@@ -9,6 +9,7 @@ import {
   type EvalReport,
   type Finding,
   type HumanItem,
+  type RunStats,
 } from "@/lib/check";
 import styles from "./CheckPanel.module.css";
 
@@ -92,9 +93,11 @@ function ScoreSummary({ report }: { report: EvalReport }) {
 function HumanCompare({
   items,
   findings,
+  stats,
 }: {
   items: HumanItem[];
   findings: Finding[];
+  stats: RunStats;
 }) {
   return (
     <div className={styles.list}>
@@ -122,7 +125,7 @@ function HumanCompare({
                   {linked
                     ? linked.title
                     : item.key_id
-                      ? "検出できませんでした"
+                      ? `この回は検出できませんでした（${runCountText(stats, item.key_id)}）`
                       : "照合の範囲外です"}
                 </p>
               </div>
@@ -135,17 +138,24 @@ function HumanCompare({
   );
 }
 
+const runCountText = (stats: RunStats, id: string) => {
+  const hits = stats.detected[id] ?? 0;
+  return `${stats.runs}回中${hits}回検出、${stats.runs - hits}回見逃し`;
+};
+
 type Tab = "findings" | "human";
 
 export default function CheckPanel({
   result,
   report,
+  stats,
   humanItems,
   activeId,
   onActivate,
 }: {
   result: CheckResult;
   report: EvalReport;
+  stats: RunStats;
   humanItems: HumanItem[];
   activeId: string | null;
   onActivate: (finding: Finding | null) => void;
@@ -171,7 +181,11 @@ export default function CheckPanel({
         </button>
       </div>
       {tab === "human" ? (
-        <HumanCompare items={humanItems} findings={result.findings} />
+        <HumanCompare
+          items={humanItems}
+          findings={result.findings}
+          stats={stats}
+        />
       ) : (
         <div className={styles.list}>
           <p className={styles.lead}>{result.mode}</p>
@@ -203,7 +217,8 @@ export default function CheckPanel({
             <section className={styles.missed}>
               <h3>AIが見逃した例</h3>
               <p>
-                正解ファイルにあるのに、今回の判定では挙がらなかった項目です。
+                正解ファイルにあるのに、この回の判定では挙がらなかった項目です。
+                画面の指摘は、同じ条件で{stats.runs}回判定したうちの最初の回です。
                 「要確認」は現場の担当者に確認中で、食い違いとは断定していません。
               </p>
               <ul>
@@ -214,7 +229,9 @@ export default function CheckPanel({
                         要確認
                       </span>
                     )}
-                    {m.title}
+                    <span>
+                      {m.title}（{runCountText(stats, m.id)}）
+                    </span>
                   </li>
                 ))}
               </ul>

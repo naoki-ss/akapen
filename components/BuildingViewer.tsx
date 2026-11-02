@@ -7,6 +7,7 @@ import type {
   EvalReport,
   Finding,
   HumanItem,
+  RunStats,
 } from "@/lib/check";
 import CheckPanel from "./CheckPanel";
 import {
@@ -59,11 +60,13 @@ export default function BuildingViewer({
   model,
   result,
   report,
+  stats,
   humanItems,
 }: {
   model: BuildingModel;
   result: CheckResult;
   report: EvalReport;
+  stats: RunStats;
   humanItems: HumanItem[];
 }) {
   const [topFloorIndex, setTopFloorIndex] = useState(FLOORS.length - 1);
@@ -154,6 +157,7 @@ export default function BuildingViewer({
           <CheckPanel
             result={result}
             report={report}
+            stats={stats}
             humanItems={humanItems}
             activeId={activeFinding?.id ?? null}
             onActivate={activateFinding}

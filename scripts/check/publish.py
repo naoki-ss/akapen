@@ -23,6 +23,23 @@ KEEP_TOKEN = re.compile(
     r"^(?:[XY]\d|No[.,]?\d+|P\d|F\d\w*|FG\d+\w*|FB\d+\w*|FC[GB]\d+|FS\d+|B\d+\w*|C\d\w*|CS\d+|S\d+|EW?\d+|W\d+\w*"
     r"|1[CS]L|[①-⑳].*)$"
 )
+# 要確認の指摘で使わない断定の語尾と、その言い換え
+SOFTENED = [
+    ("食い違っています", "食い違っている可能性があります"),
+    ("離れています", "離れている可能性があります"),
+    ("合っていません", "合っていない可能性があります"),
+]
+
+
+def soften(text, severity):
+    """現場の確認が取れるまでは断定しない"""
+    if severity != "要確認":
+        return text
+    for assertive, softened in SOFTENED:
+        text = text.replace(assertive, softened)
+    return text
+
+
 # 現場の確認が取れるまで「要確認」にする分類
 NEEDS_CONFIRMATION = {"レベル"}
 
@@ -203,8 +220,8 @@ def publish_finding(finding, changes):
         "id": finding["id"],
         "severity": severity,
         "category": finding["category"],
-        "title": dummy_text(finding["title"]),
-        "content": dummy_text(finding["content"]),
+        "title": soften(dummy_text(finding["title"]), severity),
+        "content": soften(dummy_text(finding["content"]), severity),
         "drawing": {"doc": evidence[0]["doc"], "page": evidence[0]["page"], "bbox": evidence[0]["bbox"]},
         "members": finding["members"],
         "model_refs": model_refs(finding),

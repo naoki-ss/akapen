@@ -1,8 +1,9 @@
 """同じ条件で ai_review.py を繰り返し、検出のばらつきを測る。
 
   python repeat_runs.py --runs 3 --budget 3
+  python repeat_runs.py --publish-stats     # 画面に出す回数の集計だけを demo-data に書く
 
-画面の結果（demo-data）は変えない。集計は ~/sekozu-data/check-runs/ に置く。
+画面の指摘（check-result.json）は変えない。詳しい集計は ~/sekozu-data/check-runs/ に置く。
 """
 import argparse
 import json
@@ -25,8 +26,8 @@ KEEP = [RUNS / "latest.json", RUNS / "program.json", RUNS / "kui_table_260817.js
 def run_cost(raw_dir):
     """(ドル, 使われたモデルの一覧, 入力, 出力)"""
     cost, models, total_in, total_out = 0.0, set(), 0, 0
-    for name in ("read_table", "review"):
-        message = json.loads((raw_dir / f"{name}.json").read_text())
+    for path in [*raw_dir.glob("read_table*.json"), raw_dir / "review.json"]:
+        message = json.loads(path.read_text())
         usage = message["usage"]
         total_in += usage["input_tokens"]
         total_out += usage["output_tokens"]
@@ -63,13 +64,31 @@ def one_run(key):
     }
 
 
+def publish_stats(key):
+    """画面に出している回と直近の繰り返しを合わせ、項目ごとの検出回数だけを書き出す"""
+    shown = evaluate(json.loads((RUNS / "latest.json").read_text()), key)
+    repeat = json.loads(max(RUNS.glob("repeat-*.json")).read_text())["runs"]
+    detected_sets = [[d["id"] for d in shown["detected"]], *[r["detected"] for r in repeat]]
+    required = [e["id"] for e in key["entries"] if e["kind"] in ("real", "planted")]
+    write_json(DEMO / "run-stats.json", {
+        "runs": len(detected_sets),
+        "detected": {i: sum(i in ids for ids in detected_sets) for i in required},
+        "false_positives": len(shown["false_positives"]) + sum(len(r["false_positives"]) for r in repeat),
+        "traps_passed": all(t["passed"] for t in shown["traps"]) and all(r["traps_passed"] for r in repeat),
+    })
+
+
 def main():
     parser = argparse.ArgumentParser()
+    parser.add_argument("--publish-stats", action="store_true")
     parser.add_argument("--runs", type=int, default=3)
     parser.add_argument("--budget", type=float, default=3.0, help="定価換算の上限（ドル）")
     args = parser.parse_args()
 
     key = json.loads((DEMO / "answer-key.json").read_text())
+    if args.publish_stats:
+        publish_stats(key)
+        return
     saved = {path: path.read_bytes() for path in KEEP}
     runs, spent = [], 0.0
     report_path = RUNS / f"repeat-{datetime.now().strftime('%Y%m%d-%H%M%S')}.json"

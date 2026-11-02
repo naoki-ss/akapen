@@ -297,7 +297,7 @@ def call_claude(client, system, content, schema, raw_dir, name):
     return json.loads(next(b.text for b in message.content if b.type == "text"))
 
 
-def read_table(client, raw_dir):
+def read_table(client, raw_dir, name):
     """画像PDFの杭一覧表から打設順を読む"""
     source = pymupdf.open(DOCS["kui_old"]["path"])
     subset = pymupdf.open()
@@ -313,8 +313,22 @@ def read_table(client, raw_dir):
         },
         {"type": "text", "text": "図面の杭一覧表から、杭番号（No.1〜No.18）ごとの打設順を読み取ってください。TC杭は含めません。"},
     ]
-    reply = call_claude(client, "図面の表を正確に読み取ります。", content, TABLE_SCHEMA, raw_dir, "read_table")
+    reply = call_claude(client, "図面の表を正確に読み取ります。", content, TABLE_SCHEMA, raw_dir, name)
     return {str(row["no"]): row["order"] for row in reply["rows"]}
+
+
+def table_differences(a, b):
+    return {k: (a.get(k), b.get(k)) for k in sorted(set(a) | set(b), key=int) if a.get(k) != b.get(k)}
+
+
+def read_table_twice(client, raw_dir):
+    """読み違いを防ぐため2回読み、一致しなければ止める。高い照合の呼び出しより先に判定する"""
+    first = read_table(client, raw_dir, "read_table_1")
+    second = read_table(client, raw_dir, "read_table_2")
+    differs = table_differences(first, second)
+    if differs:
+        raise SystemExit(f"杭一覧表の2回の読み取りが一致しません（図面で確認してください）: {differs}")
+    return first
 
 
 def main():
@@ -339,11 +353,9 @@ def main():
     raw_dir = RUNS / f"ai-{stamp}"
 
     # 1. 画像の一覧表を読み、手で転記した値と置き換えてプログラム照合をやり直す
-    orders = read_table(client, raw_dir)
-    previous = json.loads(TABLE_PATH.read_text())["orders"]
-    differs = {k: (previous.get(k), orders.get(k)) for k in sorted(set(previous) | set(orders), key=int)
-               if previous.get(k) != orders.get(k)}
-    print(f"一覧表の読み取り {len(orders)} 行、手の転記との差 {len(differs)} 件: {differs}")
+    orders = read_table_twice(client, raw_dir)
+    differs = table_differences(json.loads(TABLE_PATH.read_text())["orders"], orders)
+    print(f"一覧表の読み取り {len(orders)} 行、2回一致。前回の値との差 {len(differs)} 件: {differs}")
     write_json(TABLE_PATH, {"source": f"Claude API（{MODEL}）が読み取り", "orders": orders})
     subprocess.run([sys.executable, "-W", "ignore", "program_checks.py"], check=True, cwd=REPO / "scripts/check")
 

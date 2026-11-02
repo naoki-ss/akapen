@@ -49,6 +49,14 @@ export type EvalReport = {
   false_positives: { id: string; title: string }[];
 };
 
+// 同じ条件で繰り返した判定の集計
+export type RunStats = {
+  runs: number;
+  detected: Record<string, number>;
+  false_positives: number;
+  traps_passed: boolean;
+};
+
 export type HumanItem = {
   id: string;
   drawing: string;
