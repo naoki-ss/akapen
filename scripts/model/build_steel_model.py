@@ -28,6 +28,8 @@ FLOORS = ["基礎", "1F", "2F", "3F", "RF", "PHRF"]
 LEVELS = ["1F", "2F", "3F", "RF", "PHRF"]
 # 梁の符号とスパン中央のずれの許容（図面上のpt）
 MID_SPAN_TOLERANCE = 15
+# 大梁の符号と個別レベルの記入が同じ部材を指すとみなす距離（図面上のpt）
+LEVEL_NOTE_DISTANCE = 20
 
 
 def page_words(pdf, page):
@@ -124,16 +126,18 @@ def read_heights(pdf):
     if len(below_foundation) != 2:
         sys.exit("1FL から基礎梁天端までの寸法を読めません")
 
-    # R階の下がりは軸組図にないので伏図の注記から読む
-    note = "".join(w["text"] for w in page_words(pdf, PLAN_PAGES["RF"]))
-    found = re.search(r"RFL-(\d+)", note)
-    if not found:
-        sys.exit("R階の梁天端の注記を読めません")
+    # 梁天端の既定の下がりは伏図の注記から読む。軸組図の寸法は個別レベルの参照線なので使わない
+    def noted_drop(floor, prefix):
+        note = "".join(w["text"] for w in page_words(pdf, PLAN_PAGES[floor]))
+        found = re.search(rf"{prefix}-(\d+)", note)
+        if not found:
+            sys.exit(f"{floor} の梁天端の注記を読めません")
+        return int(found.group(1))
 
     return {
         "floor_z": floor_z,
         "line_y": line_y,
-        "beam_drop": {"2F": near("2F"), "3F": near("3F"), "RF": int(found.group(1)), "PHRF": 0},
+        "beam_drop": {"2F": noted_drop("2F", "2FL"), "3F": noted_drop("3F", "3FL"), "RF": noted_drop("RF", "RFL"), "PHRF": 0},
         "roof_fall": near("RF"),
         "foundation_top": -sum(to_mm(w["text"]) for w in below_foundation),
     }
@@ -299,6 +303,40 @@ def collect_girders(frames, columns, line_y):
     return girders
 
 
+def read_plan_drops(pdf, girders, grid_x, grid_y):
+    """伏図で符号のすぐ横に (FL-数値) がある大梁の下がりを {キー: 下がり} で返す。
+    記入のない大梁は、注記の既定値（read_heights の beam_drop）になる"""
+    drops = {}
+    for floor, page in PLAN_PAGES.items():
+        words = page_words(pdf, page)
+        labels = [w for w in words if re.fullmatch(r"\(?FL-\d+\)?", w["text"])]
+        marks = [w for w in words if re.match(r"G[1-5](?!\d)", w["text"])]
+        if not labels or not marks:
+            continue
+        x_labels = {w["text"]: w["x"] for w in words if re.fullmatch(r"X\d", w["text"])}
+        y_labels = {w["text"]: w["y"] for w in words if re.fullmatch(r"Y\d", w["text"])}
+        names = sorted(x_labels)
+        # 図面上の位置と実寸の対応を、両端の通りから求める
+        per_mm = (x_labels[names[-1]] - x_labels[names[0]]) / (grid_x[names[-1]] - grid_x[names[0]])
+        origin_x = x_labels[names[0]]
+        origin_y = y_labels["Y1"]
+
+        def middle(key):
+            _level, line, start, end = key
+            if line[0] == "X":
+                return origin_x + grid_x[line] * per_mm, origin_y - (grid_y[start] + grid_y[end]) / 2 * per_mm
+            return origin_x + (grid_x[start] + grid_x[end]) / 2 * per_mm, origin_y - grid_y[line] * per_mm
+
+        floor_girders = [key for key in girders if key[0] == floor]
+        for mark in marks:
+            nearest_label = min(labels, key=lambda w: (w["x"] - mark["x"]) ** 2 + (w["y"] - mark["y"]) ** 2)
+            if ((nearest_label["x"] - mark["x"]) ** 2 + (nearest_label["y"] - mark["y"]) ** 2) ** 0.5 > LEVEL_NOTE_DISTANCE:
+                continue
+            key = min(floor_girders, key=lambda k: (middle(k)[0] - mark["x"]) ** 2 + (middle(k)[1] - mark["y"]) ** 2)
+            drops[key] = int(re.search(r"\d+", nearest_label["text"]).group())
+    return drops
+
+
 def count_plan_marks(pdf):
     """伏図の大梁の符号の数。軸組図からの読み取りの確かめに使う"""
     counts = {}
@@ -319,6 +357,7 @@ def build(pdf):
     frames = read_frames(pdf)
     columns = collect_columns(frames, heights["line_y"])
     girders = collect_girders(frames, columns, heights["line_y"])
+    drops = read_plan_drops(pdf, girders, grid_x, grid_y)
 
     # 屋根の勾配。R階は Y の小さい方、PHR階は X の小さい方が水上
     y_values, x_values = list(grid_y.values()), grid_x
@@ -335,10 +374,11 @@ def build(pdf):
             return z - penthouse_slope * x
         return z
 
-    def beam_top(level, x, y):
+    def beam_top(key, x, y):
+        level = key[0]
         if level == "基礎":
             return heights["foundation_top"]
-        return round(floor_level(level, x, y) - heights["beam_drop"][level])
+        return round(floor_level(level, x, y) - drops.get(key, heights["beam_drop"][level]))
 
     members = []
     for (story, x_name, y_name), mark in columns.items():
@@ -361,7 +401,7 @@ def build(pdf):
         members.append({
             "type": "beam", "mark": mark, "grid": f"{line}/{start}-{end}", "floor": level,
             "x0": x0, "y0": y0, "x1": x1, "y1": y1,
-            "z": beam_top(level, x0, y0), "z1": beam_top(level, x1, y1),
+            "z": beam_top((level, line, start, end), x0, y0), "z1": beam_top((level, line, start, end), x1, y1),
             "width": section["width"], "depth": section["depth"], "section": section["section"],
         })
 
