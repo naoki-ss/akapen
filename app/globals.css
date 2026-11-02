@@ -1,0 +1,18 @@
+:root {
+  --bg: #f5f4f0;
+  --ink: #1d1d1b;
+  --muted: #6b6a65;
+  --line: #d9d6cc;
+  --panel: #fffdf8;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  font-family: "Hiragino Sans", "Noto Sans JP", system-ui, sans-serif;
+  background: var(--bg);
+  color: var(--ink);
+}
