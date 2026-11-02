@@ -1,7 +1,7 @@
 "use client";
 
 import dynamic from "next/dynamic";
-import { useMemo, useState } from "react";
+import { useMemo, useState, type ReactNode } from "react";
 import type {
   CheckResult,
   EvalReport,
@@ -11,7 +11,7 @@ import type {
 } from "@/lib/check";
 import CheckPanel from "./CheckPanel";
 import {
-  FLOORS,
+  floorsOf,
   TYPE_LABELS,
   type BuildingModel,
   type Member,
@@ -29,8 +29,25 @@ const TOGGLEABLE: MemberType[] = ["slab", "wall", "pile"];
 
 function levelText(m: Member) {
   const toM = (mm: number) => `${(mm / 1000).toFixed(2)}m`;
-  return "z" in m ? toM(m.z) : `${toM(m.z0)} 〜 ${toM(m.z1)}`;
+  if (!("z" in m)) return `${toM(m.z0)} 〜 ${toM(m.z1)}`;
+  const end = "z1" in m ? m.z1 : undefined;
+  return end === undefined || end === m.z
+    ? toM(m.z)
+    : `${toM(m.z)} 〜 ${toM(end)}`;
 }
+
+// 施工図チェックの結果。まだチェックしていない物件にはない
+export type BuildingCheck = {
+  result: CheckResult;
+  report: EvalReport;
+  stats: RunStats;
+  humanItems: HumanItem[];
+};
+
+export type Building = {
+  model: BuildingModel;
+  check?: BuildingCheck;
+};
 
 function MemberInfo({ member }: { member: Member | null }) {
   if (!member) {
@@ -51,25 +68,57 @@ function MemberInfo({ member }: { member: Member | null }) {
         <dd>{member.grid}</dd>
         <dt>{"z" in member ? "レベル" : "高さ"}</dt>
         <dd>{levelText(member)}</dd>
+        {member.section && (
+          <>
+            <dt>断面</dt>
+            <dd>{member.section}</dd>
+          </>
+        )}
       </dl>
     </div>
   );
 }
 
 export default function BuildingViewer({
-  model,
-  result,
-  report,
-  stats,
-  humanItems,
+  buildings,
 }: {
-  model: BuildingModel;
-  result: CheckResult;
-  report: EvalReport;
-  stats: RunStats;
-  humanItems: HumanItem[];
+  buildings: Building[];
 }) {
-  const [topFloorIndex, setTopFloorIndex] = useState(FLOORS.length - 1);
+  const [name, setName] = useState(buildings[0].model.name);
+  const building =
+    buildings.find((b) => b.model.name === name) ?? buildings[0];
+
+  const picker =
+    buildings.length > 1 ? (
+      <select
+        className={styles.picker}
+        aria-label="物件"
+        value={building.model.name}
+        onChange={(e) => setName(e.target.value)}
+      >
+        {buildings.map((b) => (
+          <option key={b.model.name} value={b.model.name}>
+            {b.model.name}
+          </option>
+        ))}
+      </select>
+    ) : (
+      <h1>{building.model.name}</h1>
+    );
+
+  // 物件を切り替えたら、表示の状態とカメラを最初からにする
+  return (
+    <BuildingView key={building.model.name} {...building} title={picker} />
+  );
+}
+
+function BuildingView({
+  model,
+  check,
+  title,
+}: Building & { title: ReactNode }) {
+  const floors = floorsOf(model);
+  const [topFloorIndex, setTopFloorIndex] = useState(floors.length - 1);
   const [hiddenTypes, setHiddenTypes] = useState<ReadonlySet<MemberType>>(
     new Set(),
   );
@@ -87,7 +136,7 @@ export default function BuildingViewer({
     if (!finding) return;
     // 基礎の部材は上階に隠れるので、基礎まで表示を下げ、杭も出す
     const lowest = Math.min(
-      ...finding.model_refs.map((ref) => FLOORS.indexOf(ref.split("|")[1])),
+      ...finding.model_refs.map((ref) => floors.indexOf(ref.split("|")[1])),
     );
     if (Number.isFinite(lowest) && lowest >= 0) setTopFloorIndex(lowest);
     setHiddenTypes(new Set());
@@ -103,13 +152,13 @@ export default function BuildingViewer({
 
   const changeTopFloor = (index: number) => {
     setTopFloorIndex(index);
-    if (selected && FLOORS.indexOf(selected.floor) > index) setSelected(null);
+    if (selected && floors.indexOf(selected.floor) > index) setSelected(null);
   };
 
   return (
     <div className={styles.root}>
       <header className={styles.header}>
-        <h1>{model.name}</h1>
+        {title}
         <span>{model.source}</span>
       </header>
       <main className={styles.main}>
@@ -129,18 +178,20 @@ export default function BuildingViewer({
         <aside className={styles.side}>
           <h2>表示</h2>
           <div className={styles.control}>
-            表示する階：<b>{FLOORS[topFloorIndex]}</b>
+            表示する階：<b>{floors[topFloorIndex]}</b>
           </div>
           <input
             className={styles.range}
             type="range"
             aria-label="表示する階"
             min={0}
-            max={FLOORS.length - 1}
+            max={floors.length - 1}
             value={topFloorIndex}
             onChange={(e) => changeTopFloor(Number(e.target.value))}
           />
-          {TOGGLEABLE.map((type) => (
+          {TOGGLEABLE.filter((type) =>
+            model.members.some((m) => m.type === type),
+          ).map((type) => (
             <label key={type} className={styles.control}>
               <input
                 type="checkbox"
@@ -154,14 +205,17 @@ export default function BuildingViewer({
           <MemberInfo member={selected} />
         </aside>
         <aside className={styles.check}>
-          <CheckPanel
-            result={result}
-            report={report}
-            stats={stats}
-            humanItems={humanItems}
-            activeId={activeFinding?.id ?? null}
-            onActivate={activateFinding}
-          />
+          {check ? (
+            <CheckPanel
+              {...check}
+              activeId={activeFinding?.id ?? null}
+              onActivate={activateFinding}
+            />
+          ) : (
+            <p className={styles.noCheck}>
+              この物件の施工図チェックはまだ行っていません。
+            </p>
+          )}
         </aside>
       </main>
     </div>

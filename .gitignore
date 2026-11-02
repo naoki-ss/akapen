@@ -42,3 +42,6 @@ prototype/model.json
 
 # Python 仮想環境
 .venv/
+
+# 公開の確認が取れていない物件のデータ（手元の画面でだけ表示する）
+demo-data-private/

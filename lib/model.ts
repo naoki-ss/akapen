@@ -4,6 +4,8 @@ type MemberBase = {
   mark: string;
   grid: string;
   floor: string;
+  // 部材リストから読んだ断面の表記
+  section?: string;
 };
 
 export type ColumnMember = MemberBase & {
@@ -12,6 +14,7 @@ export type ColumnMember = MemberBase & {
   y: number;
   z0: number;
   z1: number;
+  width?: number;
 };
 
 export type PileMember = MemberBase & {
@@ -29,7 +32,9 @@ export type BeamMember = MemberBase & {
   y0: number;
   x1: number;
   y1: number;
+  // 梁天端の高さ。勾配のある梁は z が始点、z1 が終点
   z: number;
+  z1?: number;
   width?: number;
   depth?: number;
 };
@@ -72,6 +77,8 @@ export type BuildingModel = {
   grid_x: Record<string, number>;
   grid_y: Record<string, number>;
   levels: Record<string, number>;
+  // 下から順の階名。省略すると FLOORS を使う
+  floors?: string[];
   members: Member[];
 };
 
@@ -98,6 +105,8 @@ export const FLOORS = [
   "10F",
   "RF",
 ];
+
+export const floorsOf = (model: BuildingModel) => model.floors ?? FLOORS;
 
 // 試作からの仮の寸法。柱リスト・梁リストから取れるようになったら部材ごとの値に置き換える
 export const PROVISIONAL_SIZE = {

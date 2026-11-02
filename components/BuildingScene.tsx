@@ -5,7 +5,7 @@ import { Canvas, type ThreeEvent } from "@react-three/fiber";
 import { useEffect, useMemo } from "react";
 import { CanvasTexture } from "three";
 import {
-  FLOORS,
+  floorsOf,
   memberKey,
   PROVISIONAL_SIZE as SIZE,
   type BuildingModel,
@@ -16,6 +16,8 @@ import {
 const MM = 0.001;
 const GRID_LEVEL = -2000;
 const RED = "#c8361d";
+// カメラの距離の基準にする建物の大きさ（mm）
+const CAMERA_BASE_SIZE = 45000;
 
 const COLORS: Record<MemberType, string> = {
   column: "#8a8a84",
@@ -39,7 +41,12 @@ const toScene = (x: number, y: number, z: number): Vec3 => [
   -y * MM,
 ];
 
-type Shape = { position: Vec3; size: Vec3; cylinder?: boolean };
+type Shape = {
+  position: Vec3;
+  size: Vec3;
+  rotation?: Vec3;
+  cylinder?: boolean;
+};
 
 // 平面の幅 sx, 奥行き sy, 高さ sz（mm）の箱
 const boxShape = (
@@ -56,15 +63,17 @@ const boxShape = (
 
 function shapeOf(m: Member): Shape {
   switch (m.type) {
-    case "column":
+    case "column": {
+      const width = m.width ?? SIZE.column;
       return boxShape(
         m.x,
         m.y,
         (m.z0 + m.z1) / 2,
-        SIZE.column,
-        SIZE.column,
+        width,
+        width,
         m.z1 - m.z0,
       );
+    }
     case "pile": {
       const radius = m.radius ?? SIZE.pileRadius;
       return {
@@ -74,20 +83,27 @@ function shapeOf(m: Member): Shape {
       };
     }
     case "beam": {
-      const length = Math.hypot(m.x1 - m.x0, m.y1 - m.y0);
+      const plan = Math.hypot(m.x1 - m.x0, m.y1 - m.y0);
+      const rise = (m.z1 ?? m.z) - m.z;
+      const length = Math.hypot(plan, rise);
       const depth =
         m.depth ??
         (m.floor === "基礎" ? SIZE.foundationBeamDepth : SIZE.beamDepth);
       const width = m.width ?? SIZE.beamWidth;
       const alongX = m.y0 === m.y1;
-      return boxShape(
-        (m.x0 + m.x1) / 2,
-        (m.y0 + m.y1) / 2,
-        m.z - depth / 2,
-        alongX ? length : width,
-        alongX ? width : length,
-        depth,
-      );
+      // 建物の y は three.js の -z なので、y 方向の梁は x 軸まわりに正の向きで傾ける
+      const tilt = Math.atan2(rise, alongX ? m.x1 - m.x0 : m.y1 - m.y0);
+      return {
+        ...boxShape(
+          (m.x0 + m.x1) / 2,
+          (m.y0 + m.y1) / 2,
+          m.z + rise / 2 - depth / 2,
+          alongX ? length : width,
+          alongX ? width : length,
+          depth,
+        ),
+        rotation: alongX ? [0, 0, tilt] : [tilt, 0, 0],
+      };
     }
     case "wall": {
       const length = Math.hypot(m.x1 - m.x0, m.y1 - m.y0);
@@ -135,7 +151,11 @@ function MemberMesh({
   };
 
   return (
-    <mesh position={shape.position} onClick={handleClick}>
+    <mesh
+      position={shape.position}
+      rotation={shape.rotation}
+      onClick={handleClick}
+    >
       {shape.cylinder ? (
         <cylinderGeometry
           args={[shape.size[0], shape.size[0], shape.size[1], 20]}
@@ -235,19 +255,32 @@ export default function BuildingScene({
   highlighted,
   onSelect,
 }: SceneProps) {
+  const floors = floorsOf(model);
   const visible = model.members.filter(
     (m) =>
-      FLOORS.indexOf(m.floor) <= topFloorIndex && !hiddenTypes.has(m.type),
+      floors.indexOf(m.floor) <= topFloorIndex && !hiddenTypes.has(m.type),
   );
 
   const xMax = Math.max(...Object.values(model.grid_x));
   const yMax = Math.max(...Object.values(model.grid_y));
-  // 杭の下端から屋上までの中央を見る
-  const target = toScene(xMax / 2, yMax / 2, 7500);
+  // 一番下の部材から屋上までの中央を見る。建物の大きさに合わせて引く
+  const heights = model.members.flatMap((m) =>
+    m.type === "beam"
+      ? [m.z, m.z1 ?? m.z]
+      : "z" in m
+        ? [m.z]
+        : [m.z0, m.z1],
+  );
+  const zMin = Math.min(...heights);
+  const zMax = Math.max(...heights);
+  const target = toScene(xMax / 2, yMax / 2, (zMin + zMax) / 2);
+  // 高い建物は高さで、平たい建物は平面の対角で距離を決める
+  const zoom =
+    Math.max(1.4 * Math.hypot(xMax, yMax), zMax - zMin) / CAMERA_BASE_SIZE;
   const cameraPosition: Vec3 = [
-    target[0] + 50,
-    target[1] + 14,
-    target[2] + 54,
+    target[0] + 50 * zoom,
+    target[1] + 14 * zoom,
+    target[2] + 54 * zoom,
   ];
 
   return (
