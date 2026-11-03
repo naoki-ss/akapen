@@ -25,10 +25,9 @@ export default function SheetViewer({
     return () => window.removeEventListener("keydown", close);
   }, [onClose]);
 
-  // 拡大したら、赤枠の場所まで動かす
+  // 開いたときと拡大したときに、赤枠の場所まで動かす（ページの下端にある枠は画面の外になる）
   useEffect(() => {
-    if (zoomed)
-      frame.current?.scrollIntoView({ block: "center", inline: "center" });
+    frame.current?.scrollIntoView({ block: "center", inline: "center" });
   }, [zoomed]);
 
   const src = `${base}/${sheet.image}`;

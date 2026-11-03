@@ -50,6 +50,11 @@ HUMAN_REGIONS = {
     "P307": (0.42, 0.22, 0.46, 0.27),
 }
 HUMAN_FILES = {2: PRIVATE / "check-runs/steel-20261102-182033/human-p2.json", 3: ROOT / "human-p3.json", 6: ROOT / "human-p6.json"}
+# AIが返した範囲を目で見て直したもの（スクリーンショットで確認。画面にも補正と出す）
+REGION_FIXES = {
+    "p2-03": (0.01, 0.944, 0.15, 0.958),  # 1行上の「鉄骨柱」に掛かっていた。指摘は「大梁」の行
+    "p2-08": (0.34, 0.6, 0.58, 0.64),  # X3 側だけだった。指摘は X3 と X7 の両方
+}
 PLAN_FLOORS = {2: "2F", 3: "3F", 6: "RF", 7: "PHRF"}
 # 伏図の柱部材リストは、その階の下の柱を載せている
 COLUMN_PLANS = {"1F": [1, 2], "2F": [3], "3F": [6], "RF": [7]}
@@ -136,13 +141,15 @@ def publish_page(sheet_no, config, sheet_doc, human_doc, members):
     findings = []
     for number, item in enumerate(result["findings"], 1):
         finding_id = f"p{sheet_no}-{number:02d}"
-        region = to_rect(sheet, valid_region(item["region"]))
+        fixed = REGION_FIXES.get(finding_id)
+        region = to_rect(sheet, fixed or valid_region(item["region"]))
         _, marked = single_page(sheet_doc, sheet_no)
         marked = marked
         crop(marked, region, sheet_masks(marked), OUT / f"findings/{finding_id}.png", frame=region)
         crop(scan, to_scan(region), scan_masks, OUT / f"human/{finding_id}.png")
         sources = "、".join(f"{e['drawing']} {e['page']}" for e in item.get("evidence", []))
-        box = box_of(sheet, region)
+        # 図面全体の表示でも文字に枠線が掛からないように、切り抜きの赤枠と同じだけ広げる
+        box = box_of(sheet, (region + (-3, -3, 3, 3)) & sheet.rect)
         findings.append({
             "id": finding_id,
             "severity": item["severity"],
@@ -156,7 +163,7 @@ def publish_page(sheet_no, config, sheet_doc, human_doc, members):
             "key_ids": [],
             "planted": False,
             "evidence": [{
-                "doc": DOC, "page": sheet_no, "where": f"p.{sheet_no} の該当箇所", "text": "",
+                "doc": DOC, "page": sheet_no, "where": f"p.{sheet_no} の該当箇所" + ("、枠の位置は目で見て補正" if fixed else ""), "text": "",
                 "bbox": box, "image": f"findings/{finding_id}.png",
             }],
             "human_view": {"image": f"human/{finding_id}.png", "note": f"人のチェック図 p.{config['human_page']} の同じ範囲"},
