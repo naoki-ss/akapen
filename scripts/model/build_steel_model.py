@@ -1,10 +1,10 @@
 """S造の構造図PDFから、柱と大梁の3Dモデルを作る。
 
-  python build_steel_model.py --pdf <構造図PDF> --out demo-data-private/sample-b/model.json
+  python build_steel_model.py --pdf <構造図PDF> --out demo-data/sample-b/model.json
 
 柱と大梁は軸組図の符号の位置から、断面は部材リスト・基礎梁リストから読む。
 寸法はすべてPDFから読み、このファイルには書かない。
-出力は実寸法を含むので、git管理外の demo-data-private/ に置く（CLAUDE.md 参照）。
+物件Bは社内で公開の確認が取れたので、実寸法のまま demo-data/sample-b/ に置く（CLAUDE.md 参照）。
 
 小梁、片持ち梁、基礎、杭、柱の通り芯からの片寄りはまだ入れていない。
 """
@@ -406,7 +406,7 @@ def build(pdf):
         })
 
     model = {
-        "name": "サンプル物件B（事務所・S造）",
+        "name": "後藤組本社屋（事務所・S造）",
         "source": "構造図の軸組図・鉄骨部材リスト・基礎梁リストから自動抽出（柱と大梁のみ）",
         "grid_x": grid_x,
         "grid_y": grid_y,
