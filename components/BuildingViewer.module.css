@@ -156,3 +156,43 @@
   font-size: 13px;
   color: var(--muted);
 }
+
+.sheets {
+  margin-top: 16px;
+}
+
+.sheets h3 {
+  margin: 0 0 6px;
+  font-size: 13px;
+}
+
+.sheets ul {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.sheets button {
+  display: block;
+  width: 100%;
+  padding: 6px 8px;
+  border: 1px solid #ccc;
+  border-radius: 4px;
+  background: #fff;
+  font-size: 12px;
+  text-align: left;
+  cursor: pointer;
+}
+
+.sheets button:hover {
+  border-color: #c8361d;
+}
+
+.sheets span {
+  display: block;
+  margin-top: 2px;
+  color: #666;
+}

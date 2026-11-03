@@ -1,0 +1,530 @@
+{
+  "items": [
+    {
+      "id": "H01",
+      "drawing": "2SL 梁伏図：位置の基準",
+      "note": "外周の梁は各階共通で柱面に合わせる（玄関回りも）。通り芯から柱・梁面まで X2・X8・Y1 側 165、Y4 側 80 を記入",
+      "summary": "図面の照合で判断できるはずですが、AIは見逃しました。",
+      "key_id": null,
+      "image": "human/H01.png",
+      "finding_ids": [],
+      "ai_image": "human/H01-before.png",
+      "sheet": "s02",
+      "bbox": [
+        0.5597,
+        0.8638,
+        0.9421,
+        0.9361
+      ]
+    },
+    {
+      "id": "H02",
+      "drawing": "2SL 梁伏図：納まりの打合せ",
+      "note": "X2-Y3、X2-Y4 の柱を丸で囲み「納まり打合せ（外壁先行 or 階段先行）」",
+      "summary": "打合せや製作上の判断など、図面の照合だけでは判断しにくい朱書きです。",
+      "key_id": null,
+      "image": "human/H02.png",
+      "finding_ids": [],
+      "ai_image": "human/H02-before.png",
+      "sheet": "s02",
+      "bbox": [
+        0.1876,
+        0.0059,
+        0.353,
+        0.3574
+      ]
+    },
+    {
+      "id": "H03",
+      "drawing": "2SL 梁伏図：寸法の変更",
+      "note": "X2 外側の Y 方向ピッチ（Y1〜Y3）：2580・2275・2275・2615 を 2400 に、1165/1111 を 1200/1200 に、Y1 寄りの 2275 を 2060 に",
+      "summary": "打合せや製作上の判断など、図面の照合だけでは判断しにくい朱書きです。",
+      "key_id": null,
+      "image": "human/H03.png",
+      "finding_ids": [],
+      "ai_image": "human/H03-before.png",
+      "sheet": "s02",
+      "bbox": [
+        0.1101,
+        0.3367,
+        0.1618,
+        0.6261
+      ]
+    },
+    {
+      "id": "H04",
+      "drawing": "2SL 梁伏図：寸法の変更",
+      "note": "Y1 外側の X 方向ピッチ：2615→2400、2275→2400、2275→2060、1200/1200 の追記、1835→1800、1180→1100、665→700（玄関の左右で同様）",
+      "summary": "打合せや製作上の判断など、図面の照合だけでは判断しにくい朱書きです。",
+      "key_id": null,
+      "image": "human/H04.png",
+      "finding_ids": [],
+      "ai_image": "human/H04-before.png",
+      "sheet": "s02",
+      "bbox": [
+        0.1876,
+        0.7191,
+        0.6631,
+        0.8121
+      ]
+    },
+    {
+      "id": "H05",
+      "drawing": "2SL 梁伏図：寸法の変更",
+      "note": "南の玄関の張り出し：125→170、2570（左右対称部）を追記、基準線の「柱」の文字を×で消す",
+      "summary": "打合せや製作上の判断など、図面の照合だけでは判断しにくい朱書きです。",
+      "key_id": null,
+      "image": "human/H05.png",
+      "finding_ids": [],
+      "ai_image": "human/H05-before.png",
+      "sheet": "s02",
+      "bbox": [
+        0.3737,
+        0.6571,
+        0.5804,
+        0.8018
+      ]
+    },
+    {
+      "id": "H06",
+      "drawing": "2SL 梁伏図：寸法の変更",
+      "note": "北の張り出し（X4〜X6 付近）：4000→4030、2037.5→2052.5、1962.5→1977.5、600→430、1200→1150、180 と 170 の記入",
+      "summary": "打合せや製作上の判断など、図面の照合だけでは判断しにくい朱書きです。",
+      "key_id": null,
+      "image": "human/H06.png",
+      "finding_ids": [],
+      "ai_image": "human/H06-before.png",
+      "sheet": "s02",
+      "bbox": [
+        0.3737,
+        0.0783,
+        0.4977,
+        0.1506
+      ]
+    },
+    {
+      "id": "H07",
+      "drawing": "2SL 梁伏図：位置の基準",
+      "note": "右下の底部梁伏図：X4・X6 の外に梁面 430 を記入、125→170",
+      "summary": "打合せや製作上の判断など、図面の照合だけでは判断しにくい朱書きです。",
+      "key_id": null,
+      "image": "human/H07.png",
+      "finding_ids": [],
+      "ai_image": "human/H07-before.png",
+      "sheet": "s02",
+      "bbox": [
+        0.7354,
+        0.7088,
+        0.9318,
+        0.8845
+      ]
+    },
+    {
+      "id": "H08",
+      "drawing": "2SL 梁伏図：保留",
+      "note": "雲印は保留：X2 外と X8 外の 75/1075/100、北の 1400、右下の 150/1187/1086/450",
+      "summary": "打合せや製作上の判断など、図面の照合だけでは判断しにくい朱書きです。",
+      "key_id": null,
+      "image": "human/H08.png",
+      "finding_ids": [],
+      "ai_image": "human/H08-before.png",
+      "sheet": "s02",
+      "bbox": [
+        0.2083,
+        0.7088,
+        0.7044,
+        0.7708
+      ]
+    },
+    {
+      "id": "H09",
+      "drawing": "2SL 梁伏図：部材の高さか位置",
+      "note": "Y1 の X3-X4 と X6-X7 の X4・X6 寄りの継手付近を丸で囲み「B10を上げて」（手書きの語は判読が不確か）",
+      "summary": "打合せや製作上の判断など、図面の照合だけでは判断しにくい朱書きです。",
+      "key_id": null,
+      "image": "human/H09.png",
+      "finding_ids": [],
+      "ai_image": "human/H09-before.png",
+      "sheet": "s02",
+      "bbox": [
+        0.3013,
+        0.6054,
+        0.6011,
+        0.7088
+      ]
+    },
+    {
+      "id": "H10",
+      "drawing": "2SL 梁伏図：部材リスト",
+      "note": "GL階 柱部材リストに P1 H-125×125×6.5×9 SS400 を追記",
+      "summary": "AIも同じ問題を指摘しました。",
+      "key_id": null,
+      "image": "human/H10.png",
+      "finding_ids": [
+        "p2-06"
+      ],
+      "ai_image": "human/H10-before.png",
+      "sheet": "s02",
+      "bbox": [
+        0.7561,
+        0.0783,
+        0.9938,
+        0.099
+      ]
+    },
+    {
+      "id": "H11",
+      "drawing": "2SL 梁伏図：符号",
+      "note": "X1-Y3 の柱に符号 C3 を追記",
+      "summary": "図面の照合で判断できるはずですが、AIは見逃しました。",
+      "key_id": null,
+      "image": "human/H11.png",
+      "finding_ids": [],
+      "ai_image": "human/H11-before.png",
+      "sheet": "s02",
+      "bbox": [
+        0.167,
+        0.3263,
+        0.2083,
+        0.3574
+      ]
+    },
+    {
+      "id": "H12",
+      "drawing": "2SL 梁伏図：部材リスト",
+      "note": "ルーフデッキ UA-R-12-600-Z12 に「板厚 1.0」とみられる記入（判読が不確か）",
+      "summary": "AIも同じ問題を指摘しました。",
+      "key_id": null,
+      "image": "human/H12.png",
+      "finding_ids": [
+        "p2-01"
+      ],
+      "ai_image": "human/H12-before.png",
+      "sheet": "s02",
+      "bbox": [
+        0.7561,
+        0.6467,
+        0.9318,
+        0.6984
+      ]
+    },
+    {
+      "id": "H13",
+      "drawing": "2SL 梁伏図：工事の情報",
+      "note": "EVシャフト内にファスナー受けと揚重ビームあり（施工図は後日送信）",
+      "summary": "打合せや製作上の判断など、図面の照合だけでは判断しにくい朱書きです。",
+      "key_id": null,
+      "image": "human/H13.png",
+      "finding_ids": [],
+      "ai_image": "human/H13-before.png",
+      "sheet": "s02",
+      "bbox": [
+        0.5804,
+        0.8948,
+        0.9421,
+        0.9465
+      ]
+    },
+    {
+      "id": "H14",
+      "drawing": "2SL 梁伏図：開口",
+      "note": "X4-X5、Y3-Y4 付近の開口に EV の文字と×印を記入",
+      "summary": "打合せや製作上の判断など、図面の照合だけでは判断しにくい朱書きです。",
+      "key_id": null,
+      "image": "human/H14.png",
+      "finding_ids": [],
+      "ai_image": "human/H14-before.png",
+      "sheet": "s02",
+      "bbox": [
+        0.415,
+        0.2333,
+        0.4564,
+        0.285
+      ]
+    },
+    {
+      "id": "H15",
+      "drawing": "2SL 梁伏図：図面の記入",
+      "note": "上の寸法に通り名 (X6)、(X7) を追記。X2 外と X8 外の Y2・Y3 に「柱芯」の基準を記入",
+      "summary": "打合せや製作上の判断など、図面の照合だけでは判断しにくい朱書きです。",
+      "key_id": null,
+      "image": "human/H15.png",
+      "finding_ids": [],
+      "ai_image": "human/H15-before.png",
+      "sheet": "s02",
+      "bbox": [
+        0.4874,
+        0.0576,
+        0.5701,
+        0.0783
+      ]
+    },
+    {
+      "id": "H16",
+      "drawing": "2SL 梁伏図：部材リスト",
+      "note": "大梁部材リストの CG3 の下の行の (SS400) を取り消し線で消す",
+      "summary": "打合せや製作上の判断など、図面の照合だけでは判断しにくい朱書きです。",
+      "key_id": null,
+      "image": "human/H16.png",
+      "finding_ids": [],
+      "ai_image": "human/H16-before.png",
+      "sheet": "s02",
+      "bbox": [
+        0.7561,
+        0.3677,
+        0.9938,
+        0.3884
+      ]
+    },
+    {
+      "id": "P301",
+      "drawing": "3SL 梁伏図：納まりの打合せ",
+      "note": "X2-Y3、X2-Y4 の柱を丸で囲み「納まり打合せ」",
+      "summary": "打合せや製作上の判断など、図面の照合だけでは判断しにくい朱書きです。",
+      "key_id": null,
+      "image": "human/P301.png",
+      "finding_ids": [],
+      "ai_image": "human/P301-before.png",
+      "sheet": "s03",
+      "bbox": [
+        0.2381,
+        0.1071,
+        0.3209,
+        0.3246
+      ]
+    },
+    {
+      "id": "P302",
+      "drawing": "3SL 梁伏図：質問",
+      "note": "X2 通り Y3-Y4 の六角形で囲まれた G3 を丸で囲み「この記号は何？」",
+      "summary": "AIも同じ問題を指摘しました。",
+      "key_id": null,
+      "image": "human/P302.png",
+      "finding_ids": [
+        "p3-11"
+      ],
+      "ai_image": "human/P302-before.png",
+      "sheet": "s03",
+      "bbox": [
+        0.1863,
+        0.0346,
+        0.2691,
+        0.2624
+      ]
+    },
+    {
+      "id": "P303",
+      "drawing": "3SL 梁伏図：寸法の変更",
+      "note": "X2 外側の Y 方向ピッチ：2580・2275・2615 を 2400 に、1165/1110 を 1200/1200 に、Y1 寄りの 2275 を 2060 に",
+      "summary": "AIは近い内容を指摘しました（採点の対象外）。",
+      "key_id": null,
+      "image": "human/P303.png",
+      "finding_ids": [
+        "p3-08"
+      ],
+      "ai_image": "human/P303-before.png",
+      "sheet": "s03",
+      "bbox": [
+        0.1138,
+        0.3246,
+        0.1604,
+        0.6042
+      ]
+    },
+    {
+      "id": "P304",
+      "drawing": "3SL 梁伏図：寸法の変更",
+      "note": "Y1 外側の X 方向ピッチ：2275・2417.5・2615 を 2400 に、1110/1165 を 1200/1200 に、端の 2275 を 2060 に",
+      "summary": "AIは近い内容を指摘しました（採点の対象外）。",
+      "key_id": null,
+      "image": "human/P304.png",
+      "finding_ids": [
+        "p3-08"
+      ],
+      "ai_image": "human/P304-before.png",
+      "sheet": "s03",
+      "bbox": [
+        0.207,
+        0.7181,
+        0.6627,
+        0.7906
+      ]
+    },
+    {
+      "id": "P305",
+      "drawing": "3SL 梁伏図：レベル",
+      "note": "凡例の「○内部材は SL-70」を SL-120 に訂正",
+      "summary": "AIも同じ問題を指摘しました。",
+      "key_id": null,
+      "image": "human/P305.png",
+      "finding_ids": [
+        "p3-05"
+      ],
+      "ai_image": "human/P305-before.png",
+      "sheet": "s03",
+      "bbox": [
+        0.3624,
+        0.8321,
+        0.4556,
+        0.889
+      ]
+    },
+    {
+      "id": "P306",
+      "drawing": "3SL 梁伏図：保留",
+      "note": "雲印で保留：北の 1400、X2 外と X8 外の 75/1075/100",
+      "summary": "打合せや製作上の判断など、図面の照合だけでは判断しにくい朱書きです。",
+      "key_id": null,
+      "image": "human/P306.png",
+      "finding_ids": [],
+      "ai_image": "human/P306-before.png",
+      "sheet": "s03",
+      "bbox": [
+        0.207,
+        0.6871,
+        0.7249,
+        0.7492
+      ]
+    },
+    {
+      "id": "P307",
+      "drawing": "3SL 梁伏図：開口",
+      "note": "X4-X5、Y3-Y4 付近の開口に EV の文字と×印",
+      "summary": "打合せや製作上の判断など、図面の照合だけでは判断しにくい朱書きです。",
+      "key_id": null,
+      "image": "human/P307.png",
+      "finding_ids": [],
+      "ai_image": "human/P307-before.png",
+      "sheet": "s03",
+      "bbox": [
+        0.4141,
+        0.2106,
+        0.4556,
+        0.2624
+      ]
+    },
+    {
+      "id": "R401",
+      "drawing": "RSL 梁伏図：納まりの打合せ",
+      "note": "X2-Y4、X2-Y3 の柱を雲で囲み「納まり打合せ」",
+      "summary": "打合せや製作上の判断など、図面の照合だけでは判断しにくい朱書きです。",
+      "key_id": null,
+      "image": "human/R401.png",
+      "finding_ids": [],
+      "ai_image": "human/R401-before.png",
+      "sheet": "s06",
+      "bbox": [
+        0.223,
+        0.1384,
+        0.332,
+        0.3356
+      ]
+    },
+    {
+      "id": "R402",
+      "drawing": "RSL 梁伏図：部材の追加",
+      "note": "X3-X5、Y3-Y4 付近の G 系の梁の横を雲で囲み「EV用揚重ビーム」。設計図の R 階に揚重ビームの記載なし",
+      "summary": "打合せや製作上の判断など、図面の照合だけでは判断しにくい朱書きです。",
+      "key_id": null,
+      "image": "human/R402.png",
+      "finding_ids": [],
+      "ai_image": "human/R402-before.png",
+      "sheet": "s06",
+      "bbox": [
+        0.415,
+        0.1903,
+        0.5603,
+        0.2837
+      ]
+    },
+    {
+      "id": "R403",
+      "drawing": "RSL 梁伏図：寸法の変更",
+      "note": "X2 外側の Y 方向ピッチ：2580・2275・2275・2615 を 2400 に、1165/1110 を 1200/1200 に、Y1 寄りの 2275 を 2060 に",
+      "summary": "打合せや製作上の判断など、図面の照合だけでは判断しにくい朱書きです。",
+      "key_id": null,
+      "image": "human/R403.png",
+      "finding_ids": [],
+      "ai_image": "human/R403-before.png",
+      "sheet": "s06",
+      "bbox": [
+        0.1244,
+        0.3252,
+        0.2074,
+        0.6262
+      ]
+    },
+    {
+      "id": "R404",
+      "drawing": "RSL 梁伏図：寸法の変更",
+      "note": "Y1 外側の X 方向ピッチ：2275・2417.5・2615 を 2400 に、1110/1165 を 1200/1200 に、端の 2275 を 2060 に",
+      "summary": "打合せや製作上の判断など、図面の照合だけでは判断しにくい朱書きです。",
+      "key_id": null,
+      "image": "human/R404.png",
+      "finding_ids": [],
+      "ai_image": "human/R404-before.png",
+      "sheet": "s06",
+      "bbox": [
+        0.2386,
+        0.73,
+        0.7264,
+        0.813
+      ]
+    },
+    {
+      "id": "R405",
+      "drawing": "RSL 梁伏図：レベル",
+      "note": "凡例の「○内部材は SL（水下）-70」を「水下 SL-120」に訂正",
+      "summary": "AIも同じ問題を指摘しました。",
+      "key_id": null,
+      "image": "human/R405.png",
+      "finding_ids": [
+        "p6-02"
+      ],
+      "ai_image": "human/R405-before.png",
+      "sheet": "s06",
+      "bbox": [
+        0.3631,
+        0.8338,
+        0.5603,
+        0.896
+      ]
+    },
+    {
+      "id": "R406",
+      "drawing": "RSL 梁伏図：部材の取合い",
+      "note": "大梁リストの G4 左端部・右端部の H-448-400×200×8×13 の行に「G2取合」と記入",
+      "summary": "AIも同じ問題を指摘しました。",
+      "key_id": null,
+      "image": "human/R406.png",
+      "finding_ids": [
+        "p6-03"
+      ],
+      "ai_image": "human/R406-before.png",
+      "sheet": "s06",
+      "bbox": [
+        0.7575,
+        0.2733,
+        0.9962,
+        0.3408
+      ]
+    },
+    {
+      "id": "R407",
+      "drawing": "RSL 梁伏図：保留",
+      "note": "雲印で保留：X2 外、X8 外、Y1 外の持ち出しの 75/1075/100",
+      "summary": "打合せや製作上の判断など、図面の照合だけでは判断しにくい朱書きです。",
+      "key_id": null,
+      "image": "human/R407.png",
+      "finding_ids": [],
+      "ai_image": "human/R407-before.png",
+      "sheet": "s06",
+      "bbox": [
+        0.1867,
+        0.6885,
+        0.9858,
+        0.7715
+      ]
+    }
+  ]
+}

@@ -267,3 +267,32 @@
   padding-top: 8px;
   border-top: 1px solid var(--line);
 }
+
+.openSheet {
+  margin-top: 8px;
+  padding: 5px 10px;
+  border: 1px solid #c8361d;
+  border-radius: 4px;
+  background: #fff;
+  color: #c8361d;
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.relatedList {
+  margin: 0 0 6px;
+  padding-left: 18px;
+  font-size: 13px;
+}
+
+.openCompare {
+  display: block;
+  margin-bottom: 8px;
+  padding: 5px 10px;
+  border: 1px solid #c8361d;
+  border-radius: 4px;
+  background: #c8361d;
+  color: #fff;
+  font-size: 12px;
+  cursor: pointer;
+}

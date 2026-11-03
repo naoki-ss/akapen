@@ -1,7 +1,7 @@
 "use client";
 
 import dynamic from "next/dynamic";
-import { useMemo, useState, type ReactNode } from "react";
+import { useCallback, useMemo, useState, type ReactNode } from "react";
 import type {
   CheckResult,
   EvalReport,
@@ -9,9 +9,12 @@ import type {
   HumanItem,
   RunStats,
 } from "@/lib/check";
+import type { Box, Sheet, SheetIndex, SheetTarget } from "@/lib/sheets";
 import CheckPanel from "./CheckPanel";
+import SheetViewer from "./SheetViewer";
 import {
   floorsOf,
+  memberKey,
   TYPE_LABELS,
   type BuildingModel,
   type Member,
@@ -39,15 +42,61 @@ function levelText(m: Member) {
 // 施工図チェックの結果。まだチェックしていない物件にはない
 export type BuildingCheck = {
   result: CheckResult;
-  report: EvalReport;
-  stats: RunStats;
+  report?: EvalReport;
+  stats?: RunStats;
   humanItems: HumanItem[];
+  humanLead?: string;
 };
 
 export type Building = {
+  // demo-data の下のフォルダ名
+  slug: string;
   model: BuildingModel;
   check?: BuildingCheck;
+  sheets?: SheetIndex;
 };
+
+function MemberSheets({
+  member,
+  index,
+  onOpen,
+}: {
+  member: Member;
+  index?: SheetIndex;
+  onOpen: (sheet: Sheet, bbox: Box | undefined, label: string) => void;
+}) {
+  if (!index) return null;
+  const refs = index.member_sheets[memberKey(member)] ?? [];
+  return (
+    <div className={styles.sheets}>
+      <h3>この部材を含む施工図（{refs.length}）</h3>
+      {refs.length === 0 ? (
+        <p className={styles.empty}>{index.empty_note}</p>
+      ) : (
+        <ul>
+          {refs.map((ref) => {
+            const sheet = index.sheets.find((s) => s.id === ref.sheet);
+            if (!sheet) return null;
+            return (
+              <li key={`${ref.sheet}-${ref.reason}`}>
+                <button
+                  onClick={() =>
+                    onOpen(sheet, ref.bbox, `${member.mark} ${member.grid}`)
+                  }
+                >
+                  <b>
+                    p.{sheet.page} {sheet.title}
+                  </b>
+                  <span>{ref.reason}</span>
+                </button>
+              </li>
+            );
+          })}
+        </ul>
+      )}
+    </div>
+  );
+}
 
 function MemberInfo({ member }: { member: Member | null }) {
   if (!member) {
@@ -113,10 +162,13 @@ export default function BuildingViewer({
 }
 
 function BuildingView({
+  slug,
   model,
   check,
+  sheets,
   title,
 }: Building & { title: ReactNode }) {
+  const base = `/demo-data/${slug}`;
   const floors = floorsOf(model);
   const [topFloorIndex, setTopFloorIndex] = useState(floors.length - 1);
   const [hiddenTypes, setHiddenTypes] = useState<ReadonlySet<MemberType>>(
@@ -124,6 +176,10 @@ function BuildingView({
   );
   const [selected, setSelected] = useState<Member | null>(null);
   const [activeFinding, setActiveFinding] = useState<Finding | null>(null);
+  const [openSheet, setOpenSheet] = useState<SheetTarget | null>(null);
+  const closeSheet = useCallback(() => setOpenSheet(null), []);
+  const showSheet = (sheet: Sheet, bbox: Box | undefined, label: string) =>
+    setOpenSheet({ sheet, bbox, label, base });
 
   const highlighted = useMemo(
     () => new Set(activeFinding?.model_refs ?? []),
@@ -203,6 +259,13 @@ function BuildingView({
           ))}
           <h2>選択した部材</h2>
           <MemberInfo member={selected} />
+          {selected && (
+            <MemberSheets
+              member={selected}
+              index={sheets}
+              onOpen={showSheet}
+            />
+          )}
         </aside>
         <aside className={styles.check}>
           {check ? (
@@ -210,6 +273,9 @@ function BuildingView({
               {...check}
               activeId={activeFinding?.id ?? null}
               onActivate={activateFinding}
+              base={base}
+              sheets={sheets?.sheets ?? []}
+              onOpenSheet={showSheet}
             />
           ) : (
             <p className={styles.noCheck}>
@@ -218,6 +284,7 @@ function BuildingView({
           )}
         </aside>
       </main>
+      {openSheet && <SheetViewer target={openSheet} onClose={closeSheet} />}
     </div>
   );
 }

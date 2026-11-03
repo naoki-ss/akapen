@@ -1,4 +1,6 @@
-// 施工図チェックの結果の型。demo-data/sample-x/check-result.json に対応する
+// 施工図チェックの結果の型。demo-data/*/check-result.json に対応する
+
+import type { Box } from "./sheets";
 
 export type Severity = "高" | "中" | "低" | "要確認";
 
@@ -7,9 +9,15 @@ export type Evidence = {
   page: number;
   where: string;
   text: string;
-  bbox: [number, number, number, number];
+  bbox: Box;
   image: string;
   note?: string;
+};
+
+// 同じ箇所の人の朱書き（物件B）
+export type HumanView = {
+  image: string;
+  note: string;
 };
 
 export type Finding = {
@@ -18,13 +26,15 @@ export type Finding = {
   category: string;
   title: string;
   content: string;
-  drawing: { doc: string; page: number; bbox: Evidence["bbox"] };
+  // sheet は sheets.json のページ。施工図以外の図面が対象のときはない
+  drawing: { doc: string; page: number; bbox: Box; sheet?: string };
   members: { grids: string[]; marks: string[]; floor: string };
   model_refs: string[];
   source: "program" | "ai" | "program+ai";
   key_ids: string[];
   planted: boolean;
   evidence: Evidence[];
+  human_view?: HumanView;
 };
 
 export type OrderChange = {
@@ -64,6 +74,11 @@ export type HumanItem = {
   summary: string;
   key_id: string | null;
   image?: string;
+  // 物件B：同じ箇所に当たるAIの指摘と、同じ箇所の朱書き前の図面
+  finding_ids?: string[];
+  ai_image?: string;
+  sheet?: string;
+  bbox?: Box;
 };
 
 export const SOURCE_LABELS: Record<Finding["source"], string> = {
@@ -73,4 +88,4 @@ export const SOURCE_LABELS: Record<Finding["source"], string> = {
 };
 
 // demo-data の画像は public/demo-data（シンボリックリンク）から配信する
-export const demoImage = (path: string) => `/demo-data/sample-x/${path}`;
+export const demoBase = (slug: string) => `/demo-data/${slug}`;

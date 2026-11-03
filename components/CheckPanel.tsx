@@ -3,7 +3,6 @@
 import Image from "next/image";
 import { useState } from "react";
 import {
-  demoImage,
   SOURCE_LABELS,
   type CheckResult,
   type EvalReport,
@@ -11,6 +10,8 @@ import {
   type HumanItem,
   type RunStats,
 } from "@/lib/check";
+import type { Box, Sheet } from "@/lib/sheets";
+import CompareViewer, { type CompareTarget } from "./CompareViewer";
 import styles from "./CheckPanel.module.css";
 
 const SEVERITY_CLASS: Record<Finding["severity"], string> = {
@@ -20,12 +21,20 @@ const SEVERITY_CLASS: Record<Finding["severity"], string> = {
   要確認: styles.unconfirmed,
 };
 
-function DrawingImage({ src, alt }: { src: string; alt: string }) {
+function DrawingImage({
+  base,
+  src,
+  alt,
+}: {
+  base: string;
+  src: string;
+  alt: string;
+}) {
   // 切り抜きごとに縦横比が違うので、幅に合わせて高さを決める
   return (
     <Image
       className={styles.image}
-      src={demoImage(src)}
+      src={`${base}/${src}`}
       alt={alt}
       width={800}
       height={500}
@@ -34,7 +43,21 @@ function DrawingImage({ src, alt }: { src: string; alt: string }) {
   );
 }
 
-function FindingDetail({ finding }: { finding: Finding }) {
+function FindingDetail({
+  finding,
+  base,
+  sheets,
+  onOpenSheet,
+  onCompare,
+}: {
+  finding: Finding;
+  base: string;
+  sheets: Sheet[];
+  onOpenSheet: (sheet: Sheet, bbox: Box, label: string) => void;
+  onCompare: (target: CompareTarget) => void;
+}) {
+  const sheet = sheets.find((s) => s.id === finding.drawing.sheet);
+  const main = finding.evidence[0];
   return (
     <div className={styles.detail}>
       <p>{finding.content}</p>
@@ -56,16 +79,80 @@ function FindingDetail({ finding }: { finding: Finding }) {
         <dt>判定</dt>
         <dd>{SOURCE_LABELS[finding.source]}</dd>
       </dl>
-      <h4>根拠</h4>
-      {finding.evidence.map((ev) => (
-        <figure key={ev.image} className={styles.evidence}>
-          <figcaption>
-            {ev.doc} p.{ev.page}・{ev.where}：<b>{ev.text}</b>
-          </figcaption>
-          <DrawingImage src={ev.image} alt={`${ev.doc} ${ev.where}`} />
-          {ev.note && <small>{ev.note}</small>}
-        </figure>
-      ))}
+      {finding.human_view ? (
+        <>
+          <h4>同じ箇所の比較</h4>
+          <button
+            className={styles.openCompare}
+            onClick={() =>
+              onCompare({
+                title: finding.title,
+                left: { label: "AIの朱書き", src: `${base}/${main.image}` },
+                right: {
+                  label: `人の朱書き（${finding.human_view?.note}）`,
+                  src: `${base}/${finding.human_view?.image}`,
+                },
+              })
+            }
+          >
+            大きく並べて見る
+          </button>
+          <div className={styles.columns}>
+            <figure className={styles.evidence}>
+              <figcaption>
+                <b>AIの朱書き</b>（{main.where}）
+              </figcaption>
+              <DrawingImage
+                base={base}
+                src={main.image}
+                alt={`AIの朱書き ${main.where}`}
+              />
+            </figure>
+            <figure className={styles.evidence}>
+              <figcaption>
+                <b>人の朱書き</b>（{finding.human_view.note}）
+              </figcaption>
+              <DrawingImage
+                base={base}
+                src={finding.human_view.image}
+                alt={`人の朱書き ${finding.human_view.note}`}
+              />
+            </figure>
+          </div>
+        </>
+      ) : (
+        <>
+          <h4>根拠</h4>
+          {finding.evidence.map((ev) => (
+            <figure key={ev.image} className={styles.evidence}>
+              <figcaption>
+                {ev.doc} p.{ev.page}・{ev.where}
+                {ev.text && (
+                  <>
+                    ：<b>{ev.text}</b>
+                  </>
+                )}
+              </figcaption>
+              <DrawingImage
+                base={base}
+                src={ev.image}
+                alt={`${ev.doc} ${ev.where}`}
+              />
+              {ev.note && <small>{ev.note}</small>}
+            </figure>
+          ))}
+        </>
+      )}
+      {sheet && (
+        <button
+          className={styles.openSheet}
+          onClick={() =>
+            onOpenSheet(sheet, finding.drawing.bbox, finding.title)
+          }
+        >
+          図面全体で見る（p.{sheet.page}）
+        </button>
+      )}
     </div>
   );
 }
@@ -94,20 +181,35 @@ function HumanCompare({
   items,
   findings,
   stats,
+  base,
+  sheets,
+  onOpenSheet,
+  onCompare,
+  lead,
 }: {
   items: HumanItem[];
   findings: Finding[];
-  stats: RunStats;
+  stats?: RunStats;
+  base: string;
+  sheets: Sheet[];
+  onOpenSheet: (sheet: Sheet, bbox: Box, label: string) => void;
+  onCompare: (target: CompareTarget) => void;
+  lead?: string;
 }) {
   return (
     <div className={styles.list}>
       <p className={styles.lead}>
-        実際のチェックバックの朱書きと、チェック機能の指摘を並べています。
+        {lead ??
+          "実際のチェックバックの朱書きと、チェック機能の指摘を並べています。"}
       </p>
       {items.map((item) => {
         const linked = findings.find(
           (f) => item.key_id && f.key_ids.includes(item.key_id),
         );
+        const related = findings.filter((f) =>
+          item.finding_ids?.includes(f.id),
+        );
+        const sheet = sheets.find((s) => s.id === item.sheet);
         return (
           <article key={item.id} className={styles.compare}>
             <h3>{item.drawing}</h3>
@@ -116,21 +218,67 @@ function HumanCompare({
                 <h4>人の朱書き</h4>
                 <p>{item.note}</p>
                 {item.image && (
-                  <DrawingImage src={item.image} alt={item.note} />
+                  <DrawingImage base={base} src={item.image} alt={item.note} />
                 )}
               </div>
               <div>
                 <h4>チェック機能</h4>
-                <p>
-                  {linked
-                    ? linked.title
-                    : item.key_id
-                      ? `この回は検出できませんでした（${runCountText(stats, item.key_id)}）`
-                      : "照合の範囲外です"}
-                </p>
+                {item.finding_ids ? (
+                  related.length > 0 ? (
+                    <ul className={styles.relatedList}>
+                      {related.map((f) => (
+                        <li key={f.id}>{f.title}</li>
+                      ))}
+                    </ul>
+                  ) : (
+                    <p>この箇所の指摘はありません</p>
+                  )
+                ) : (
+                  <p>
+                    {linked
+                      ? linked.title
+                      : item.key_id && stats
+                        ? `この回は検出できませんでした（${runCountText(stats, item.key_id)}）`
+                        : "照合の範囲外です"}
+                  </p>
+                )}
+                {item.ai_image && (
+                  <DrawingImage
+                    base={base}
+                    src={item.ai_image}
+                    alt={`朱書き前の図面 ${item.drawing}`}
+                  />
+                )}
               </div>
             </div>
             <p className={styles.summary}>{item.summary}</p>
+            {item.image && item.ai_image && (
+              <button
+                className={styles.openCompare}
+                onClick={() =>
+                  onCompare({
+                    title: item.drawing,
+                    left: {
+                      label: "朱書き前の図面",
+                      src: `${base}/${item.ai_image}`,
+                    },
+                    right: { label: "人の朱書き", src: `${base}/${item.image}` },
+                  })
+                }
+              >
+                大きく並べて見る
+              </button>
+            )}
+            {sheet && item.bbox && (
+              <button
+                className={styles.openSheet}
+                onClick={() =>
+                  onOpenSheet(sheet, item.bbox as Box, item.note)
+                }
+              >
+                図面全体で見る（p.{sheet.page}）
+              </button>
+            )}
           </article>
         );
       })}
@@ -150,20 +298,33 @@ export default function CheckPanel({
   report,
   stats,
   humanItems,
+  humanLead,
   activeId,
   onActivate,
+  base,
+  sheets,
+  onOpenSheet,
 }: {
   result: CheckResult;
-  report: EvalReport;
-  stats: RunStats;
+  // 正解ファイルがある物件だけ採点を出す
+  report?: EvalReport;
+  stats?: RunStats;
   humanItems: HumanItem[];
+  humanLead?: string;
   activeId: string | null;
   onActivate: (finding: Finding | null) => void;
+  base: string;
+  sheets: Sheet[];
+  onOpenSheet: (sheet: Sheet, bbox: Box, label: string) => void;
 }) {
   const [tab, setTab] = useState<Tab>("findings");
+  const [compare, setCompare] = useState<CompareTarget | null>(null);
 
   return (
     <div className={styles.root}>
+      {compare && (
+        <CompareViewer target={compare} onClose={() => setCompare(null)} />
+      )}
       <div className={styles.tabs} role="tablist">
         <button
           role="tab"
@@ -185,11 +346,16 @@ export default function CheckPanel({
           items={humanItems}
           findings={result.findings}
           stats={stats}
+          base={base}
+          sheets={sheets}
+          onOpenSheet={onOpenSheet}
+          onCompare={setCompare}
+          lead={humanLead}
         />
       ) : (
         <div className={styles.list}>
           <p className={styles.lead}>{result.mode}</p>
-          <ScoreSummary report={report} />
+          {report && <ScoreSummary report={report} />}
           {result.findings.map((finding) => {
             const active = finding.id === activeId;
             return (
@@ -209,11 +375,19 @@ export default function CheckPanel({
                     <span className={styles.planted}>デモ用に仕込み</span>
                   )}
                 </button>
-                {active && <FindingDetail finding={finding} />}
+                {active && (
+                  <FindingDetail
+                    finding={finding}
+                    base={base}
+                    sheets={sheets}
+                    onOpenSheet={onOpenSheet}
+                    onCompare={setCompare}
+                  />
+                )}
               </article>
             );
           })}
-          {report.missed.length > 0 && (
+          {report && stats && report.missed.length > 0 && (
             <section className={styles.missed}>
               <h3>AIが見逃した例</h3>
               <p>
