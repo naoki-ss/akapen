@@ -7,16 +7,18 @@
   A 施工図＋構造図（review_steel_sheet.py で実施）
   B A＋差替図面
   C B＋施工図を細かく分割し、同じ階の伏図も分割して渡す
-  D C＋照合の手順を決めて1つずつ確認させる
+  D C＋照合の手順を決めて1つずつ確認させる（物件Bの標準の判定方法）
+  E D＋場所ごとの確認を足す（RSL の検証で D と比べる。結果を見るまでは標準にしない）
 
 設定と記録は ~/sekozu-data/experiments/ に置く（図面の場所を含むのでコミットしない）。
 - 人の朱書きのある図面は内容のハッシュで拒否する。施工図と構造図は赤があれば送らない
 - プロンプトは正解の指摘を知らなくても書ける一般的な内容だけにする
-- 予算の上限を超えそうなら API を呼ばない
+- 費用は1回ごとに ledger.json へ記録する。budget_usd が null なら上限なし
 """
 import argparse
 import base64
 import copy
+import fcntl
 import hashlib
 import json
 import os
@@ -52,6 +54,10 @@ PROCEDURE = """
 (3) リストにあって図にない符号、図にあってリストにない符号を探す。
 (4) 食い違いごとに、根拠になる図面とページを evidence に示す。"""
 
+# 同じ符号が別の場所にあると、符号ごとの確認では場所ごとの抜けに気づけない
+LOCATION_PROCEDURE = """
+(5) 符号とは別に、場所ごとに確かめて location_checks に書く。柱は通り芯の交点ごと、大梁は通り間ごとに、施工図の符号と設計図の同じ場所の符号を1か所ずつ並べる。設計図の場所をすべて順に見て、施工図で抜けている場所、符号が違う場所、設計図にない場所を探す。食い違いは findings にも書く。"""
+
 
 def tiles(page, columns, rows, overlap=0.06):
     """[(PNG, 範囲の説明)] 重なりのある分割図"""
@@ -82,7 +88,7 @@ def sha256(path):
 
 def schema_for(condition):
     schema = copy.deepcopy(SCHEMA)
-    if condition != "D":
+    if condition not in ("D", "E"):
         return schema
     finding = schema["properties"]["findings"]["items"]
     finding["required"].append("evidence")
@@ -112,7 +118,35 @@ def schema_for(condition):
             },
         },
     }
+    if condition == "E":
+        schema["required"].append("location_checks")
+        schema["properties"]["location_checks"] = {
+            "type": "array",
+            "items": {
+                "type": "object",
+                "additionalProperties": False,
+                "required": ["place", "sheet_mark", "design_mark", "result"],
+                "properties": {
+                    "place": {"type": "string"},
+                    "sheet_mark": {"type": "string"},
+                    "design_mark": {"type": "string"},
+                    "result": {"type": "string", "enum": ["一致", "相違", "施工図になし", "設計図になし", "読めない"]},
+                },
+            },
+        }
     return schema
+
+
+def record_cost(ledger_path, run_id, usd):
+    """同時に走る回があっても記録が消えないように、読み直してから追記する"""
+    with open(ledger_path, "r+") as file:
+        fcntl.flock(file, fcntl.LOCK_EX)
+        ledger = json.load(file)
+        ledger["runs"].append({"id": run_id, "usd": usd})
+        file.seek(0)
+        json.dump(ledger, file, ensure_ascii=False, indent=2)
+        file.truncate()
+    return ledger
 
 
 def build_inputs(condition, page_config, config):
@@ -132,7 +166,7 @@ def build_inputs(condition, page_config, config):
     if marked:
         sys.exit(f"赤い部分があるページは送りません: {marked}")
 
-    columns, rows = (4, 3) if condition in ("C", "D") else (3, 2)
+    columns, rows = (4, 3) if condition in ("C", "D", "E") else (3, 2)
     content = [{"type": "text", "text": "施工図：全体図"}, image_block(render(sheet_page))]
     labels = []
     for png, place in tiles(sheet_page, columns, rows):
@@ -148,7 +182,7 @@ def build_inputs(condition, page_config, config):
                 pdf_block(Path(config["revised"]).read_bytes())]
 
     plan_tiles = []
-    if condition in ("C", "D"):
+    if condition in ("C", "D", "E"):
         plans = [("構造図", design, page_config["design_plan"])]
         if page_config["revised_plan"]:
             plans.append(("差替図面", revised, page_config["revised_plan"]))
@@ -158,8 +192,10 @@ def build_inputs(condition, page_config, config):
                 content += [{"type": "text", "text": f"{name} p{page_no}（伏図）：{place} の分割図"}, image_block(png)]
 
     request = "この施工図のページを設計図と照らし合わせ、確認すべき点を挙げてください。"
-    if condition == "D":
+    if condition in ("D", "E"):
         request += PROCEDURE
+    if condition == "E":
+        request += LOCATION_PROCEDURE
     content.append({"type": "text", "text": request})
 
     record = {
@@ -176,7 +212,7 @@ def build_inputs(condition, page_config, config):
 
 def main():
     parser = argparse.ArgumentParser()
-    parser.add_argument("--condition", choices=["B", "C", "D"], required=True)
+    parser.add_argument("--condition", choices=["B", "C", "D", "E"], default="D")
     parser.add_argument("--page", required=True, help="config.json の pages のキー")
     parser.add_argument("--dry-run", action="store_true")
     args = parser.parse_args()
@@ -199,17 +235,18 @@ def main():
     ledger_path = ROOT / "ledger.json"
     ledger = json.loads(ledger_path.read_text())
     spent = sum(run["usd"] for run in ledger["runs"])
-    print(f"入力 {counted} トークン、見込み {estimate:.2f} ドル、使用済み {spent:.2f} / {ledger['budget_usd']:.2f} ドル")
+    budget = ledger["budget_usd"]
+    print(f"入力 {counted} トークン、見込み {estimate:.2f} ドル、使用済み {spent:.2f} ドル（上限 {budget}）")
     if args.dry_run:
         return
-    if spent + estimate > ledger["budget_usd"]:
-        sys.exit("予算の上限を超えそうなので実行しません")
+    if budget is not None:
+        if spent + estimate > budget:
+            sys.exit("予算の上限を超えそうなので実行しません")
+        # 出力が多くても予算を超えないように、残額から出力の上限を決める
+        remaining = budget - spent - counted * PRICE_INPUT / 1_000_000
+        ai_review.MAX_TOKENS = min(ai_review.MAX_TOKENS, int(remaining * 1_000_000 / PRICE_OUTPUT))
 
-    # 出力が多くても予算を超えないように、残額から出力の上限を決める
-    remaining = ledger["budget_usd"] - spent - counted * PRICE_INPUT / 1_000_000
-    ai_review.MAX_TOKENS = min(ai_review.MAX_TOKENS, int(remaining * 1_000_000 / PRICE_OUTPUT))
-
-    run_id = f"{args.condition}-p{args.page}-{datetime.now().strftime('%Y%m%d-%H%M%S')}"
+    run_id = f"{args.condition}-p{args.page}-{datetime.now().strftime('%Y%m%d-%H%M%S')}-{os.getpid()}"
     raw_dir = ROOT / run_id
     write_json(raw_dir / "inputs.json", record)
     write_json(raw_dir / "prompt.json", {
@@ -229,8 +266,7 @@ def main():
             message = json.loads(response.read_text())
             usage = message["usage"]
             cost = (usage["input_tokens"] * PRICE_INPUT + usage["output_tokens"] * PRICE_OUTPUT) / 1_000_000
-            ledger["runs"].append({"id": run_id, "usd": round(cost, 3)})
-            write_json(ledger_path, ledger)
+            ledger = record_cost(ledger_path, run_id, round(cost, 3))
             write_json(raw_dir / "metrics.json", {
                 "model": message["model"],
                 "stop_reason": message["stop_reason"],
