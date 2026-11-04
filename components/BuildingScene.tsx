@@ -3,13 +3,22 @@
 import { Html, Line, OrbitControls } from "@react-three/drei";
 import { Canvas, useFrame, useThree, type ThreeEvent } from "@react-three/fiber";
 import { useEffect, useMemo, useRef, type CSSProperties } from "react";
-import { CanvasTexture, Vector3 } from "three";
+import {
+  CanvasTexture,
+  ExtrudeGeometry,
+  Shape as OutlineShape,
+  Vector2,
+  Vector3,
+} from "three";
 import type { OrbitControls as OrbitControlsImpl } from "three-stdlib";
 import {
   floorsOf,
   memberCenter,
   memberKey,
   PROVISIONAL_SIZE as SIZE,
+  type ArchFloor,
+  type ArchOpening,
+  type Architecture,
   type BuildingModel,
   type Member,
   type MemberType,
@@ -23,6 +32,11 @@ const GRID_COLOR = "#5B6470";
 // 霧がかった緑の地面
 const GROUND = "#A9B79C";
 const FOG = "#DDE3D6";
+const WALL = "#D8D4CA";
+const GLASS = "#8FA6B2";
+const ROOF = "#B7B4AB";
+const WALL_THICKNESS = 200;
+const GLASS_THICKNESS = 40;
 
 const COLORS: Record<MemberType, string> = {
   column: "#8a8a84",
@@ -341,6 +355,216 @@ function CameraRig({
   return null;
 }
 
+// 外周の壁。開口のところは腰と垂れ壁だけにして、ガラスを入れる
+type WallBox = { center: Vec3; size: Vec3; glass: boolean };
+
+function wallBoxes(floor: ArchFloor): WallBox[] {
+  const boxes: WallBox[] = [];
+  const points = floor.outline;
+  const edges = points.map((p, i) => [p, points[(i + 1) % points.length]]);
+  const box = (
+    a: number,
+    b: number,
+    fixed: number,
+    alongX: boolean,
+    z0: number,
+    z1: number,
+    glass: boolean,
+  ) => {
+    if (b - a < 1 || z1 - z0 < 1) return;
+    const mid = (a + b) / 2;
+    const thick = glass ? GLASS_THICKNESS : WALL_THICKNESS;
+    boxes.push({
+      center: alongX
+        ? toScene(mid, fixed, (z0 + z1) / 2)
+        : toScene(fixed, mid, (z0 + z1) / 2),
+      size: alongX
+        ? [(b - a) * MM, (z1 - z0) * MM, thick * MM]
+        : [thick * MM, (z1 - z0) * MM, (b - a) * MM],
+      glass,
+    });
+  };
+  // 開口を、その面の側で範囲が重なる一番外の壁に割り当てる
+  const onEdge = new Map<number, ArchOpening[]>();
+  for (const opening of floor.openings) {
+    const alongX = opening.along === "x";
+    let best = -1;
+    let bestValue = 0;
+    edges.forEach(([p, q], index) => {
+      const edgeAlongX = p[1] === q[1];
+      if (edgeAlongX !== alongX || (!edgeAlongX && p[0] !== q[0])) return;
+      const [a, b] = alongX
+        ? [Math.min(p[0], q[0]), Math.max(p[0], q[0])]
+        : [Math.min(p[1], q[1]), Math.max(p[1], q[1])];
+      if (opening.to <= a || opening.from >= b) return;
+      const value = alongX ? p[1] : p[0];
+      const outer = opening.side === "north" || opening.side === "east" ? value : -value;
+      if (best < 0 || outer > bestValue) {
+        best = index;
+        bestValue = outer;
+      }
+    });
+    if (best >= 0) onEdge.set(best, [...(onEdge.get(best) ?? []), opening]);
+  }
+  edges.forEach(([p, q], index) => {
+    const alongX = p[1] === q[1];
+    if (!alongX && p[0] !== q[0]) return;
+    const fixed = alongX ? p[1] : p[0];
+    const a = Math.min(alongX ? p[0] : p[1], alongX ? q[0] : q[1]);
+    const b = Math.max(alongX ? p[0] : p[1], alongX ? q[0] : q[1]);
+    const openings = (onEdge.get(index) ?? []).sort((m, n) => m.from - n.from);
+    let cursor = a;
+    for (const opening of openings) {
+      const from = Math.max(opening.from, cursor);
+      const to = Math.min(opening.to, b);
+      if (to <= from) continue;
+      box(cursor, from, fixed, alongX, floor.z0, floor.z1, false);
+      box(from, to, fixed, alongX, floor.z0, opening.z0, false);
+      box(from, to, fixed, alongX, opening.z1, floor.z1, false);
+      box(from, to, fixed, alongX, opening.z0, opening.z1, true);
+      cursor = to;
+    }
+    box(cursor, b, fixed, alongX, floor.z0, floor.z1, false);
+  });
+  return boxes;
+}
+
+const NO_RAYCAST = () => null;
+
+// 平面の外形を板にする
+function Plate({
+  outline,
+  z,
+  thickness,
+  color,
+  opacity,
+}: {
+  outline: [number, number][];
+  z: number;
+  thickness: number;
+  color: string;
+  opacity?: number;
+}) {
+  const geometry = useMemo(() => {
+    const shape = new OutlineShape(outline.map(([x, y]) => new Vector2(x * MM, y * MM)));
+    const extruded = new ExtrudeGeometry(shape, {
+      depth: thickness * MM,
+      bevelEnabled: false,
+    });
+    extruded.rotateX(-Math.PI / 2);
+    return extruded;
+  }, [outline, thickness]);
+  useEffect(() => () => geometry.dispose(), [geometry]);
+  return (
+    <mesh geometry={geometry} position={[0, z * MM, 0]} raycast={NO_RAYCAST}>
+      <meshStandardMaterial
+        color={color}
+        transparent={opacity !== undefined}
+        opacity={opacity ?? 1}
+        depthWrite={opacity === undefined}
+      />
+    </mesh>
+  );
+}
+
+function FloorWalls({ floor, ghost }: { floor: ArchFloor; ghost: boolean }) {
+  const boxes = useMemo(() => wallBoxes(floor), [floor]);
+  return (
+    <group>
+      {boxes.map((item, index) => (
+        <mesh key={index} position={item.center} raycast={NO_RAYCAST}>
+          <boxGeometry args={item.size} />
+          <meshStandardMaterial
+            key={`${item.glass}-${ghost}`}
+            color={item.glass ? GLASS : WALL}
+            transparent={ghost || item.glass}
+            opacity={ghost ? 0.07 : item.glass ? 0.42 : 1}
+            depthWrite={!ghost && !item.glass}
+          />
+        </mesh>
+      ))}
+    </group>
+  );
+}
+
+// PHは RF の階に立つ塔屋
+const floorIndexOf = (floors: string[], name: string) =>
+  floors.indexOf(name === "PH" ? "RF" : name);
+
+function Exterior({
+  architecture,
+  floors,
+  topFloorIndex,
+  display,
+  showRooms,
+}: {
+  architecture: Architecture;
+  floors: string[];
+  topFloorIndex: number;
+  display: Display;
+  showRooms: boolean;
+}) {
+  const ghost = display === "xray";
+  const visible = architecture.floors.filter(
+    (floor) => floorIndexOf(floors, floor.floor) <= topFloorIndex,
+  );
+  const everything = topFloorIndex >= floors.length - 1;
+  const roofOn = everything && display === "normal";
+  const mainFloors = visible.filter((floor) => floor.floor !== "PH");
+  const topMain = mainFloors.reduce<ArchFloor | null>(
+    (top, floor) =>
+      floor.rooms.length > 0 && (!top || floor.z0 > top.z0) ? floor : top,
+    null,
+  );
+  const labeled = topMain ? [topMain] : [];
+  return (
+    <group>
+      {visible
+        .filter((floor) => !(floor.floor === "PH" && !everything))
+        .map((floor, index) => (
+          <FloorWalls key={index} floor={floor} ghost={ghost} />
+        ))}
+      {!ghost && topMain && !roofOn && (
+        <Plate outline={topMain.outline} z={topMain.z0} thickness={60} color="#EFEBE2" />
+      )}
+      {architecture.roofs
+        .filter(() => roofOn || ghost)
+        .map((roof, index) => (
+          <Plate
+            key={index}
+            outline={roof.outline}
+            z={roof.z}
+            thickness={200}
+            color={ROOF}
+            opacity={ghost ? 0.06 : undefined}
+          />
+        ))}
+      {showRooms &&
+        !roofOn &&
+        !ghost &&
+        labeled.flatMap((floor) =>
+          floor.rooms.map((room) => (
+            <Html
+              key={`${floor.floor}-${room.name}`}
+              position={toScene(room.x, room.y, floor.z0 + 300)}
+              center
+              zIndexRange={[1, 0]}
+              pointerEvents="none"
+            >
+              <div className={styles.room} data-status={room.status}>
+                {room.name}
+                {room.area_m2 !== null && (
+                  <small className="mono">{room.area_m2}㎡</small>
+                )}
+                {room.status === "要確認" && <small>要確認</small>}
+              </div>
+            </Html>
+          )),
+        )}
+    </group>
+  );
+}
+
 export type SceneProps = {
   model: BuildingModel;
   topFloorIndex: number;
@@ -355,6 +579,8 @@ export type SceneProps = {
   callout?: Callout | null;
   // 小さな枠で使うときは、通り芯の符号を出さない
   compact?: boolean;
+  // 部屋名を出す（屋根を外しているとき）
+  showRooms?: boolean;
 };
 
 export default function BuildingScene({
@@ -368,12 +594,16 @@ export default function BuildingScene({
   view = "oblique",
   callout,
   compact = false,
+  showRooms = false,
 }: SceneProps) {
   const floors = floorsOf(model);
   const roofIndex = floors.findIndex((floor) => /^R/.test(floor));
   const visible = model.members.filter((m) => {
     const index = floors.indexOf(m.floor);
     if (index > topFloorIndex) return false;
+    // 外観がある物件は、通常は外観だけ、屋根を外すと柱だけ、透かしで骨組み全部を見せる
+    if (model.architecture && display === "normal" && !highlighted.size) return false;
+    if (model.architecture && display === "noRoof" && m.type !== "column") return false;
     return !(display === "noRoof" && roofIndex >= 0 && index >= roofIndex);
   });
 
@@ -454,6 +684,15 @@ export default function BuildingScene({
           />
         );
       })}
+      {model.architecture && (
+        <Exterior
+          architecture={model.architecture}
+          floors={floors}
+          topFloorIndex={topFloorIndex}
+          display={display}
+          showRooms={showRooms}
+        />
+      )}
       {callout && focus && (
         <Html position={focus.center} center zIndexRange={[1, 0]} pointerEvents="none">
           <div

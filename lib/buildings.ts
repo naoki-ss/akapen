@@ -41,7 +41,7 @@ const DEMOS: Building[] = [
   },
   {
     slug: "sample-b",
-    model: modelB as BuildingModel,
+    model: modelB as unknown as BuildingModel,
     sheets: sheetsB as unknown as SheetIndex,
     check: resultB as unknown as CheckResult,
   },

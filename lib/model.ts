@@ -86,6 +86,42 @@ export function memberCenter(m: Member): [number, number, number] {
   }
 }
 
+// 意匠図から読んだ外観と部屋（物件Bのみ）。座標は mm
+export type ArchOpening = {
+  side: "north" | "south" | "east" | "west";
+  kind: string;
+  fixed: number;
+  from: number;
+  to: number;
+  along: "x" | "y";
+  z0: number;
+  z1: number;
+};
+
+export type ArchRoom = {
+  name: string;
+  area_m2: number | null;
+  x: number;
+  y: number;
+  status: string;
+};
+
+export type ArchFloor = {
+  floor: string;
+  z0: number;
+  z1: number;
+  outline: [number, number][];
+  openings: ArchOpening[];
+  rooms: ArchRoom[];
+};
+
+export type Architecture = {
+  floors: ArchFloor[];
+  roofs: { floor: string; z: number; outline: [number, number][] }[];
+  checks: { kind: string; result: string; message: string }[];
+  source: string;
+};
+
 export type BuildingModel = {
   name: string;
   source: string;
@@ -95,6 +131,9 @@ export type BuildingModel = {
   // 下から順の階名。省略すると FLOORS を使う
   floors?: string[];
   members: Member[];
+  architecture?: Architecture;
+  // 建設地の代表点と、図面の上が真北から時計回りに何度か
+  site?: { lat: number; lon: number; north_deg: number };
 };
 
 export const TYPE_LABELS: Record<MemberType, string> = {

@@ -97,6 +97,8 @@ export default function ModelConsole({
   const [selected, setSelected] = useState<Member | null>(null);
   const [openSheet, setOpenSheet] = useState<SheetTarget | null>(null);
   const [showChecks, setShowChecks] = useState(false);
+  const [showArchChecks, setShowArchChecks] = useState(false);
+  const [showRooms, setShowRooms] = useState(false);
   const [visibleLayers, setVisibleLayers] = useState<ReadonlySet<LayerKey>>(
     () => new Set(ALL_LAYERS),
   );
@@ -189,6 +191,7 @@ export default function ModelConsole({
             onSelect={setSelected}
             display={display}
             view={view}
+            showRooms={showRooms}
             callout={
               active
                 ? {
@@ -376,6 +379,31 @@ export default function ModelConsole({
               }
             }}
           />
+          {model.architecture && (
+            <>
+              <h2>部屋</h2>
+              <label className={appStyles.typeToggle}>
+                <input
+                  type="checkbox"
+                  checked={showRooms}
+                  onChange={(e) => {
+                    setShowRooms(e.target.checked);
+                    // 部屋は屋根の下にあるので、屋根を外して見せる
+                    if (e.target.checked && display === "normal") {
+                      setDisplay("noRoof");
+                    }
+                  }}
+                />
+                部屋名を表示
+              </label>
+              <button
+                className={panel.clear}
+                onClick={() => setShowArchChecks(true)}
+              >
+                外観の要確認 {model.architecture.checks.length} 件
+              </button>
+            </>
+          )}
         </aside>
       )}
 
@@ -410,6 +438,34 @@ export default function ModelConsole({
             <button
               className={appStyles.secondary}
               onClick={() => setShowChecks(false)}
+            >
+              閉じる
+            </button>
+          </div>
+        </div>
+      )}
+      {showArchChecks && model.architecture && (
+        <div
+          className={appStyles.projectChecks}
+          role="dialog"
+          aria-label="外観の要確認"
+          onClick={() => setShowArchChecks(false)}
+        >
+          <div onClick={(e) => e.stopPropagation()}>
+            <div className={appStyles.checks}>
+              <h3>外観の要確認 {model.architecture.checks.length} 件</h3>
+              <p className={appStyles.fine}>{model.architecture.source}</p>
+              <ul>
+                {model.architecture.checks.map((check, index) => (
+                  <li key={index}>
+                    <b>{check.kind}</b> {check.message}
+                  </li>
+                ))}
+              </ul>
+            </div>
+            <button
+              className={appStyles.secondary}
+              onClick={() => setShowArchChecks(false)}
             >
               閉じる
             </button>
