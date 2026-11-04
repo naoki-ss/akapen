@@ -39,8 +39,9 @@ export function sourceLabel(finding: Finding) {
 const bodyOf = (finding: Finding) =>
   finding.content.replace(/（根拠：[\s\S]*$/, "").trim();
 
-// 理由の一文。本文の最初の文を使う
+// 理由の一文。理由の項目がない結果は、本文の最初の文を使う
 export function reasonOf(finding: Finding) {
+  if (finding.reason) return finding.reason;
   const body = bodyOf(finding);
   const first = body.split(/(?<=。)/)[0]?.trim();
   return first || body;

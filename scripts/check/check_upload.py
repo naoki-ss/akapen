@@ -55,6 +55,7 @@ OUTPUT_NOTE = """
 出力について:
 - regions に、指摘の場所ごとの範囲を入れてください。指摘が複数の場所を指すときは、場所ごとに範囲を分けて全部入れます。
 - comment は図面に書き込む短いコメントです。30文字以内で、何を確認するのかが分かるように書きます。
+- reason は、なぜ問題かを1文（40字程度）で書きます。前置きや読めた値の説明ではなく、何が問題なのかを書きます。
 - needs_confirmation は、図面だけでは食い違いと言い切れず、人の確認が必要なときに true にします。"""
 
 # 鉄骨以外の施工図では、製作会社向けの言い方だけを変える
@@ -142,9 +143,10 @@ def output_schema():
     finding = schema["properties"]["findings"]["items"]
     finding["required"].remove("region")
     del finding["properties"]["region"]
-    finding["required"] += ["regions", "comment", "needs_confirmation"]
+    finding["required"] += ["regions", "comment", "reason", "needs_confirmation"]
     finding["properties"]["regions"] = {"type": "array", "items": {"type": "array", "items": {"type": "number"}}}
     finding["properties"]["comment"] = {"type": "string"}
+    finding["properties"]["reason"] = {"type": "string"}
     finding["properties"]["needs_confirmation"] = {"type": "boolean"}
     return schema
 
@@ -450,6 +452,7 @@ def to_view(item, slug, classified):
         "merged_numbers": item.get("merged_numbers"),
         # 根拠カードで値を並べるための項目。朱書きの短い注記と、枠が複数のときの全部の枠
         "comment": item.get("comment"),
+        "reason": item.get("reason") or None,
         "regions": item["regions"],
         "sheet_value": item.get("sheet_value") or None,
         "design_value": item.get("design_value") or item.get("decided_value") or None,
@@ -561,6 +564,12 @@ def finish_job(job, folder, slug, pages, checklist, use_knowledge, client, input
     masked = bool(masks) and write_masked(folder, input_path, masks, findings, numbers, **marks)
     by_page = {page["number"]: page for page in pages}
     views = [to_view(item, slug, by_page[item["page"]].get("classified")) for item in findings]
+    # 理由の項目を足す前の結果は、あとから作った理由を使う（作り直しても消えないように別のファイルに置く）
+    reasons_path = folder / "reasons.json"
+    if reasons_path.exists():
+        reasons = json.loads(reasons_path.read_text())
+        for view in views:
+            view["reason"] = view["reason"] or reasons.get(view["id"])
     usd = round(sum(page["usd"] for page in pages) + merge_usd + stopped_usd, 3)
     seconds = round(time.time() - job.started, 1)
     write_json(folder / "result.json", {

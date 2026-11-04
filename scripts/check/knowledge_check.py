@@ -47,6 +47,7 @@ SYSTEM = """あなたは建設会社の施工図チェック担当です。提�
 - 「〜の可能性があります。ご確認ください」と書きます。
 - 位置は通り芯で書きます。regions に、指摘の場所ごとの全体図に対する 0〜1 の範囲 [x0, y0, x1, y1] を入れます。複数の場所を指すときは、場所ごとに分けて全部入れます。
 - comment は図面に書き込む短いコメントです。30文字以内で、何を確認するのかが分かるように書きます。
+- reason は、なぜ問題かを1文（40字程度）で書きます。前置きや読めた値の説明ではなく、何が問題なのかを書きます。
 - needs_confirmation は、図面だけでは言い切れず、人の確認が必要なときに true にします。"""
 
 
@@ -197,7 +198,7 @@ def build_schema(targets):
                 "items": {
                     "type": "object",
                     "additionalProperties": False,
-                    "required": ["checklist_id", "title", "content", "severity", "grids", "marks", "regions", "comment", "needs_confirmation"],
+                    "required": ["checklist_id", "title", "content", "severity", "grids", "marks", "regions", "comment", "reason", "needs_confirmation"],
                     "properties": {
                         "checklist_id": {"type": "string", "enum": ids},
                         "title": {"type": "string"},
@@ -207,6 +208,7 @@ def build_schema(targets):
                         "marks": {"type": "array", "items": {"type": "string"}},
                         "regions": {"type": "array", "items": {"type": "array", "items": {"type": "number"}}},
                         "comment": {"type": "string"},
+                        "reason": {"type": "string"},
                         "needs_confirmation": {"type": "boolean"},
                     },
                 },

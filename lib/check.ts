@@ -39,6 +39,8 @@ export type Finding = {
   minutes_refs?: { id: string; text: string }[] | null;
   // 朱書きの短い注記と、すべての枠
   comment?: string | null;
+  // なぜ問題かの1文
+  reason?: string | null;
   regions?: Box[];
   // 根拠カードで並べる値（設計図書または議事録で決まった値）と、根拠の資料
   sheet_value?: string | null;

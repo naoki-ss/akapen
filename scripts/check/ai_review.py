@@ -277,7 +277,7 @@ TABLE_SCHEMA = {
 }
 
 
-def call_claude(client, system, content, schema, raw_dir, name):
+def call_claude(client, system, content, schema, raw_dir, name, effort="high"):
     """1回呼び出し、生の応答を保存して JSON を返す"""
     with client.beta.messages.stream(
         model=MODEL,
@@ -285,7 +285,7 @@ def call_claude(client, system, content, schema, raw_dir, name):
         betas=["server-side-fallback-2026-07-01"],
         fallbacks="default",
         system=system,
-        output_config={"effort": "high", "format": {"type": "json_schema", "schema": schema}},
+        output_config={"effort": effort, "format": {"type": "json_schema", "schema": schema}},
         messages=[{"role": "user", "content": content}],
     ) as stream:
         message = stream.get_final_message()
