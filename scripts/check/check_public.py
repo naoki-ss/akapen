@@ -3,6 +3,8 @@
 禁止語の一覧は実名を含むのでリポジトリの外（~/sekozu-data/dummy_map.json）に置く。
 画像の中身は文字として調べられないので、目で確認した画像のハッシュを
 demo-data/image-review.json に記録し、記録と違う画像があれば止める。
+
+--staged を付けると、ステージした内容も調べる（コミット前のフック .githooks/pre-commit が使う）。
 """
 import hashlib
 import json
@@ -60,33 +62,35 @@ for source in sorted(knowledge.glob("*.json")) if knowledge.exists() else []:
                 checklist_phrases[phrase] = f"{entry['id']} の {field}"
 print(f"チェックリストの文 {len(checklist_phrases)} 件と照合")
 
-for name in filter(None, files):
+def check_file(name, data, label=""):
+    """1ファイルの中身を調べる。data はファイルの内容（バイト列）"""
     path = REPO / name
-    if path.is_file() and hashlib.sha256(path.read_bytes()).hexdigest() in upload_hashes:
-        problems.append(f"{name}: アップロードされたファイルと同じ内容です")
-    if path.is_file() and hashlib.sha256(path.read_bytes()).hexdigest() in checklist_hashes:
-        problems.append(f"{name}: チェックリストの本体と同じ内容です")
-    if not path.is_file() or path.name == "package-lock.json":
-        continue
+    digest = hashlib.sha256(data).hexdigest()
+    if digest in upload_hashes:
+        problems.append(f"{label}{name}: アップロードされたファイルと同じ内容です")
+    if digest in checklist_hashes:
+        problems.append(f"{label}{name}: チェックリストの本体と同じ内容です")
+    if path.name == "package-lock.json":
+        return
     if path.suffix.lower() == ".png" and name.startswith("demo-data/"):
-        if reviewed.get(name) != hashlib.sha256(path.read_bytes()).hexdigest():
-            problems.append(f"{name}: 目で確認した記録と違う画像です")
-        continue
+        if reviewed.get(name) != digest:
+            problems.append(f"{label}{name}: 目で確認した記録と違う画像です")
+        return
     if path.suffix.lower() in {".pdf", ".jww", ".dxf", ".dwg"}:
         if not name.startswith("demo-data/"):
-            problems.append(f"{name}: 図面ファイルです")
-        continue
+            problems.append(f"{label}{name}: 図面ファイルです")
+        return
     if path.name.startswith(".env") and path.name != ".env.example":
-        problems.append(f"{name}: 環境変数のファイルです")
-        continue
+        problems.append(f"{label}{name}: 環境変数のファイルです")
+        return
     try:
-        text = path.read_text()
+        text = data.decode()
     except UnicodeDecodeError:
-        continue
+        return
     compact = SPACES.sub("", text)
     for phrase, where in checklist_phrases.items():
         if phrase in compact:
-            problems.append(f"{name}: チェックリスト（{where}）の文と一致")
+            problems.append(f"{label}{name}: チェックリスト（{where}）の文と一致")
     for phrase in phrases:
         text = text.replace(phrase, "")
     targets = names if name.startswith(numbers_exempt) else names + numbers
@@ -95,7 +99,21 @@ for name in filter(None, files):
         pattern = rf"(?<![\d,]){re.escape(word)}(?![\d,])" if word[0].isdigit() else re.escape(word)
         if word not in allowed.get(name, []) and re.search(pattern, text):
             # 実名を画面に出さないよう、位置だけを表示する
-            problems.append(f"{name}: 禁止語の {(names + numbers).index(word) + 1} 番目に一致")
+            problems.append(f"{label}{name}: 禁止語の {(names + numbers).index(word) + 1} 番目に一致")
+
+
+for name in filter(None, files):
+    path = REPO / name
+    if path.is_file():
+        check_file(name, path.read_bytes())
+
+# コミットされるのは作業中のファイルではなく、ステージした内容。そちらも調べる
+if "--staged" in sys.argv:
+    staged = subprocess.run(["git", "diff", "--cached", "--name-only", "--diff-filter=ACMRT", "-z"],
+                            capture_output=True, text=True, cwd=REPO, check=True).stdout.split("\0")
+    for name in filter(None, staged):
+        blob = subprocess.run(["git", "show", f":{name}"], capture_output=True, cwd=REPO, check=True).stdout
+        check_file(name, blob, "（ステージ）")
 
 print(f"確認 {len(files)} ファイル、問題 {len(problems)} 件")
 for problem in problems:

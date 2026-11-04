@@ -1,0 +1,7 @@
+#!/bin/sh
+# 公開チェックに通らないコミットを止める。チェック自体が動かないときも止める。
+root=$(git rev-parse --show-toplevel) || exit 1
+if ! python3 "$root/scripts/check/check_public.py" --staged; then
+  echo "公開チェックに通らないので、コミットを止めました。" >&2
+  exit 1
+fi
