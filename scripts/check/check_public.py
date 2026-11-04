@@ -42,7 +42,15 @@ if uploads.exists():
     for item in uploads.rglob("*"):
         if item.is_file():
             upload_hashes[hashlib.sha256(item.read_bytes()).hexdigest()] = item.name
-print(f"アップロードのファイル {len(upload_hashes)} 種類と照合")
+# 登録した物件の建物データと3D（別の物件の寸法を含む）も、リポジトリの外にだけ置く
+registered = PRIVATE / "projects"
+if registered.resolve().is_relative_to(REPO.resolve()):
+    problems.append("登録した物件の保存先がリポジトリの中です")
+if registered.exists():
+    for item in registered.rglob("*"):
+        if item.is_file():
+            upload_hashes[hashlib.sha256(item.read_bytes()).hexdigest()] = item.name
+print(f"アップロードと登録のファイル {len(upload_hashes)} 種類と照合")
 
 # 社内のチェックリストは公開してよいか決まるまで入れない。本体と同じファイル、項目の文章の転記を止める。
 # 短い文（「設計図通りか」など）は一般的な言い回しと区別できないので調べない
