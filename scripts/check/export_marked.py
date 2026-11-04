@@ -29,7 +29,7 @@ def main():
 
     slug = json.loads((folder / "job.json").read_text())["project"]
     project = load_project(slug)
-    checklist = knowledge_check.load_checklist(project)
+    checklist = knowledge_check.load_library()
     minutes = minutes_check.load_minutes(project)
     before = json.loads((folder / "result.json").read_text())
     findings = []

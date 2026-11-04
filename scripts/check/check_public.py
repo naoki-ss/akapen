@@ -61,13 +61,27 @@ checklist_hashes = set()
 knowledge = PRIVATE / "knowledge"
 if knowledge.resolve().is_relative_to(REPO.resolve()):
     problems.append("チェックリストの保存先がリポジトリの中です")
+
+
+def checklist_texts(value, inside=False):
+    """ファイルの形によらず、項目（リストの中）の日本語の文をすべて取り出す。ファイルの説明や種類の値は調べない"""
+    if isinstance(value, str):
+        if inside and not value.isascii():
+            yield value
+    elif isinstance(value, dict):
+        for child in value.values():
+            yield from checklist_texts(child, inside)
+    elif isinstance(value, list):
+        for child in value:
+            yield from checklist_texts(child, True)
+
+
 for source in sorted(knowledge.glob("*.json")) if knowledge.exists() else []:
     checklist_hashes.add(hashlib.sha256(source.read_bytes()).hexdigest())
-    for entry in json.loads(source.read_text())["items"]:
-        for field in ("item", "content", "note"):
-            phrase = SPACES.sub("", entry[field])
-            if len(phrase) >= CHECKLIST_MIN_CHARS:
-                checklist_phrases[phrase] = f"{entry['id']} の {field}"
+    for text in checklist_texts(json.loads(source.read_text())):
+        phrase = SPACES.sub("", text)
+        if len(phrase) >= CHECKLIST_MIN_CHARS:
+            checklist_phrases[phrase] = source.name
 print(f"チェックリストの文 {len(checklist_phrases)} 件と照合")
 
 def check_file(name, data, label=""):

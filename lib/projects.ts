@@ -9,6 +9,7 @@ import {
   readdirSync,
   readFileSync,
   rmSync,
+  statSync,
   writeFileSync,
 } from "node:fs";
 import { homedir } from "node:os";
@@ -236,7 +237,9 @@ export function requestProjectStop(folder: string) {
   writeFileSync(path.join(folder, "stop.flag"), "");
 }
 
+const KNOWLEDGE = path.join(homedir(), "sekozu-data", "knowledge");
 const KNOWLEDGE_APPS = path.join(homedir(), "sekozu-data", "knowledge_apps.json");
+const KNOWLEDGE_BUNDLE = path.join(KNOWLEDGE, "sekozu-checklist-knowledge.json");
 
 export type KnowledgeApp = {
   id: number;
@@ -245,9 +248,38 @@ export type KnowledgeApp = {
   items?: number;
 };
 
-// 施工図チェックリストの一覧。取り込み済みかはファイルに記録する。公開先など、ないときは空
-export const knowledgeApps = (): KnowledgeApp[] =>
-  readJson(KNOWLEDGE_APPS)?.apps ?? [];
+const shortName = (name: string) => name.replace(/\s*チェックリスト\s*$/, "").trim();
+
+// 取り込み済みのチェックリスト（名前と項目の数）。中身は返さない
+function importedCounts() {
+  const counts = new Map<string, { items: number; at: string }>();
+  if (existsSync(KNOWLEDGE_BUNDLE)) {
+    const bundle = readJson(KNOWLEDGE_BUNDLE);
+    const apps = Array.isArray(bundle)
+      ? bundle
+      : (bundle.apps ?? bundle.checklists ?? []);
+    const at = statSync(KNOWLEDGE_BUNDLE).mtime.toISOString().slice(0, 10);
+    for (const app of apps) {
+      const name = shortName(String(app.name ?? app.title ?? ""));
+      if (name && app.items?.length) {
+        counts.set(name, { items: app.items.length, at });
+      }
+    }
+  }
+  return counts;
+}
+
+// 施工図チェックリストの一覧。公開先など、ないときは空
+export function knowledgeApps(): KnowledgeApp[] {
+  const counts = importedCounts();
+  const apps: KnowledgeApp[] = readJson(KNOWLEDGE_APPS)?.apps ?? [];
+  return apps.map((app) => {
+    const found = counts.get(app.name);
+    return found
+      ? { ...app, imported_at: found.at, items: found.items }
+      : app;
+  });
+}
 
 export type ProjectDocument = { kind: string; count: number };
 

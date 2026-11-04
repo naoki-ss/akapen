@@ -24,8 +24,10 @@ def read_reply(raw_dir, name):
     return json.loads(path.read_text()) if path.exists() else None
 
 
-def page_findings(raw_dir, project, classified, number, checklist, minutes):
+def page_findings(raw_dir, project, classified, number, library, minutes):
     """(指摘, 照合ごとの記録)"""
+    name = knowledge_check.used_name(raw_dir, library, classified.get("title"), project.get("kind"))
+    checklist = library.get(name) if name else None
     level = plan_for(project, classified)[1]
     found, checks = [], {}
     reply = read_reply(raw_dir, "review")
@@ -58,7 +60,7 @@ def rebuild_saved(folder, slug, project, checklist, minutes):
         raw_dir = folder / "raw" / f"p{page['number']}"
         classified = json.loads((raw_dir / "classified.json").read_text())
         found, _ = page_findings(raw_dir, project, classified, page["number"], checklist, minutes)
-        pages.append({**page, "classified": classified, "findings": found})
+        pages.append({**page, "classified": classified, "findings": found, "raw_dir": raw_dir})
     # 元の結果で行っていない照合は、作り直しでも行っていないものとして扱う
     checks = {name for page in pages for name in page["checks"]}
     job = Job(folder)
@@ -74,7 +76,6 @@ def recover_stopped(folder, slug, project, checklist, minutes, meta):
     seconds = json.loads((folder / "status.json").read_text()).get("seconds", 0)
     doc = pymupdf.open(folder / "input.pdf")
     numbers = meta.get("pages") or list(range(1, doc.page_count + 1))
-    needed = set(checkers_for(project, checklist, minutes))
     pages, stopped, stopped_usd = [], [], 0.0
     for number in numbers:
         raw_dir = folder / "raw" / f"p{number}"
@@ -83,14 +84,17 @@ def recover_stopped(folder, slug, project, checklist, minutes, meta):
         if classified_path.exists():
             classified = json.loads(classified_path.read_text())
             found, checks = page_findings(raw_dir, project, classified, number, checklist, minutes)
+        title = json.loads(classified_path.read_text()).get("title") if classified_path.exists() else None
+        name = knowledge_check.used_name(raw_dir, checklist, title, project.get("kind"))
+        needed = set(checkers_for(project, checklist.get(name) if name else None, minutes))
         if needed <= set(checks):
-            pages.append({"number": number, "ok": True, "failed_checks": [], "findings": found, "classified": classified,
+            pages.append({"number": number, "ok": True, "failed_checks": [], "findings": found, "classified": classified, "raw_dir": raw_dir,
                           "usd": raw_cost(raw_dir), "seconds": 0, "checks": checks, "red_pixels": red_pixels(doc[number - 1]), "error": None})
         else:
             stopped.append(number)
             stopped_usd += raw_cost(raw_dir) if raw_dir.exists() else 0.0
     job = Job(folder)
-    finish_job(job, folder, slug, pages, checklist, "knowledge" in needed, None, folder / "input.pdf", minutes,
+    finish_job(job, folder, slug, pages, checklist, bool(checklist), None, folder / "input.pdf", minutes,
                project.get("masks"), stopped, stopped_usd)
     after = json.loads((folder / "result.json").read_text())
     write_json(folder / "result.json", {**after, "seconds": seconds})
@@ -104,7 +108,7 @@ def main():
     meta = json.loads((folder / "job.json").read_text())
     slug = meta["project"]
     project = load_project(slug)
-    checklist = knowledge_check.load_checklist(project)
+    checklist = knowledge_check.load_library()
     minutes = minutes_check.load_minutes(project)
     if (folder / "result.json").exists():
         rebuild_saved(folder, slug, project, checklist, minutes)

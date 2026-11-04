@@ -281,7 +281,7 @@ def stop_requested(folder):
     return (folder / "stop.flag").exists()
 
 
-def check_page(job, client, project, checklist, minutes, input_path, number, job_id):
+def check_page(job, client, project, library, minutes, input_path, number, job_id):
     """1ページの結果。始める前に止める指示が来ていたら None"""
     if stop_requested(job.folder):
         return None
@@ -296,6 +296,10 @@ def check_page(job, client, project, checklist, minutes, input_path, number, job
         classified, cost = classify_page(client, page, raw_dir)
         usd += cost
         write_json(raw_dir / "classified.json", classified)
+        # 施工図の種類からチェックリストを選ぶ。合うものがなければ青の照合はしない
+        name, checklist = knowledge_check.checklist_for(library, classified.get("title"), project.get("kind"))
+        if checklist:
+            write_json(raw_dir / "knowledge-checklist.json", {"name": name})
         context = {"client": client, "project": project, "classified": classified, "input": str(input_path),
                    "number": number, "raw_dir": raw_dir, "checklist": checklist, "minutes": minutes}
         checkers = checkers_for(project, checklist, minutes)
@@ -314,7 +318,7 @@ def check_page(job, client, project, checklist, minutes, input_path, number, job
                 failed.append(name)
                 usd += stopped_cost(raw_dir, name)
         return {"number": number, "ok": len(failed) < len(checkers), "failed_checks": failed, "findings": findings,
-                "classified": classified, "usd": usd, "seconds": round(time.time() - started, 1), "red_pixels": red_pixels(page),
+                "classified": classified, "raw_dir": raw_dir, "usd": usd, "seconds": round(time.time() - started, 1), "red_pixels": red_pixels(page),
                 "checks": checks, "error": "一部の照合に失敗" if failed else None}
     except (Exception, SystemExit) as error:  # 1ページの失敗で全体を止めない。一覧に「判定できなかった」と書く
         (raw_dir / "error.txt").write_text(traceback.format_exc())
@@ -531,10 +535,14 @@ def finish_job(job, folder, slug, pages, checklist, use_knowledge, client, input
     dropped = sum(page.get("checks", {}).get("minutes", {}).get("dropped", 0) for page in pages)
     if dropped:
         notes.append(f"議事録の番号が示されていない指摘 {dropped} 件を除きました。")
-    checklist_rows = minutes_rows = None
-    if use_knowledge:
-        done = [(page["number"], page["checks"]["knowledge"]["item_results"]) for page in pages if "knowledge" in page.get("checks", {})]
-        checklist_rows = knowledge_check.summary_rows(checklist, done)
+    minutes_rows = None
+    # checklist は全部のチェックリスト。ページごとに使ったものだけを結果に出す
+    project_kind = load_project(slug).get("kind")
+    checklist_rows = knowledge_check.summary_for(checklist, pages, project_kind) if use_knowledge else None
+    use_knowledge = bool(checklist_rows)
+    no_list = [str(page["number"]) for page in pages if page.get("ok") and "knowledge" not in page.get("checks", {})]
+    if checklist and no_list:
+        notes.append("次のページは、種類の合うチェックリストがないので青の照合をしていません： " + "、".join(f"p.{n}" for n in no_list))
     if minutes:
         done = [(page["number"], page["checks"]["minutes"]["item_results"]) for page in pages if "minutes" in page.get("checks", {})]
         minutes_rows = minutes_check.summary_rows(minutes_check.all_items(minutes), done)
@@ -601,7 +609,7 @@ def main():
         if not os.environ.get("ANTHROPIC_API_KEY"):
             raise ValueError("ANTHROPIC_API_KEY がありません")
         client = anthropic.Anthropic()
-        checklist = knowledge_check.load_checklist(project)
+        checklist = knowledge_check.load_library()
         minutes = minutes_check.load_minutes(project)
         use_knowledge = "knowledge" in checkers_for(project, checklist, minutes)
         pages, stopped = run_pages(job, numbers, lambda n: check_page(job, client, project, checklist, minutes, input_path, n, folder.name))

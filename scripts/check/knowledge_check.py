@@ -10,6 +10,7 @@
 """
 import copy
 import json
+import re
 
 from pathlib import Path
 
@@ -20,7 +21,7 @@ DESIGN_SCOPE = "設計図書との照合（赤）の範囲"
 # 複数ページのときは、この順に強い結果を項目の結果にする
 RESULT_ORDER = [ISSUE, OK, NOT_HERE, UNANSWERED]
 
-SYSTEM = """あなたは建設会社の施工図チェック担当です。鉄骨製作会社から提出された鉄骨施工図の1ページを、社内のチェックリストの項目ごとに確認します。
+SYSTEM = """あなたは建設会社の施工図チェック担当です。提出された施工図の1ページを、社内のチェックリストの項目ごとに確認します。
 
 入力:
 - 施工図の1ページの画像。1枚目が全体、残りは同じページの分割図です（文字を読むために使います）
@@ -49,12 +50,99 @@ SYSTEM = """あなたは建設会社の施工図チェック担当です。鉄�
 - needs_confirmation は、図面だけでは言い切れず、人の確認が必要なときに true にします。"""
 
 
-def load_checklist(project):
-    """項目のリスト。登録がないかファイルがなければ None（ナレッジの確認をせず、そのことを一覧に書く）"""
-    path = project.get("checklist")
-    if not path or not Path(path).exists():
-        return None
-    return json.loads(Path(path).read_text())["items"]
+KNOWLEDGE = Path.home() / "sekozu-data" / "knowledge"
+BUNDLE = KNOWLEDGE / "sekozu-checklist-knowledge.json"
+STEEL = "鉄骨図"
+# 施工図の題名からチェックリストを選ぶ語。細かい種類を先に見る
+KINDS = [
+    ("鉄骨胴縁図", ["胴縁"]),
+    ("アンカー図", ["アンカー"]),
+    ("杭伏図", ["杭伏"]),
+    ("基礎伏図", ["基礎伏"]),
+    ("土間伏図", ["土間"]),
+    ("根伐図", ["根伐", "根切"]),
+    ("山留図", ["山留"]),
+    ("足場計画図", ["足場"]),
+    ("総合仮設計画図", ["仮設"]),
+    ("カットオフ図", ["カットオフ"]),
+    ("インサート図", ["インサート"]),
+    ("ALC・アスロック図", ["ALC", "アスロック"]),
+    ("外壁割付図", ["外壁割付"]),
+    ("AW図", ["AW", "サッシ"]),
+    ("建具図", ["建具"]),
+    ("シャッター図", ["シャッター"]),
+    ("平面詳細図", ["平面詳細"]),
+    ("天井伏図", ["天井伏"]),
+    ("外構図", ["外構"]),
+]
+# 鉄骨の物件の、梁伏図や軸組図など
+STEEL_WORDS = ["梁伏", "軸組", "鉄骨", "継手", "ブレース", "部材リスト", "仕口", "階段"]
+
+
+def normalize_app(name, items):
+    """項目に足りない欄を埋める。ID がなければ順番で付ける"""
+    done = []
+    for index, item in enumerate(items, 1):
+        done.append({
+            "id": str(item.get("id") or f"{name}-{index}"),
+            "section": item.get("section") or "",
+            "item": item.get("item") or "",
+            "content": item.get("content") or "",
+            "note": item.get("note") or "",
+            "type": item.get("type") or "knowledge",
+            "drawing_checkable": item.get("drawing_checkable", True),
+        })
+    return done
+
+
+def short_name(name):
+    """「鉄骨図　チェックリスト」→「鉄骨図」"""
+    return re.sub(r"\s*チェックリスト\s*$", "", name).strip()
+
+
+def load_library():
+    """{チェックリストの名前: 項目のリスト}。社内ノウハウなのでリポジトリの外から読む。ないものは入らない"""
+    library = {}
+    if BUNDLE.exists():
+        bundle = json.loads(BUNDLE.read_text())
+        apps = bundle if isinstance(bundle, list) else bundle.get("apps") or bundle.get("checklists") or []
+        for app in apps:
+            name = short_name(str(app.get("name") or app.get("title") or ""))
+            if name and app.get("items"):
+                library[name] = normalize_app(name, app["items"])
+    # 1つだけのファイルは鉄骨図（name がなければ）。これまでの結果と同じ項目IDを使うので、まとめたファイルより優先する
+    for source in sorted(KNOWLEDGE.glob("*.json")) if KNOWLEDGE.exists() else []:
+        single = json.loads(source.read_text())
+        if source != BUNDLE and isinstance(single, dict) and single.get("items"):
+            library[short_name(single.get("name") or STEEL)] = single["items"]
+    return library
+
+
+def choose_name(title, kind=None):
+    """施工図の題名からチェックリストの名前を選ぶ。合うものがなければ None"""
+    text = title or ""
+    for name, words in KINDS:
+        if any(word in text for word in words):
+            return name
+    if kind == "steel" and any(word in text for word in STEEL_WORDS):
+        return STEEL
+    return None
+
+
+def checklist_for(library, title, kind=None):
+    """(名前, 項目)。その種類のチェックリストがなければ (名前, None)"""
+    name = choose_name(title, kind)
+    return name, library.get(name) if name else None
+
+
+def used_name(raw_dir, library, title, kind=None):
+    """そのページの判定で使ったチェックリストの名前。自動で選ぶ前の結果は、すべて鉄骨図"""
+    path = Path(raw_dir) / "knowledge-checklist.json"
+    if path.exists():
+        return json.loads(path.read_text())["name"]
+    if (Path(raw_dir) / "knowledge-result.json").exists():
+        return STEEL
+    return choose_name(title, kind)
 
 
 def targets_of(items):
@@ -167,6 +255,23 @@ def page_results(reply, targets, findings):
         else:
             results[item["id"]] = {"result": entry["result"], "reason": entry["reason"]}
     return results
+
+
+def summary_for(library, pages, kind=None):
+    """判定したページで使ったチェックリストごとの結果をつなげる。ひとつも使っていなければ None"""
+    done = {}
+    for page in pages:
+        if "knowledge" not in page.get("checks", {}):
+            continue
+        title = (page.get("classified") or {}).get("title")
+        raw_dir = page.get("raw_dir")
+        name = used_name(raw_dir, library, title, kind) if raw_dir else choose_name(title, kind)
+        done.setdefault(name, []).append((page["number"], page["checks"]["knowledge"]["item_results"]))
+    rows = []
+    for name, results in done.items():
+        for row in summary_rows(library.get(name, []), results):
+            rows.append({**row, "checklist": name})
+    return rows or None
 
 
 def summary_rows(items, pages):
