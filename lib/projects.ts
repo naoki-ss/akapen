@@ -194,3 +194,42 @@ export function projectStatus(folder: string) {
 export function requestProjectStop(folder: string) {
   writeFileSync(path.join(folder, "stop.flag"), "");
 }
+
+const KNOWLEDGE_APPS = path.join(homedir(), "sekozu-data", "knowledge_apps.json");
+
+export type KnowledgeApp = {
+  id: number;
+  name: string;
+  imported_at?: string;
+  items?: number;
+};
+
+// 施工図チェックリストの一覧。取り込み済みかはファイルに記録する。公開先など、ないときは空
+export const knowledgeApps = (): KnowledgeApp[] =>
+  readJson(KNOWLEDGE_APPS)?.apps ?? [];
+
+export type ProjectDocument = { kind: string; count: number };
+
+// 登録済みの設計図書。ファイル名は社名が入ることがあるので、種類と数だけを返す
+export function projectDocuments(slug: string): ProjectDocument[] {
+  const stored = readProjects()[slug] as
+    | {
+        design?: string;
+        revised?: string | null;
+        minutes?: string[];
+        checklist?: string;
+      }
+    | undefined;
+  const folder = projectFolder(slug);
+  const inputs = folder
+    ? readJson(path.join(folder, "meta.json"))?.inputs
+    : stored;
+  if (!inputs) return [];
+  const rows: ProjectDocument[] = [
+    { kind: "構造図", count: inputs.design ? 1 : 0 },
+    { kind: "差替図面", count: inputs.revised ? 1 : 0 },
+    { kind: "意匠図", count: inputs.architectural ? 1 : 0 },
+    { kind: "議事録", count: inputs.minutes?.length ?? 0 },
+  ];
+  return rows.filter((row) => row.count > 0);
+}

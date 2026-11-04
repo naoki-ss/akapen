@@ -152,14 +152,14 @@
   width: 340px;
   display: flex;
   flex-direction: column;
-  gap: 14px;
-  overflow-y: auto;
+  gap: 10px;
+  overflow: hidden;
 }
 
 .panelRight {
   top: 12px;
   right: 12px;
-  width: 190px;
+  width: 244px;
   display: flex;
   flex-direction: column;
   gap: 6px;
@@ -173,21 +173,9 @@
   font-weight: 700;
 }
 
-.projectName {
-  display: flex;
-  flex-direction: column;
-  align-items: flex-start;
-  gap: 4px;
-}
-
-.projectName a,
 .meetingHead a {
   color: var(--muted);
   font-size: 12px;
-}
-
-.projectName b {
-  font-size: 15px;
 }
 
 .memberSlot {

@@ -71,6 +71,21 @@ export type Member =
 
 export type MemberType = Member["type"];
 
+// 部材の中心（mm）。x, y は平面、z は高さ
+export function memberCenter(m: Member): [number, number, number] {
+  switch (m.type) {
+    case "column":
+    case "pile":
+      return [m.x, m.y, (m.z0 + m.z1) / 2];
+    case "beam":
+      return [(m.x0 + m.x1) / 2, (m.y0 + m.y1) / 2, (m.z + (m.z1 ?? m.z)) / 2];
+    case "wall":
+      return [(m.x0 + m.x1) / 2, (m.y0 + m.y1) / 2, (m.z0 + m.z1) / 2];
+    case "slab":
+      return [(m.x0 + m.x1) / 2, (m.y0 + m.y1) / 2, m.z];
+  }
+}
+
 export type BuildingModel = {
   name: string;
   source: string;

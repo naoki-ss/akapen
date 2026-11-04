@@ -2,13 +2,27 @@ import { Suspense } from "react";
 import { notFound } from "next/navigation";
 import { connection } from "next/server";
 import ModelConsole from "@/components/screens/ModelConsole";
-import { getBuilding } from "@/lib/buildings";
+import { getBuilding, listBuildings } from "@/lib/buildings";
+import { uploadEnabled } from "@/lib/jobs";
+import { knowledgeApps, projectDocuments } from "@/lib/projects";
 
 async function Content({ params }: PageProps<"/projects/[slug]">) {
   await connection();
-  const building = getBuilding((await params).slug);
+  const { slug } = await params;
+  const building = getBuilding(slug);
   if (!building) notFound();
-  return <ModelConsole {...building} />;
+  const enabled = uploadEnabled();
+  return (
+    <ModelConsole
+      {...building}
+      projects={listBuildings().map((b) => ({
+        slug: b.slug,
+        name: b.model.name,
+      }))}
+      knowledge={enabled ? knowledgeApps() : []}
+      documents={enabled ? projectDocuments(slug) : []}
+    />
+  );
 }
 
 // ③ 3Dモデル＋コンソール

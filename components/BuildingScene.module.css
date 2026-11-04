@@ -1,0 +1,36 @@
+/* 指摘の位置を示す点線の丸と吹き出し。文字の色は指摘の色 */
+.callout {
+  position: relative;
+  width: 84px;
+  height: 84px;
+}
+
+.ring {
+  position: absolute;
+  inset: 0;
+  border: 2.5px dashed var(--callout);
+  border-radius: 50%;
+}
+
+.bubble {
+  position: absolute;
+  left: 76px;
+  bottom: 70px;
+  width: max-content;
+  max-width: 260px;
+  padding: 5px 10px;
+  border: 1.5px solid var(--callout);
+  border-radius: 6px;
+  background: var(--panel);
+  color: var(--ink);
+  font-size: 12px;
+  line-height: 1.4;
+}
+
+.bubble b {
+  margin-right: 6px;
+  padding: 0 5px;
+  border-radius: 3px;
+  background: var(--callout);
+  color: #fff;
+}

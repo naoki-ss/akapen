@@ -1,23 +1,28 @@
 "use client";
 
-import { Line, OrbitControls } from "@react-three/drei";
-import { Canvas, type ThreeEvent } from "@react-three/fiber";
-import { useEffect, useMemo } from "react";
-import { CanvasTexture } from "three";
+import { Html, Line, OrbitControls } from "@react-three/drei";
+import { Canvas, useFrame, useThree, type ThreeEvent } from "@react-three/fiber";
+import { useEffect, useMemo, useRef, type CSSProperties } from "react";
+import { CanvasTexture, Vector3 } from "three";
+import type { OrbitControls as OrbitControlsImpl } from "three-stdlib";
 import {
   floorsOf,
+  memberCenter,
   memberKey,
   PROVISIONAL_SIZE as SIZE,
   type BuildingModel,
   type Member,
   type MemberType,
 } from "@/lib/model";
+import styles from "./BuildingScene.module.css";
 
 const MM = 0.001;
-const GRID_LEVEL = -2000;
 const RED = "#C62D23";
-// カメラの距離の基準にする建物の大きさ（mm）
-const CAMERA_BASE_SIZE = 45000;
+const INK = "#1B2430";
+const GRID_COLOR = "#5B6470";
+// 霧がかった緑の地面
+const GROUND = "#A9B79C";
+const FOG = "#DDE3D6";
 
 const COLORS: Record<MemberType, string> = {
   column: "#8a8a84",
@@ -135,16 +140,21 @@ function shapeOf(m: Member): Shape {
 function MemberMesh({
   member,
   selected,
-  highlightColor,
+  glow,
+  ghost,
   onSelect,
 }: {
   member: Member;
   selected: boolean;
-  highlightColor: string;
+  // 指摘の該当部材を光らせる色
+  glow?: string;
+  // 透かしの表示
+  ghost: boolean;
   onSelect: (member: Member) => void;
 }) {
   const shape = useMemo(() => shapeOf(member), [member]);
-  const opacity = OPACITY[member.type];
+  const baseOpacity = OPACITY[member.type];
+  const opacity = ghost ? Math.min(baseOpacity ?? 1, 0.16) : baseOpacity;
 
   const handleClick = (e: ThreeEvent<MouseEvent>) => {
     // 手前の部材だけを選ぶ。ドラッグで回転した直後のクリックは無視する
@@ -152,6 +162,7 @@ function MemberMesh({
     if (e.delta <= 5) onSelect(member);
   };
 
+  const accent = selected ? INK : glow;
   return (
     <mesh
       position={shape.position}
@@ -165,38 +176,42 @@ function MemberMesh({
       ) : (
         <boxGeometry args={shape.size} />
       )}
-      {selected ? (
+      {accent ? (
         <meshStandardMaterial
-          key="selected"
-          color={highlightColor}
-          emissive={highlightColor}
-          emissiveIntensity={0.35}
+          key={accent}
+          color={accent}
+          emissive={accent}
+          emissiveIntensity={selected ? 0.2 : 0.75}
         />
       ) : (
         // 透明と不透明の切り替えを確実に反映するため、key で作り直す
         <meshStandardMaterial
-          key="normal"
+          key={opacity ?? "solid"}
           color={COLORS[member.type]}
           transparent={opacity !== undefined}
           opacity={opacity ?? 1}
+          depthWrite={!ghost}
         />
       )}
     </mesh>
   );
 }
 
-// 丸囲みの通り芯符号。外部フォントに頼らないよう canvas に描いて貼る
+// 丸囲みの通り芯符号。canvas に描いて貼る
 function GridLabel({ name, position }: { name: string; position: Vec3 }) {
   const texture = useMemo(() => {
     const canvas = document.createElement("canvas");
     canvas.width = canvas.height = 128;
     const ctx = canvas.getContext("2d")!;
-    ctx.strokeStyle = ctx.fillStyle = RED;
-    ctx.lineWidth = 6;
+    const mono = getComputedStyle(document.documentElement).getPropertyValue(
+      "--font-mono",
+    );
+    ctx.strokeStyle = ctx.fillStyle = GRID_COLOR;
+    ctx.lineWidth = 5;
     ctx.beginPath();
     ctx.arc(64, 64, 56, 0, Math.PI * 2);
     ctx.stroke();
-    ctx.font = "bold 52px sans-serif";
+    ctx.font = `500 50px ${mono || "monospace"}`;
     ctx.textAlign = "center";
     ctx.textBaseline = "middle";
     ctx.fillText(name, 64, 68);
@@ -212,106 +227,247 @@ function GridLabel({ name, position }: { name: string; position: Vec3 }) {
   );
 }
 
-function GridLines({ model }: { model: BuildingModel }) {
+function GridLines({ model, level }: { model: BuildingModel; level: number }) {
   const xs = Object.entries(model.grid_x);
   const ys = Object.entries(model.grid_y);
   const xMax = Math.max(...xs.map(([, v]) => v));
   const yMax = Math.max(...ys.map(([, v]) => v));
   const line = (a: Vec3, b: Vec3) => (
-    <Line points={[a, b]} color={RED} dashed dashSize={0.6} gapSize={0.3} />
+    <Line
+      points={[a, b]}
+      color={GRID_COLOR}
+      lineWidth={1}
+      dashed
+      dashSize={0.6}
+      gapSize={0.3}
+    />
   );
 
   return (
     <group>
       {xs.map(([name, v]) => (
         <group key={name}>
-          {line(
-            toScene(v, -4000, GRID_LEVEL),
-            toScene(v, yMax + 3000, GRID_LEVEL),
-          )}
-          <GridLabel name={name} position={toScene(v, -5200, GRID_LEVEL)} />
+          {line(toScene(v, -4000, level), toScene(v, yMax + 3000, level))}
+          <GridLabel name={name} position={toScene(v, -5200, level + 600)} />
         </group>
       ))}
       {ys.map(([name, v]) => (
         <group key={name}>
-          {line(
-            toScene(-3000, v, GRID_LEVEL),
-            toScene(xMax + 3000, v, GRID_LEVEL),
-          )}
-          <GridLabel name={name} position={toScene(-4200, v, GRID_LEVEL)} />
+          {line(toScene(-3000, v, level), toScene(xMax + 3000, v, level))}
+          <GridLabel name={name} position={toScene(-4200, v, level + 600)} />
         </group>
       ))}
     </group>
   );
 }
 
+export type ViewName = "oblique" | "top" | "east" | "west" | "south" | "north";
+export type Display = "normal" | "noRoof" | "xray";
+export type Callout = { number: number; title: string; color: string };
+
+type Frame = { center: Vec3; size: number };
+
+// 建物の中心と大きさ（m）から、視点ごとのカメラの位置を出す。北は建物座標の +y（three.js の -z）
+function viewPosition(view: ViewName, { center, size }: Frame): Vec3 {
+  const d = size * 1.75;
+  const [x, y, z] = center;
+  switch (view) {
+    case "top":
+      // 真上でも北が上になるよう、南へわずかにずらす
+      return [x, y + d * 1.15, z + d * 0.03];
+    case "north":
+      return [x, y + d * 0.18, z - d];
+    case "south":
+      return [x, y + d * 0.18, z + d];
+    case "east":
+      return [x + d, y + d * 0.18, z];
+    case "west":
+      return [x - d, y + d * 0.18, z];
+    case "oblique":
+      return [x + d * 0.68, y + d * 0.42, z + d * 0.72];
+  }
+}
+
+// 視点を切り替えると滑らかに動かす。手で動かし始めたら止める
+function CameraRig({
+  view,
+  frame,
+  focus,
+}: {
+  view: ViewName;
+  frame: Frame;
+  focus: { center: Vec3; size: number } | null;
+}) {
+  const camera = useThree((state) => state.camera);
+  const controls = useThree(
+    (state) => state.controls,
+  ) as unknown as OrbitControlsImpl | null;
+  const goal = useRef<{ position: Vector3; target: Vector3 } | null>(null);
+
+  const fx = focus?.center[0];
+  const fy = focus?.center[1];
+  const fz = focus?.center[2];
+  const fs = focus?.size;
+  useEffect(() => {
+    const shown =
+      fx !== undefined && fy !== undefined && fz !== undefined && fs !== undefined
+        ? { center: [fx, fy, fz] as Vec3, size: fs }
+        : frame;
+    goal.current = {
+      position: new Vector3(...viewPosition(view, shown)),
+      target: new Vector3(...shown.center),
+    };
+  }, [view, frame, fx, fy, fz, fs]);
+
+  useEffect(() => {
+    if (!controls) return;
+    const stop = () => {
+      goal.current = null;
+    };
+    controls.addEventListener("start", stop);
+    return () => controls.removeEventListener("start", stop);
+  }, [controls]);
+
+  useFrame((_, delta) => {
+    if (!goal.current || !controls) return;
+    const k = 1 - Math.exp(-delta * 5);
+    camera.position.lerp(goal.current.position, k);
+    controls.target.lerp(goal.current.target, k);
+    controls.update();
+    if (camera.position.distanceTo(goal.current.position) < 0.02) {
+      goal.current = null;
+    }
+  });
+  return null;
+}
+
 export type SceneProps = {
   model: BuildingModel;
   topFloorIndex: number;
-  hiddenTypes: ReadonlySet<MemberType>;
   selected: Member | null;
   highlighted: ReadonlySet<string>;
   // 強調の色。青（ナレッジ）の指摘は青で光らせる
   highlightColor?: string;
   onSelect: (member: Member | null) => void;
+  display?: Display;
+  view?: ViewName;
+  // 指摘の位置に出す点線の丸と吹き出し
+  callout?: Callout | null;
+  // 小さな枠で使うときは、通り芯の符号を出さない
+  compact?: boolean;
 };
 
 export default function BuildingScene({
   model,
   topFloorIndex,
-  hiddenTypes,
   selected,
   highlighted,
   highlightColor = RED,
   onSelect,
+  display = "normal",
+  view = "oblique",
+  callout,
+  compact = false,
 }: SceneProps) {
   const floors = floorsOf(model);
-  const visible = model.members.filter(
-    (m) =>
-      floors.indexOf(m.floor) <= topFloorIndex && !hiddenTypes.has(m.type),
-  );
+  const roofIndex = floors.findIndex((floor) => /^R/.test(floor));
+  const visible = model.members.filter((m) => {
+    const index = floors.indexOf(m.floor);
+    if (index > topFloorIndex) return false;
+    return !(display === "noRoof" && roofIndex >= 0 && index >= roofIndex);
+  });
 
-  const xMax = Math.max(...Object.values(model.grid_x));
-  const yMax = Math.max(...Object.values(model.grid_y));
-  // 一番下の部材から屋上までの中央を見る。建物の大きさに合わせて引く
-  const heights = model.members.flatMap((m) =>
-    m.type === "beam"
-      ? [m.z, m.z1 ?? m.z]
-      : "z" in m
-        ? [m.z]
-        : [m.z0, m.z1],
-  );
-  const zMin = Math.min(...heights);
-  const zMax = Math.max(...heights);
-  const target = toScene(xMax / 2, yMax / 2, (zMin + zMax) / 2);
-  // 高い建物は高さで、平たい建物は平面の対角で距離を決める
-  const zoom =
-    Math.max(1.15 * Math.hypot(xMax, yMax), zMax - zMin) / CAMERA_BASE_SIZE;
-  const cameraPosition: Vec3 = [
-    target[0] + 50 * zoom,
-    target[1] + 14 * zoom,
-    target[2] + 54 * zoom,
-  ];
+  const frame = useMemo<Frame & { groundLevel: number }>(() => {
+    const xs = Object.values(model.grid_x);
+    const ys = Object.values(model.grid_y);
+    const heights = model.members.flatMap((m) =>
+      m.type === "beam"
+        ? [m.z, m.z1 ?? m.z]
+        : "z" in m
+          ? [m.z]
+          : [m.z0, m.z1],
+    );
+    const zMin = Math.min(...heights);
+    const zMax = Math.max(...heights);
+    const xMid = (Math.min(...xs) + Math.max(...xs)) / 2;
+    const yMid = (Math.min(...ys) + Math.max(...ys)) / 2;
+    const plan = Math.hypot(
+      Math.max(...xs) - Math.min(...xs),
+      Math.max(...ys) - Math.min(...ys),
+    );
+    return {
+      center: toScene(xMid, yMid, (zMin + zMax) / 2),
+      size: Math.max(plan, zMax - zMin) * MM,
+      groundLevel: zMin - 100,
+    };
+  }, [model]);
+
+  // 該当部材の中心。指摘を選ぶとここへ寄る
+  const focus = useMemo(() => {
+    const members = model.members.filter((m) =>
+      highlighted.has(memberKey(m)),
+    );
+    if (members.length === 0) return null;
+    const points = members.map(memberCenter);
+    const mid = (values: number[]) =>
+      (Math.min(...values) + Math.max(...values)) / 2;
+    const spread = (values: number[]) =>
+      Math.max(...values) - Math.min(...values);
+    const xs = points.map((p) => p[0]);
+    const ys = points.map((p) => p[1]);
+    const zs = points.map((p) => p[2]);
+    return {
+      center: toScene(mid(xs), mid(ys), mid(zs)),
+      size: Math.max(frame.size * 0.45, Math.max(spread(xs), spread(ys), spread(zs)) * MM),
+    };
+  }, [model, highlighted, frame.size]);
+
+  const groundY = frame.groundLevel * MM;
+  const start = useMemo(() => viewPosition("oblique", frame), [frame]);
 
   return (
     <Canvas
-      camera={{ fov: 40, near: 0.1, far: 1000, position: cameraPosition }}
+      camera={{ fov: 40, near: 0.1, far: 2000, position: start }}
       onPointerMissed={() => onSelect(null)}
     >
-      <color attach="background" args={["#F6F4EE"]} />
+      <color attach="background" args={[FOG]} />
+      <fog attach="fog" args={[FOG, frame.size * 2.6, frame.size * 8]} />
       <hemisphereLight args={["#ffffff", "#b8b4a8", 1.1]} />
       <directionalLight position={[30, 50, 20]} intensity={1.2} />
-      <OrbitControls makeDefault target={target} enableDamping />
-      <GridLines model={model} />
-      {visible.map((m) => (
-        <MemberMesh
-          key={memberKey(m)}
-          member={m}
-          selected={m === selected || highlighted.has(memberKey(m))}
-          highlightColor={m === selected ? RED : highlightColor}
-          onSelect={onSelect}
-        />
-      ))}
+      <OrbitControls makeDefault target={frame.center} enableDamping />
+      <CameraRig view={view} frame={frame} focus={focus} />
+      <mesh position={[frame.center[0], groundY, frame.center[2]]} rotation={[-Math.PI / 2, 0, 0]}>
+        <circleGeometry args={[frame.size * 12, 64]} />
+        <meshStandardMaterial color={GROUND} />
+      </mesh>
+      {!compact && <GridLines model={model} level={frame.groundLevel + 30} />}
+      {visible.map((m) => {
+        const key = memberKey(m);
+        return (
+          <MemberMesh
+            key={key}
+            member={m}
+            selected={m === selected}
+            glow={highlighted.has(key) ? highlightColor : undefined}
+            ghost={display === "xray"}
+            onSelect={onSelect}
+          />
+        );
+      })}
+      {callout && focus && (
+        <Html position={focus.center} center zIndexRange={[1, 0]} pointerEvents="none">
+          <div
+            className={styles.callout}
+            style={{ "--callout": callout.color } as CSSProperties}
+          >
+            <span className={styles.ring} />
+            <span className={styles.bubble}>
+              <b className="mono">{callout.number}</b>
+              {callout.title}
+            </span>
+          </div>
+        </Html>
+      )}
     </Canvas>
   );
 }

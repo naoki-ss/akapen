@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { useSearchParams } from "next/navigation";
 import { useMemo, useState } from "react";
 import type { Building } from "@/lib/buildings";
 import { inkOf, memberKeysOf, numbered } from "@/lib/findings";
@@ -16,7 +17,6 @@ import BasisCard from "../check/BasisCard";
 import FindingList from "../check/FindingList";
 import styles from "../check/check.module.css";
 
-const NO_HIDDEN = new Set<never>();
 const ignore = () => {};
 
 // ④ 施工図の朱書きと根拠。一覧・朱書き・根拠・3D は同じ指摘を選んで一緒に切り替わる
@@ -36,7 +36,10 @@ export default function CheckScreen({
   const hasModel = model.members.length > 0;
   const floors = floorsOf(model);
 
-  const [activeId, setActiveId] = useState<string | null>(null);
+  // ③から開いたときは、選んでいた指摘をそのまま選ぶ
+  const [activeId, setActiveId] = useState<string | null>(
+    useSearchParams().get("finding"),
+  );
   const [sheetId, setSheetId] = useState<string | null>(null);
   const [zoomed, setZoomed] = useState(false);
   const [visibleLayers, setVisibleLayers] = useState<ReadonlySet<LayerKey>>(
@@ -79,7 +82,9 @@ export default function CheckScreen({
   );
   const active = allFindings.find((f) => f.id === activeId) ?? null;
   const currentSheet =
-    pageSheets.find((sheet) => sheet.id === sheetId) ?? pageSheets[0];
+    pageSheets.find(
+      (sheet) => sheet.id === (sheetId ?? active?.drawing.sheet),
+    ) ?? pageSheets[0];
 
   const counts = {
     design: allFindings.filter((f) => (f.source_type ?? "design") === "design")
@@ -92,15 +97,6 @@ export default function CheckScreen({
     () => new Set(active ? memberKeysOf(active, model) : []),
     [active, model],
   );
-  // 該当部材が上の階に隠れないよう、一番下の該当階まで表示を下げる
-  const topFloorIndex = useMemo(() => {
-    const indexes = [...highlighted].map((key) =>
-      floors.indexOf(key.split("|")[1]),
-    );
-    const lowest = Math.max(...indexes.filter((index) => index >= 0));
-    return Number.isFinite(lowest) ? lowest : floors.length - 1;
-  }, [highlighted, floors]);
-
   const select = (finding: (typeof allFindings)[number]) => {
     setActiveId(finding.id);
     if (finding.drawing.sheet) setSheetId(finding.drawing.sheet);
@@ -231,9 +227,10 @@ export default function CheckScreen({
                   <>
                     <BuildingScene
                       model={model}
-                      topFloorIndex={topFloorIndex}
-                      hiddenTypes={NO_HIDDEN}
+                      topFloorIndex={floors.length - 1}
                       selected={null}
+                      compact
+                      display={highlighted.size > 0 ? "xray" : "normal"}
                       highlighted={highlighted}
                       highlightColor={active ? inkOf(active) : undefined}
                       onSelect={ignore}

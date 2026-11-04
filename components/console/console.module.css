@@ -1,0 +1,255 @@
+/* ③ のパネル */
+.select {
+  width: 100%;
+  padding: 7px 8px;
+  border: 1px solid var(--line-strong);
+  border-radius: 6px;
+  background: var(--panel);
+  color: var(--ink);
+  font: inherit;
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.summary {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 6px;
+  margin: 0;
+}
+
+.summary div {
+  padding: 5px 6px;
+  border-radius: 6px;
+  background: rgb(255 255 255 / 55%);
+}
+
+.summary dt {
+  color: var(--muted);
+  font-size: 11px;
+}
+
+.summary dd {
+  margin: 0;
+  font-size: 13px;
+  font-weight: 500;
+}
+
+.tabs {
+  flex: none;
+  display: flex;
+  border-bottom: 1px solid var(--line-strong);
+}
+
+.tabs button {
+  flex: 1;
+  padding: 7px 2px;
+  border: 0;
+  border-bottom: 2px solid transparent;
+  background: none;
+  color: var(--muted);
+  font-size: 13px;
+  cursor: pointer;
+}
+
+.tabs button[aria-selected="true"] {
+  border-bottom-color: var(--ink);
+  color: var(--ink);
+  font-weight: 700;
+}
+
+.tabBody {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.empty {
+  margin: 0;
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.add {
+  align-self: flex-start;
+  padding: 5px 10px;
+  border: 1px solid var(--line-strong);
+  border-radius: 6px;
+  background: var(--panel);
+  color: var(--ink);
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.sheetRows,
+.points ul,
+.rows {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.sheetRow {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 7px 8px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: var(--panel);
+  color: var(--ink);
+  text-align: left;
+  cursor: pointer;
+}
+
+.sheetRow[aria-expanded="true"] {
+  border-color: var(--ink);
+}
+
+.sheetRow > span {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  font-size: 12px;
+  line-height: 1.4;
+}
+
+.sheetRow b {
+  font-weight: 500;
+}
+
+.sheetRow small {
+  color: var(--muted);
+  font-size: 11px;
+}
+
+.sheetRow i,
+.points i {
+  flex: none;
+  min-width: 24px;
+  padding: 1px 4px;
+  border-radius: 4px;
+  color: #fff;
+  font-size: 11px;
+  font-style: normal;
+  font-weight: 700;
+  text-align: center;
+}
+
+.sheetRow i[data-color="red"],
+.points i[data-color="red"] {
+  background: var(--red);
+}
+
+.sheetRow i[data-color="blue"],
+.points i[data-color="blue"] {
+  background: var(--blue);
+}
+
+.points {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 6px 0 8px 8px;
+}
+
+.points button {
+  width: 100%;
+  display: flex;
+  align-items: flex-start;
+  gap: 6px;
+  padding: 4px 6px;
+  border: 1px solid transparent;
+  border-radius: 4px;
+  background: none;
+  color: var(--ink);
+  font-size: 12px;
+  line-height: 1.4;
+  text-align: left;
+  cursor: pointer;
+}
+
+.points button:hover {
+  background: rgb(255 255 255 / 55%);
+}
+
+.points button[data-active="true"] {
+  border-color: var(--ink);
+  background: var(--panel);
+}
+
+.openCheck {
+  display: block;
+  padding: 2px 6px;
+  color: var(--ink);
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.rows li {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 5px 2px;
+  border-bottom: 1px solid var(--line);
+  font-size: 12px;
+}
+
+.rows small {
+  flex: none;
+  color: var(--muted);
+  font-size: 11px;
+}
+
+.rows li[data-on="true"] small {
+  color: var(--ink);
+  font-weight: 700;
+}
+
+.choice {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 4px;
+}
+
+.choice button {
+  padding: 4px 2px;
+  border: 1px solid var(--line-strong);
+  border-radius: 5px;
+  background: var(--panel);
+  color: var(--ink);
+  font-size: 12px;
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.choice button[aria-pressed="true"] {
+  border-color: var(--accent);
+  background: var(--accent);
+  color: #fff;
+}
+
+.choice button:disabled {
+  opacity: 0.45;
+  cursor: default;
+}
+
+.clear {
+  align-self: flex-start;
+  padding: 3px 8px;
+  border: 0;
+  background: none;
+  color: var(--muted);
+  font-size: 12px;
+  text-decoration: underline;
+  cursor: pointer;
+}

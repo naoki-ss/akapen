@@ -6,7 +6,6 @@ import { floorsOf } from "@/lib/model";
 import BuildingScene from "../BuildingSceneLazy";
 import styles from "./screens.module.css";
 
-const NO_HIDDEN = new Set<never>();
 const NO_HIGHLIGHT: ReadonlySet<string> = new Set();
 const ignore = () => {};
 
@@ -25,7 +24,6 @@ export default function MeetingScreen({
           <BuildingScene
             model={model}
             topFloorIndex={floorsOf(model).length - 1}
-            hiddenTypes={NO_HIDDEN}
             selected={null}
             highlighted={NO_HIGHLIGHT}
             onSelect={ignore}
