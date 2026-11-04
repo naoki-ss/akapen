@@ -10,7 +10,7 @@ import shutil
 
 import pymupdf
 
-from common import DEMO, DOCS, PRIVATE, RUNS, write_json
+from common import DEMO, DOCS, PRIVATE, RUNS, VALIDATION, write_json
 from evaluate import matches
 
 MAP = json.loads((PRIVATE / "dummy_map.json").read_text())["numbers"]
@@ -189,7 +189,7 @@ def model_refs(finding):
 
 def key_ids(finding):
     """正解のどの項目に当たるか（AIと人の比較画面で使う）"""
-    key = json.loads((DEMO / "answer-key.json").read_text())
+    key = json.loads((VALIDATION / "sample-x" / "answer-key.json").read_text())
     return [e["id"] for e in key["entries"] if e["kind"] in ("real", "planted") and matches(e, finding)]
 
 

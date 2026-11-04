@@ -5,10 +5,10 @@
 """
 import pymupdf
 
-from common import DEMO, PRIVATE, write_json
+from common import PRIVATE, VALIDATION, write_json
 
 CHECK = PRIVATE / "shikouzu/check"
-OUT = DEMO / "human"
+OUT = VALIDATION / "sample-x" / "human"
 SCALE = 300 / 72
 MASK = (225, 225, 225)
 
@@ -61,7 +61,7 @@ def main():
             "key_id": None,
         },
     ]
-    write_json(DEMO / "human-compare.json", {"items": items})
+    write_json(VALIDATION / "sample-x" / "human-compare.json", {"items": items})
     print(f"{len(items)} 件を書き出しました")
 
 

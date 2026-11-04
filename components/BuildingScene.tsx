@@ -15,7 +15,7 @@ import {
 
 const MM = 0.001;
 const GRID_LEVEL = -2000;
-const RED = "#c8361d";
+const RED = "#C62D23";
 // カメラの距離の基準にする建物の大きさ（mm）
 const CAMERA_BASE_SIZE = 45000;
 
@@ -288,7 +288,7 @@ export default function BuildingScene({
       camera={{ fov: 40, near: 0.1, far: 1000, position: cameraPosition }}
       onPointerMissed={() => onSelect(null)}
     >
-      <color attach="background" args={["#f3f5f3"]} />
+      <color attach="background" args={["#F6F4EE"]} />
       <hemisphereLight args={["#ffffff", "#b8b4a8", 1.1]} />
       <directionalLight position={[30, 50, 20]} intensity={1.2} />
       <OrbitControls makeDefault target={target} enableDamping />

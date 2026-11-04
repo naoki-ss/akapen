@@ -47,33 +47,7 @@
   flex-shrink: 0;
 }
 
-.score {
-  display: flex;
-  gap: 8px;
-}
-
-.score div {
-  flex: 1;
-  padding: 8px;
-  border: 1px solid var(--line);
-  border-radius: 6px;
-  font-size: 11px;
-  color: var(--muted);
-  text-align: center;
-}
-
-.score b {
-  display: block;
-  font-size: 18px;
-  color: var(--foreground, #222);
-}
-
 .card,
-.compare {
-  border: 1px solid var(--line);
-  border-radius: 6px;
-}
-
 .cardHead {
   width: 100%;
   display: flex;
@@ -114,7 +88,7 @@
 }
 
 .middle {
-  background: #6f7a75;
+  background: var(--muted);
 }
 
 .low {
@@ -212,7 +186,7 @@
 .planted {
   padding: 2px 6px;
   border-radius: 4px;
-  background: #eee9dc;
+  background: var(--tint);
   font-size: 11px;
 }
 
@@ -285,35 +259,6 @@
   background: #fff;
 }
 
-.missed {
-  padding: 10px;
-  border: 1px solid var(--line);
-  border-radius: 6px;
-  font-size: 12px;
-}
-
-.missed h3 {
-  margin: 0 0 4px;
-  font-size: 13px;
-}
-
-.missed p {
-  margin: 0 0 6px;
-  color: var(--muted);
-}
-
-.missed ul {
-  margin: 0;
-  padding: 0;
-  list-style: none;
-}
-
-.missed li {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-}
-
 .changes {
   padding: 10px;
   border: 1px dashed var(--line);
@@ -336,38 +281,6 @@
   padding-left: 18px;
 }
 
-.compare {
-  padding: 10px;
-  font-size: 12px;
-  line-height: 1.6;
-}
-
-.compare h3 {
-  margin: 0 0 8px;
-  font-size: 13px;
-}
-
-.compare h4 {
-  margin: 0 0 4px;
-  font-size: 11px;
-  color: var(--muted);
-}
-
-.compare p {
-  margin: 0 0 6px;
-}
-
-.columns {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 10px;
-}
-
-.summary {
-  padding-top: 8px;
-  border-top: 1px solid var(--line);
-}
-
 .openSheet {
   margin-top: 8px;
   padding: 5px 10px;
@@ -375,24 +288,6 @@
   border-radius: 4px;
   background: #fff;
   color: var(--accent);
-  font-size: 12px;
-  cursor: pointer;
-}
-
-.relatedList {
-  margin: 0 0 6px;
-  padding-left: 18px;
-  font-size: 13px;
-}
-
-.openCompare {
-  display: block;
-  margin-bottom: 8px;
-  padding: 5px 10px;
-  border: 1px solid var(--accent);
-  border-radius: 4px;
-  background: var(--accent);
-  color: #fff;
   font-size: 12px;
   cursor: pointer;
 }

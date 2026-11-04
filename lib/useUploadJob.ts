@@ -53,17 +53,18 @@ export type JobSummary = {
 const storageKey = (slug: string) => `sekozu-job-${slug}`;
 
 // 施工図を入れてチェックする流れ。onFinished は、この画面で始めたチェックが終わったときに呼ぶ
-export function useUploadJob(slug: string, onFinished: () => void) {
+export function useUploadJob(
+  slug: string,
+  onFinished: (jobId: string) => void,
+) {
   const [jobId, setJobId] = useState<string | null>(null);
   const [status, setStatus] = useState<JobStatus | null>(null);
-  const [result, setResult] = useState<JobResult | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [sending, setSending] = useState(false);
   const [draft, setDraft] = useState<Draft | null>(null);
   const [stopping, setStopping] = useState(false);
-  // 過去の結果の一覧と、いま開いている結果のジョブ
+  // 過去の結果の一覧
   const [history, setHistory] = useState<JobSummary[]>([]);
-  const [resultId, setResultId] = useState<string | null>(null);
   const startedHere = useRef(false);
   const finished = useRef(onFinished);
 
@@ -112,16 +113,11 @@ export function useUploadJob(slug: string, onFinished: () => void) {
         startedHere.current = true;
         timer = setTimeout(poll, POLL_MS);
       } else if (next.state === "done") {
-        const data = await fetch(`${base}/files/result.json`);
-        const body = (await data.json()) as JobResult;
-        if (stopped) return;
         // チェックが終わったら一覧に足す。開くのは、この画面で始めたチェックだけ
         void loadHistory();
         if (startedHere.current) {
           startedHere.current = false;
-          setResult(body);
-          setResultId(jobId);
-          finished.current();
+          finished.current(jobId);
         }
       }
     };
@@ -173,7 +169,6 @@ export function useUploadJob(slug: string, onFinished: () => void) {
         setError(body.error);
         return;
       }
-      setResult(null);
       setStatus(null);
       setDraft(null);
       window.localStorage.setItem(storageKey(slug), draft.id);
@@ -192,22 +187,12 @@ export function useUploadJob(slug: string, onFinished: () => void) {
     if (!response.ok) setStopping(false);
   }, [jobId]);
 
-  // 過去の結果を開く。走っているチェックの見張りには影響しない
-  const open = useCallback(async (id: string) => {
-    setResult(null);
-    setResultId(id);
-    const response = await fetch(`/api/check/${id}/files/result.json`);
-    if (response.ok) setResult((await response.json()) as JobResult);
-  }, []);
-
   const cancelDraft = useCallback(() => setDraft(null), []);
 
   return {
     status,
-    result,
     error,
     history,
-    open,
     draft,
     prepare,
     start,
@@ -216,6 +201,5 @@ export function useUploadJob(slug: string, onFinished: () => void) {
     cancelDraft,
     sending,
     running: status?.state === "running",
-    base: `/api/check/${resultId}/files`,
   };
 }

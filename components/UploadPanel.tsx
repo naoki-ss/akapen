@@ -1,8 +1,9 @@
 "use client";
 
 import Image from "next/image";
-import { useRef, useState, type ReactNode } from "react";
-import type { Draft, useUploadJob } from "@/lib/useUploadJob";
+import Link from "next/link";
+import { useRef, useState } from "react";
+import type { Draft, JobSummary, useUploadJob } from "@/lib/useUploadJob";
 import styles from "./App.module.css";
 
 // 3ページずつ並行して判定する。実績は1ページ 約3〜4分、約2ドル
@@ -81,21 +82,55 @@ function PagePicker({
   );
 }
 
-// 最初の画面。物件を選ぶ → 施工図を入れる → 朱書きを見る
-export default function StartView({
-  picker,
+function pagesText(pages: JobSummary["pages"]) {
+  if (pages.length === 1) {
+    return `p.${pages[0].number} ${pages[0].title ?? ""}`.trim();
+  }
+  const numbers = pages.map((page) => page.number);
+  const first = numbers[0];
+  const last = numbers[numbers.length - 1];
+  return last - first === numbers.length - 1
+    ? `p.${first}〜p.${last}（${numbers.length} ページ）`
+    : numbers.map((number) => `p.${number}`).join("、");
+}
+
+// 名前を付けた結果は、1ページのときの図面名も添える
+function resultTitle(job: JobSummary) {
+  if (!job.label) return pagesText(job.pages);
+  const title = job.pages.length === 1 ? job.pages[0].title : null;
+  return title ? `${job.label} ${title}` : job.label;
+}
+
+const dateFormat = new Intl.DateTimeFormat("ja-JP", {
+  month: "numeric",
+  day: "numeric",
+  hour: "2-digit",
+  minute: "2-digit",
+  timeZone: "Asia/Tokyo",
+});
+
+function resultDetail(job: JobSummary) {
+  const { design, minutes, knowledge } = job.counts;
+  return [
+    dateFormat.format(new Date(job.uploaded_at)),
+    `赤 ${design + minutes}・青 ${knowledge}`,
+    ...(job.stopped ? ["途中で止めた回"] : []),
+    ...(job.masked ? [] : ["公開用の図面なし"]),
+  ].join("・");
+}
+
+// 施工図を入れる部分と、チェック結果の一覧
+export default function UploadPanel({
+  slug,
   job,
-  results,
-  onRegister,
-  projectNote,
+  savedCount,
 }: {
-  picker: ReactNode;
-  onRegister?: () => void;
-  projectNote?: ReactNode;
+  slug: string;
   job: ReturnType<typeof useUploadJob>;
-  results: { key: string; title: string; detail: string; onOpen: () => void }[];
+  // デモ用に固定した結果の指摘の数。ない物件は undefined
+  savedCount?: number;
 }) {
-  const { status, error, running, draft, sending } = job;
+  const { status, error, running, draft, sending, history } = job;
   const input = useRef<HTMLInputElement>(null);
   const [over, setOver] = useState(false);
   const [notPdf, setNotPdf] = useState(false);
@@ -112,33 +147,9 @@ export default function StartView({
     : 0;
 
   return (
-    <div className={styles.start}>
-      <div className={styles.hero}>
-        <h1>施工図に、朱書きを。</h1>
-        <p>
-          施工図を設計図書・議事録・社内チェックリストと照らし合わせ、朱書きを付けて返します。
-        </p>
-      </div>
-
+    <>
       <section className={styles.startStep}>
-        <h2>
-          <i>1</i>物件を選ぶ
-        </h2>
-        <div className={styles.registerRow}>
-          {picker}
-          {onRegister && (
-            <button className={styles.secondary} onClick={onRegister}>
-              ＋ 新しい物件を登録
-            </button>
-          )}
-          {projectNote}
-        </div>
-      </section>
-
-      <section className={`${styles.startStep} ${styles.grow}`}>
-        <h2>
-          <i>2</i>施工図を入れる
-        </h2>
+        <h2>施工図を入れる</h2>
         <div
           className={styles.drop}
           data-over={over}
@@ -183,29 +194,17 @@ export default function StartView({
                 止めても、終わったページの結果は残ります。画面を閉じてもチェックは止まりません。
               </small>
             </div>
-          ) : draft ? (
-            <PagePicker
-              key={draft.id}
-              draft={draft}
-              sending={sending}
-              onStart={job.start}
-              onOther={() => {
-                job.cancelDraft();
-                input.current?.click();
-              }}
-            />
-          ) : sending ? (
+          ) : sending && !draft ? (
             <b role="status">PDFを読み込んでいます…</b>
           ) : (
             <>
               <span>施工図のPDFをここに置く</span>
               <button
-                className={styles.primary}
+                className={styles.primarySmall}
                 onClick={() => input.current?.click()}
               >
                 PDFを選ぶ
               </button>
-              <small>1ページ 約3〜4分</small>
             </>
           )}
           {notPdf && <p className={styles.error}>PDFを選んでください</p>}
@@ -221,17 +220,21 @@ export default function StartView({
       </section>
 
       <section className={styles.startStep}>
-        <h2>
-          <i>3</i>朱書きを見る
-        </h2>
-        {results.length > 0 ? (
+        <h2>チェック結果</h2>
+        {history.length > 0 || savedCount !== undefined ? (
           <div className={styles.results}>
-            {results.map((item) => (
-              <button key={item.key} onClick={item.onOpen}>
-                <b>{item.title}</b>
-                <span>{item.detail}</span>
-              </button>
+            {history.map((item) => (
+              <Link key={item.id} href={`/projects/${slug}/check/${item.id}`}>
+                <b>{resultTitle(item)}</b>
+                <span>{resultDetail(item)}</span>
+              </Link>
             ))}
+            {savedCount !== undefined && (
+              <Link href={`/projects/${slug}/check/saved`}>
+                <b>チェック済みの施工図</b>
+                <span>指摘 {savedCount} 件</span>
+              </Link>
+            )}
           </div>
         ) : (
           <p className={styles.fine}>
@@ -239,6 +242,23 @@ export default function StartView({
           </p>
         )}
       </section>
-    </div>
+
+      {draft && (
+        <div className={styles.projectChecks} role="dialog" aria-label="判定するページ">
+          <div className={styles.pickerWindow}>
+            <PagePicker
+              key={draft.id}
+              draft={draft}
+              sending={sending}
+              onStart={job.start}
+              onOther={() => {
+                job.cancelDraft();
+                input.current?.click();
+              }}
+            />
+          </div>
+        </div>
+      )}
+    </>
   );
 }

@@ -25,13 +25,13 @@
   align-items: center;
   gap: 16px;
   padding: 10px 14px;
-  border-bottom: 1px solid #ddd;
+  border-bottom: 1px solid var(--line);
   font-size: 14px;
 }
 
 .head span {
   margin-left: 12px;
-  color: #666;
+  color: var(--muted);
 }
 
 .actions {
@@ -44,7 +44,7 @@
 .actions button,
 .actions a {
   padding: 4px 10px;
-  border: 1px solid #bbb;
+  border: 1px solid var(--line-strong);
   border-radius: 4px;
   background: #fff;
   color: inherit;
@@ -100,33 +100,8 @@
 .note {
   margin: 0;
   padding: 6px 14px;
-  border-top: 1px solid #ddd;
-  color: #666;
+  border-top: 1px solid var(--line);
+  color: var(--muted);
   font-size: 12px;
 }
 
-.compare {
-  container-type: normal;
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  align-items: start;
-  gap: 8px;
-  padding: 8px;
-}
-
-.compare figure {
-  margin: 0;
-  background: #fff;
-}
-
-.compare figcaption {
-  padding: 6px 8px;
-  font-size: 13px;
-  font-weight: 600;
-}
-
-.compare img {
-  display: block;
-  width: 100%;
-  height: auto;
-}

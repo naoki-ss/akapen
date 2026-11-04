@@ -14,12 +14,6 @@ export type Evidence = {
   note?: string;
 };
 
-// 同じ箇所の人の朱書き（物件B）
-export type HumanView = {
-  image: string;
-  note: string;
-};
-
 export type Finding = {
   id: string;
   severity: Severity;
@@ -34,7 +28,6 @@ export type Finding = {
   key_ids: string[];
   planted: boolean;
   evidence: Evidence[];
-  human_view?: HumanView;
   // アップロードの判定：朱書きの番号、種類（設計図書／議事録／ナレッジ）、人の確認が必要か
   number?: number;
   source_type?: "design" | "minutes" | "knowledge";
@@ -58,36 +51,6 @@ export type CheckResult = {
   mode: string;
   findings: Finding[];
   changes: OrderChange[];
-};
-
-export type EvalReport = {
-  detected: { id: string; title: string }[];
-  missed: { id: string; title: string; needs_confirmation: boolean }[];
-  required_total: number;
-  traps: { id: string; title: string; passed: boolean }[];
-  false_positives: { id: string; title: string }[];
-};
-
-// 同じ条件で繰り返した判定の集計
-export type RunStats = {
-  runs: number;
-  detected: Record<string, number>;
-  false_positives: number;
-  traps_passed: boolean;
-};
-
-export type HumanItem = {
-  id: string;
-  drawing: string;
-  note: string;
-  summary: string;
-  key_id: string | null;
-  image?: string;
-  // 物件B：同じ箇所に当たるAIの指摘と、同じ箇所の朱書き前の図面
-  finding_ids?: string[];
-  ai_image?: string;
-  sheet?: string;
-  bbox?: Box;
 };
 
 export const SOURCE_LABELS: Record<Finding["source"], string> = {

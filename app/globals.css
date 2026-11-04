@@ -1,21 +1,22 @@
 /*
- * 色の決まり
+ * 色と書体の決まりは docs/design.md。
  * 赤と青は朱書きの意味を持つので、画面の飾りには使わない（--red はロゴと朱書きの表示だけ）。
- * 画面の操作の色は深緑。
+ * 操作の色は文字と同じ濃紺。
  */
 :root {
-  --bg: #ffffff;
-  --ink: #1f2a27;
-  --muted: #5d6a65;
-  --line: #dde3df;
-  --line-strong: #aeb9b4;
-  --panel: #ffffff;
-  --tint: #f3f5f3;
-  --tint-strong: #d6e4de;
-  --accent: #1f5c4a;
-  --accent-dark: #174638;
-  --red: #cc1a1a;
-  --blue: #0d4dcc;
+  --bg: #f6f4ee;
+  --ink: #1b2430;
+  --muted: #5b6470;
+  --line: #dad6cc;
+  --line-strong: #b9b5aa;
+  --panel: #fdfcf9;
+  --panel-3d: rgb(236 234 228 / 86%);
+  --tint: #eceae4;
+  --tint-strong: #dad6cc;
+  --accent: #1b2430;
+  --accent-dark: #0e141c;
+  --red: #c62d23;
+  --blue: #1d5bb8;
 }
 
 * {
@@ -24,7 +25,7 @@
 
 body {
   margin: 0;
-  font-family: "Hiragino Sans", "Noto Sans JP", "Noto Sans CJK JP", system-ui, sans-serif;
+  font-family: var(--font-sans), "Noto Sans JP", system-ui, sans-serif;
   font-size: 14px;
   line-height: 1.55;
   background: var(--bg);
@@ -33,4 +34,14 @@ body {
 
 button {
   font: inherit;
+}
+
+/* 通り芯・符号・数値 */
+.mono {
+  font-family: var(--font-mono), monospace;
+}
+
+/* 朱書きの手書き注記だけに使う */
+.hand {
+  font-family: var(--font-hand), cursive;
 }

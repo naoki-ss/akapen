@@ -2,7 +2,7 @@
 
 禁止語の一覧は実名を含むのでリポジトリの外（~/sekozu-data/dummy_map.json）に置く。
 画像の中身は文字として調べられないので、目で確認した画像のハッシュを
-demo-data/image-review.json に記録し、記録と違う画像があれば止める。
+demo-data/image-review.json に記録し（validation/ の画像も同じ）、記録と違う画像があれば止める。
 
 --staged を付けると、ステージした内容も調べる（コミット前のフック .githooks/pre-commit が使う）。
 """
@@ -80,7 +80,7 @@ def check_file(name, data, label=""):
         problems.append(f"{label}{name}: チェックリストの本体と同じ内容です")
     if path.name == "package-lock.json":
         return
-    if path.suffix.lower() == ".png" and name.startswith("demo-data/"):
+    if path.suffix.lower() == ".png" and name.startswith(("demo-data/", "validation/")):
         if reviewed.get(name) != digest:
             problems.append(f"{label}{name}: 目で確認した記録と違う画像です")
         return

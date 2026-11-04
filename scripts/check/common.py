@@ -12,6 +12,8 @@ PRIVATE = Path.home() / "sekozu-data"
 RUNS = PRIVATE / "check-runs"
 REPO = Path(__file__).resolve().parents[2]
 DEMO = REPO / "demo-data" / "sample-x"
+# 検証用のデータ（人の朱書き、正解、採点）。画面では使わない
+VALIDATION = REPO / "validation"
 
 # 照合に使う図面。名前は画面に出してよい呼び名だけにする
 DOCS = {

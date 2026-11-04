@@ -1,16 +1,8 @@
 "use client";
 
 import { useEffect, useState, type FormEvent } from "react";
+import type { ProjectSummary } from "@/lib/buildings";
 import styles from "./App.module.css";
-
-export type ProjectSummary = {
-  model_status: string;
-  grids: string;
-  levels: number;
-  columns: number;
-  beams: number;
-  checks: { kind: string; result: string; message: string }[];
-};
 
 type PageRow = {
   source: string;
@@ -36,8 +28,6 @@ type Status = {
   stage?: string;
   pages_total?: number;
   pages_done?: number;
-  usd?: number;
-  seconds?: number;
   summary?: ProjectSummary | null;
 };
 
@@ -128,7 +118,7 @@ export default function RegisterView({
   onCancel,
 }: {
   maskChoices: { slug: string; name: string }[];
-  onDone: (name: string) => void;
+  onDone: (slug: string) => void;
   onCancel: () => void;
 }) {
   const [slug, setSlug] = useState<string | null>(null);
@@ -272,13 +262,11 @@ export default function RegisterView({
         <h2>{name ? `「${name}」を登録しました` : "登録しました"}</h2>
         <ChecksList summary={status.summary} />
         <div className={styles.dropActions}>
-          <button className={styles.primary} onClick={() => onDone(name)}>
-            この物件を開く
-          </button>
-          <small>
-            {status.usd !== undefined &&
-              `費用 ${status.usd.toFixed(2)} ドル・時間 ${Math.round(status.seconds ?? 0)} 秒`}
-          </small>
+          {slug && (
+            <button className={styles.primary} onClick={() => onDone(slug)}>
+              この物件を開く
+            </button>
+          )}
         </div>
       </section>
     );

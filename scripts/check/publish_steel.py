@@ -18,6 +18,8 @@ from common import PRIVATE, REPO, write_json
 from sheet_geometry import plan_transform, register
 
 OUT = REPO / "demo-data" / "sample-b"
+# 人の朱書きとの比較は検証用なので、画面で使うデータと分ける
+VALIDATION = REPO / "validation" / "sample-b"
 ROOT = PRIVATE / "experiments"
 RED = (0.78, 0.21, 0.11)
 SHEET_DPI = 170
@@ -146,7 +148,7 @@ def publish_page(sheet_no, config, sheet_doc, human_doc, members):
         _, marked = single_page(sheet_doc, sheet_no)
         marked = marked
         crop(marked, region, sheet_masks(marked), OUT / f"findings/{finding_id}.png", frame=region)
-        crop(scan, to_scan(region), scan_masks, OUT / f"human/{finding_id}.png")
+        crop(scan, to_scan(region), scan_masks, VALIDATION / f"human/{finding_id}.png")
         sources = "、".join(f"{e['drawing']} {e['page']}" for e in item.get("evidence", []))
         # 図面全体の表示でも文字に枠線が掛からないように、切り抜きの赤枠と同じだけ広げる
         box = box_of(sheet, (region + (-3, -3, 3, 3)) & sheet.rect)
@@ -166,7 +168,6 @@ def publish_page(sheet_no, config, sheet_doc, human_doc, members):
                 "doc": DOC, "page": sheet_no, "where": f"p.{sheet_no} の該当箇所" + ("、枠の位置は目で見て補正" if fixed else ""), "text": "",
                 "bbox": box, "image": f"findings/{finding_id}.png",
             }],
-            "human_view": {"image": f"human/{finding_id}.png", "note": f"人のチェック図 p.{config['human_page']} の同じ範囲"},
         })
     return findings, human_items(sheet_no, config, sheet, scan, to_scan, scan_masks)
 
@@ -180,8 +181,8 @@ def human_items(sheet_no, config, sheet, scan, to_scan, scan_masks):
         region = item.get("region") or HUMAN_REGIONS[item["id"]]
         scan_rect = to_rect(scan, region)
         sheet_rect = to_sheet(scan_rect) & sheet.rect
-        crop(scan, scan_rect, scan_masks, OUT / f"human/{item['id']}.png")
-        crop(sheet, sheet_rect, sheet_masks(sheet), OUT / f"human/{item['id']}-before.png")
+        crop(scan, scan_rect, scan_masks, VALIDATION / f"human/{item['id']}.png")
+        crop(sheet, sheet_rect, sheet_masks(sheet), VALIDATION / f"human/{item['id']}-before.png")
         numbers = config["hits"].get(item["id"], [])
         near = config["near"].get(item["id"], [])
         if numbers:
@@ -275,9 +276,9 @@ def main():
     sheet_doc = pymupdf.open(config["sheet"])
     human_doc = pymupdf.open(config["human"])
     model = json.loads((OUT / "model.json").read_text())
-    for name in ("findings", "human", "sheets"):
-        if (OUT / name).exists():
-            shutil.rmtree(OUT / name)
+    for folder in (OUT / "findings", OUT / "sheets", VALIDATION / "human"):
+        if folder.exists():
+            shutil.rmtree(folder)
 
     sheets, indexes = publish_sheets(sheet_doc, model)
     write_json(OUT / "sheets.json", {
@@ -295,7 +296,11 @@ def main():
         "findings": findings,
         "changes": [],
     })
-    write_json(OUT / "human-compare.json", {"items": items})
+    write_json(VALIDATION / "human-compare.json", {"items": items})
+    write_json(VALIDATION / "finding-human-views.json", {
+        f["id"]: {"image": f"human/{f['id']}.png", "note": f"人のチェック図 p.{PAGES[f['drawing']['page']]['human_page']} の同じ範囲"}
+        for f in findings
+    })
     size = sum(p.stat().st_size for p in OUT.rglob("*.png")) / 1e6
     print(f"ページ {len(sheets)}、指摘 {len(findings)}、人の朱書き {len(items)}、画像 {size:.1f}MB")
 

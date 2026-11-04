@@ -12,7 +12,7 @@ import sys
 from datetime import datetime
 from pathlib import Path
 
-from common import DEMO, RUNS, write_json
+from common import RUNS, VALIDATION, write_json
 from evaluate import evaluate
 
 # 定価（ドル / 100万トークン）。claude-opus-5-5
@@ -70,7 +70,7 @@ def publish_stats(key):
     repeat = json.loads(max(RUNS.glob("repeat-*.json")).read_text())["runs"]
     detected_sets = [[d["id"] for d in shown["detected"]], *[r["detected"] for r in repeat]]
     required = [e["id"] for e in key["entries"] if e["kind"] in ("real", "planted")]
-    write_json(DEMO / "run-stats.json", {
+    write_json(VALIDATION / "sample-x" / "run-stats.json", {
         "runs": len(detected_sets),
         "detected": {i: sum(i in ids for ids in detected_sets) for i in required},
         "false_positives": len(shown["false_positives"]) + sum(len(r["false_positives"]) for r in repeat),
@@ -85,7 +85,7 @@ def main():
     parser.add_argument("--budget", type=float, default=3.0, help="定価換算の上限（ドル）")
     args = parser.parse_args()
 
-    key = json.loads((DEMO / "answer-key.json").read_text())
+    key = json.loads((VALIDATION / "sample-x" / "answer-key.json").read_text())
     if args.publish_stats:
         publish_stats(key)
         return
