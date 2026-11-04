@@ -444,6 +444,12 @@ def to_view(item, slug, classified):
         "checklist_id": item.get("checklist", {}).get("id"),
         "minutes_refs": minutes_refs,
         "merged_numbers": item.get("merged_numbers"),
+        # 根拠カードで値を並べるための項目。朱書きの短い注記と、枠が複数のときの全部の枠
+        "comment": item.get("comment"),
+        "regions": item["regions"],
+        "sheet_value": item.get("sheet_value") or None,
+        "design_value": item.get("design_value") or item.get("decided_value") or None,
+        "sources": [{"doc": e["drawing"], "page": e["page"], "where": e["where"]} for e in item.get("evidence", [])],
     }
 
 

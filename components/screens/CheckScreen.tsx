@@ -1,34 +1,25 @@
 "use client";
 
-import { useCallback, useMemo, useState } from "react";
+import Link from "next/link";
+import { useMemo, useState } from "react";
 import type { Building } from "@/lib/buildings";
-import type { Finding } from "@/lib/check";
-import {
-  floorsOf,
-  TYPE_LABELS,
-  type Member,
-  type MemberType,
-} from "@/lib/model";
-import {
-  ALL_LAYERS,
-  type Box,
-  type LayerKey,
-  type Sheet,
-  type SheetTarget,
-} from "@/lib/sheets";
+import { inkOf, memberKeysOf, numbered } from "@/lib/findings";
+import { floorsOf } from "@/lib/model";
+import { ALL_LAYERS, type LayerKey } from "@/lib/sheets";
+import { useDecisions } from "@/lib/useDecisions";
 import { useJobResult } from "@/lib/useJobResult";
 import AppFrame from "../AppFrame";
 import BuildingScene from "../BuildingSceneLazy";
-import CheckPanel from "../CheckPanel";
 import LayerToggles from "../LayerToggles";
-import MemberCard from "../MemberCard";
-import SheetCanvas from "../SheetCanvas";
-import SheetViewer from "../SheetViewer";
-import styles from "../App.module.css";
+import AnnotatedSheet from "../check/AnnotatedSheet";
+import BasisCard from "../check/BasisCard";
+import FindingList from "../check/FindingList";
+import styles from "../check/check.module.css";
 
-const TOGGLEABLE: MemberType[] = ["slab", "wall", "pile"];
+const NO_HIDDEN = new Set<never>();
+const ignore = () => {};
 
-// ④ 施工図の朱書きと根拠
+// ④ 施工図の朱書きと根拠。一覧・朱書き・根拠・3D は同じ指摘を選んで一緒に切り替わる
 export default function CheckScreen({
   slug,
   model,
@@ -39,47 +30,32 @@ export default function CheckScreen({
   const isSaved = job === "saved";
   const jobId = isSaved ? null : job;
   const { result: uploaded, missing } = useJobResult(jobId);
+  const { excluded, setKept } = useDecisions(jobId);
   const saved = isSaved ? check : undefined;
-  const savedBase = `/demo-data/${slug}`;
   const jobBase = `/api/check/${jobId}/files`;
   const hasModel = model.members.length > 0;
-
   const floors = floorsOf(model);
-  const [topFloorIndex, setTopFloorIndex] = useState(floors.length - 1);
-  const [hiddenTypes, setHiddenTypes] = useState<ReadonlySet<MemberType>>(
-    new Set(),
-  );
-  const [selected, setSelected] = useState<Member | null>(null);
-  const [activeFinding, setActiveFinding] = useState<Finding | null>(null);
-  const [openSheet, setOpenSheet] = useState<SheetTarget | null>(null);
-  const closeSheet = useCallback(() => setOpenSheet(null), []);
-  // 図面と3Dのどちらを大きく出すか
-  const [focus, setFocus] = useState<"drawing" | "model">("drawing");
-  const [zoomed, setZoomed] = useState(false);
+
+  const [activeId, setActiveId] = useState<string | null>(null);
   const [sheetId, setSheetId] = useState<string | null>(null);
-  const [shownBox, setShownBox] = useState<Box | undefined>(undefined);
-  // 朱書きの表示。一覧と図面で同じ状態を使う
+  const [zoomed, setZoomed] = useState(false);
   const [visibleLayers, setVisibleLayers] = useState<ReadonlySet<LayerKey>>(
     () => new Set(ALL_LAYERS),
   );
-  const toggleLayer = useCallback((key: LayerKey) => {
-    setVisibleLayers((current) => {
-      const next = new Set(current);
-      if (next.has(key)) next.delete(key);
-      else next.add(key);
-      return next;
-    });
-  }, []);
   // 公開・デモ用の表示。読み込み直すと必ず塗りつぶしありに戻す
   const [publicView, setPublicView] = useState(true);
 
-  const allFindings = uploaded?.findings ?? saved?.findings ?? [];
+  const allFindings = useMemo(
+    () => numbered(uploaded?.findings ?? saved?.findings ?? []),
+    [uploaded, saved],
+  );
   const noMaskedFiles = Boolean(uploaded && publicView && !uploaded.masked);
   const resultBase = uploaded
     ? publicView
       ? `${jobBase}/masked`
       : jobBase
-    : savedBase;
+    : `/demo-data/${slug}`;
+
   const pageSheets = useMemo(() => {
     if (uploaded) {
       // 入れた施工図は、読み取った図面名で出す
@@ -97,72 +73,44 @@ export default function CheckScreen({
     }
     return [];
   }, [uploaded, saved, sheets]);
+
+  const shownFindings = allFindings.filter((f) =>
+    visibleLayers.has(f.source_type ?? "design"),
+  );
+  const active = allFindings.find((f) => f.id === activeId) ?? null;
   const currentSheet =
     pageSheets.find((sheet) => sheet.id === sheetId) ?? pageSheets[0];
 
-  const hasLayers = pageSheets.some((sheet) => sheet.layers);
   const counts = {
     design: allFindings.filter((f) => (f.source_type ?? "design") === "design")
       .length,
     minutes: allFindings.filter((f) => f.source_type === "minutes").length,
     knowledge: allFindings.filter((f) => f.source_type === "knowledge").length,
   };
-  const shownFindings = hasLayers
-    ? allFindings.filter(
-        (f) => !f.source_type || visibleLayers.has(f.source_type),
-      )
-    : allFindings;
 
   const highlighted = useMemo(
-    () => new Set(activeFinding?.model_refs ?? []),
-    [activeFinding],
+    () => new Set(active ? memberKeysOf(active, model) : []),
+    [active, model],
   );
-
-  const showInline = (sheet: Sheet, bbox: Box | undefined) => {
-    setSheetId(sheet.id);
-    setShownBox(bbox);
-    setFocus("drawing");
-  };
-
-  // 結果の中の図面は左の大きな枠に出す。それ以外（3Dの部材から開く別の施工図）は別の窓で開く
-  const showSheet = (sheet: Sheet, bbox: Box | undefined, label: string) => {
-    if (saved && pageSheets.some((s) => s.id === sheet.id)) {
-      showInline(sheet, bbox);
-    } else if (uploaded && pageSheets.some((s) => s.image === sheet.image)) {
-      showInline(sheet, bbox);
-    } else {
-      setOpenSheet({ sheet, bbox, label, base: savedBase });
-    }
-  };
-
-  const activateFinding = (finding: Finding | null) => {
-    setActiveFinding(finding);
-    setSelected(null);
-    if (!finding) {
-      setShownBox(undefined);
-      return;
-    }
-    const sheet = pageSheets.find((s) => s.id === finding.drawing.sheet);
-    if (sheet) showInline(sheet, finding.drawing.bbox);
-    // 基礎の部材は上階に隠れるので、基礎まで表示を下げ、杭も出す
-    const lowest = Math.min(
-      ...finding.model_refs.map((ref) => floors.indexOf(ref.split("|")[1])),
+  // 該当部材が上の階に隠れないよう、一番下の該当階まで表示を下げる
+  const topFloorIndex = useMemo(() => {
+    const indexes = [...highlighted].map((key) =>
+      floors.indexOf(key.split("|")[1]),
     );
-    if (Number.isFinite(lowest) && lowest >= 0) setTopFloorIndex(lowest);
-    setHiddenTypes(new Set());
+    const lowest = Math.max(...indexes.filter((index) => index >= 0));
+    return Number.isFinite(lowest) ? lowest : floors.length - 1;
+  }, [highlighted, floors]);
+
+  const select = (finding: (typeof allFindings)[number]) => {
+    setActiveId(finding.id);
+    if (finding.drawing.sheet) setSheetId(finding.drawing.sheet);
   };
 
-  const toggleType = (type: MemberType, show: boolean) => {
-    const next = new Set(hiddenTypes);
-    if (show) next.delete(type);
-    else next.add(type);
-    setHiddenTypes(next);
-    if (!show && selected?.type === type) setSelected(null);
-  };
-
-  const changeTopFloor = (index: number) => {
-    setTopFloorIndex(index);
-    if (selected && floors.indexOf(selected.floor) > index) setSelected(null);
+  const toggleLayer = (key: LayerKey) => {
+    const next = new Set(visibleLayers);
+    if (next.has(key)) next.delete(key);
+    else next.add(key);
+    setVisibleLayers(next);
   };
 
   const crumbs = [
@@ -174,26 +122,25 @@ export default function CheckScreen({
   if (!currentSheet) {
     return (
       <AppFrame crumbs={crumbs}>
-        <p className={styles.loading} role="status">
+        <p className={styles.noMasked} role="status">
           {missing ? "このチェック結果は見つかりません。" : "読み込み中…"}
         </p>
       </AppFrame>
     );
   }
 
+  const modelHref = `/projects/${slug}?job=${job}${active ? `&finding=${active.id}` : ""}`;
+
   return (
     <AppFrame crumbs={crumbs}>
-      <div className={styles.stage} data-focus={focus}>
+      <div className={styles.screen}>
         <div className={styles.topBar}>
           {pageSheets.length > 1 ? (
             <select
               className={styles.pageSelect}
               aria-label="図面のページ"
               value={currentSheet.id}
-              onChange={(e) => {
-                setSheetId(e.target.value);
-                setShownBox(undefined);
-              }}
+              onChange={(e) => setSheetId(e.target.value)}
             >
               {pageSheets.map((sheet) => (
                 <option key={sheet.id} value={sheet.id}>
@@ -202,19 +149,15 @@ export default function CheckScreen({
               ))}
             </select>
           ) : (
-            <b className={styles.pageTitle}>{currentSheet.title}</b>
+            <b>{currentSheet.title}</b>
           )}
           <LayerToggles
             counts={counts}
             visible={visibleLayers}
-            onToggle={hasLayers ? toggleLayer : undefined}
+            onToggle={toggleLayer}
           />
-          <div className={styles.topActions}>
-            <button
-              className={styles.secondary}
-              disabled={focus !== "drawing"}
-              onClick={() => setZoomed(!zoomed)}
-            >
+          <div className={styles.barActions}>
+            <button className={styles.btn} onClick={() => setZoomed(!zoomed)}>
               {zoomed ? "図面の全体" : "図面を拡大"}
             </button>
             {uploaded && (
@@ -231,10 +174,13 @@ export default function CheckScreen({
                 {publicView ? "公開・デモ用の表示" : "社内用（名前が見えます）"}
               </label>
             )}
+            <Link className={styles.btn} href={`/projects/${slug}?add=1`}>
+              施工図を追加
+            </Link>
             {uploaded && !noMaskedFiles && (
               <a
-                className={styles.primarySmall}
-                href={`${resultBase}/marked.pdf`}
+                className={styles.btnPrimary}
+                href={`/api/check/${jobId}/export?public=${publicView ? 1 : 0}`}
                 download
               >
                 朱書きPDFをダウンロード
@@ -249,127 +195,71 @@ export default function CheckScreen({
           </p>
         ) : (
           <>
-            <section className={styles.drawingPane} aria-label="朱書きの図面">
-              {focus === "model" && (
-                <button
-                  className={styles.swap}
-                  onClick={() => setFocus("drawing")}
-                >
-                  図面を大きく
-                </button>
-              )}
-              <SheetCanvas
+            <FindingList
+              findings={shownFindings}
+              total={allFindings.length}
+              excluded={excluded}
+              activeId={activeId}
+              notes={uploaded?.notes}
+              changes={saved?.changes}
+              minutes={uploaded?.minutes}
+              checklist={uploaded?.checklist}
+              onSelect={select}
+            />
+            <section className={styles.sheetPane} aria-label="朱書きの図面">
+              <AnnotatedSheet
                 sheet={currentSheet}
                 base={resultBase}
-                bbox={shownBox}
-                marks={
-                  hasLayers
-                    ? undefined
-                    : allFindings
-                        .filter((f) => f.drawing.sheet === currentSheet.id)
-                        .map((f) => f.drawing.bbox)
-                }
-                zoomed={zoomed && focus === "drawing"}
-                visibleLayers={hasLayers ? visibleLayers : new Set(ALL_LAYERS)}
+                findings={shownFindings.filter(
+                  (f) => f.drawing.sheet === currentSheet.id,
+                )}
+                excluded={excluded}
+                activeId={activeId}
+                zoomed={zoomed}
+                onSelect={select}
               />
             </section>
-
-            <section className={styles.listPane} aria-label="指摘の一覧">
-              <CheckPanel
-                findings={shownFindings}
-                totalFindings={allFindings.length}
-                lead={saved?.mode}
-                notes={uploaded?.notes}
-                changes={saved?.changes}
-                minutes={uploaded?.minutes}
-                checklist={uploaded?.checklist}
-                activeId={activeFinding?.id ?? null}
-                onActivate={activateFinding}
+            <aside className={styles.side}>
+              <BasisCard
+                finding={active}
+                kept={!active || !excluded.has(active.number)}
                 base={resultBase}
-                sheets={pageSheets}
-                onOpenSheet={showSheet}
+                onKeep={(kept) => active && setKept(active.number, kept)}
               />
-            </section>
-
-            <section className={styles.modelPane} aria-label="3Dモデル">
-              {!hasModel ? (
-                <div className={styles.noModel}>
-                  この物件は3Dなしで登録しています。
-                  <br />
-                  施工図チェックは使えます。
-                </div>
-              ) : (
-                <>
-                  <div className={styles.modelBar}>
-                    <b>3Dモデル</b>
-                    <label className={styles.floor}>
-                      <span className="mono">{floors[topFloorIndex]}</span>
-                      <input
-                        type="range"
-                        aria-label="表示する階"
-                        min={0}
-                        max={floors.length - 1}
-                        value={topFloorIndex}
-                        onChange={(e) => changeTopFloor(Number(e.target.value))}
-                      />
-                    </label>
-                    {TOGGLEABLE.filter((type) =>
-                      model.members.some((m) => m.type === type),
-                    ).map((type) => (
-                      <label key={type} className={styles.typeToggle}>
-                        <input
-                          type="checkbox"
-                          checked={!hiddenTypes.has(type)}
-                          onChange={(e) => toggleType(type, e.target.checked)}
-                        />
-                        {TYPE_LABELS[type]}
-                      </label>
-                    ))}
-                    {focus === "drawing" && (
-                      <button
-                        className={styles.secondary}
-                        onClick={() => setFocus("model")}
-                      >
-                        3Dを大きく
-                      </button>
-                    )}
-                  </div>
-                  <div className={styles.modelView}>
+              <div className={styles.mini}>
+                {hasModel ? (
+                  <>
                     <BuildingScene
                       model={model}
                       topFloorIndex={topFloorIndex}
-                      hiddenTypes={hiddenTypes}
-                      selected={selected}
+                      hiddenTypes={NO_HIDDEN}
+                      selected={null}
                       highlighted={highlighted}
-                      onSelect={setSelected}
+                      highlightColor={active ? inkOf(active) : undefined}
+                      onSelect={ignore}
                     />
-                    {selected ? (
-                      <MemberCard
-                        member={selected}
-                        index={sheets}
-                        onClose={() => setSelected(null)}
-                        onOpen={showSheet}
-                      />
-                    ) : (
-                      <div className={styles.hint}>
-                        ドラッグで回転・ホイールで拡大・部材をクリック
-                      </div>
+                    <Link
+                      className={`${styles.btn} ${styles.miniAction}`}
+                      href={modelHref}
+                    >
+                      3Dで大きく見る
+                    </Link>
+                    {active && highlighted.size === 0 && (
+                      <span className={styles.miniNote}>
+                        3D上の位置を特定できませんでした
+                      </span>
                     )}
-                  </div>
-                </>
-              )}
-            </section>
+                  </>
+                ) : (
+                  <p className={styles.noModel}>
+                    この物件は3Dなしで登録しています。
+                  </p>
+                )}
+              </div>
+            </aside>
           </>
         )}
       </div>
-      {openSheet && (
-        <SheetViewer
-          target={openSheet}
-          onClose={closeSheet}
-          visibleLayers={visibleLayers}
-          onToggleLayer={toggleLayer}
-        />
-      )}
     </AppFrame>
   );
 }

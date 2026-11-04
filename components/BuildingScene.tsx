@@ -135,10 +135,12 @@ function shapeOf(m: Member): Shape {
 function MemberMesh({
   member,
   selected,
+  highlightColor,
   onSelect,
 }: {
   member: Member;
   selected: boolean;
+  highlightColor: string;
   onSelect: (member: Member) => void;
 }) {
   const shape = useMemo(() => shapeOf(member), [member]);
@@ -164,7 +166,12 @@ function MemberMesh({
         <boxGeometry args={shape.size} />
       )}
       {selected ? (
-        <meshStandardMaterial key="selected" color={RED} emissive="#5a1006" />
+        <meshStandardMaterial
+          key="selected"
+          color={highlightColor}
+          emissive={highlightColor}
+          emissiveIntensity={0.35}
+        />
       ) : (
         // 透明と不透明の切り替えを確実に反映するため、key で作り直す
         <meshStandardMaterial
@@ -244,6 +251,8 @@ export type SceneProps = {
   hiddenTypes: ReadonlySet<MemberType>;
   selected: Member | null;
   highlighted: ReadonlySet<string>;
+  // 強調の色。青（ナレッジ）の指摘は青で光らせる
+  highlightColor?: string;
   onSelect: (member: Member | null) => void;
 };
 
@@ -253,6 +262,7 @@ export default function BuildingScene({
   hiddenTypes,
   selected,
   highlighted,
+  highlightColor = RED,
   onSelect,
 }: SceneProps) {
   const floors = floorsOf(model);
@@ -298,6 +308,7 @@ export default function BuildingScene({
           key={memberKey(m)}
           member={m}
           selected={m === selected || highlighted.has(memberKey(m))}
+          highlightColor={m === selected ? RED : highlightColor}
           onSelect={onSelect}
         />
       ))}

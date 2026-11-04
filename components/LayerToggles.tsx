@@ -1,7 +1,7 @@
 "use client";
 
 import { ALL_LAYERS, LAYER_LABELS, type LayerKey } from "@/lib/sheets";
-import styles from "./CheckPanel.module.css";
+import styles from "./check/check.module.css";
 
 const COLOR_NAME: Record<LayerKey, string> = {
   design: "赤",

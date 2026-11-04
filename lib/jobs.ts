@@ -99,6 +99,27 @@ export function listJobs(project: string): JobSummary[] {
   );
 }
 
+export function readDecisions(folder: string): number[] {
+  const file = path.join(folder, "decisions.json");
+  return existsSync(file) ? JSON.parse(readFileSync(file, "utf8")).excluded : [];
+}
+
+// 朱書きから外した指摘の番号を残す
+export function saveDecisions(folder: string, excluded: number[]) {
+  writeFileSync(path.join(folder, "decisions.json"), JSON.stringify({ excluded }));
+}
+
+// 朱書きPDFのパス。外した指摘があれば、その分を除いて作り直す（AIは呼ばない）
+export async function exportMarked(folder: string, isPublic: boolean) {
+  const script = fromRoot("scripts", "check", "export_marked.py");
+  const { stdout } = await runFile(
+    PYTHON(),
+    [script, folder, ...(isPublic ? ["--public"] : [])],
+    { cwd: fromRoot("scripts", "check"), maxBuffer: 1024 * 1024 },
+  );
+  return stdout.trim();
+}
+
 export function publicFile(folder: string, relative: string) {
   return PUBLIC_FILE.test(relative) ? path.join(folder, relative) : null;
 }

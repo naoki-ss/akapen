@@ -20,8 +20,8 @@ from fontTools.ttLib import TTCollection, TTFont
 
 from merge_findings import merged_note
 
-RED = (0.8, 0.1, 0.1)
-BLUE = (0.05, 0.3, 0.8)
+RED = (198 / 255, 45 / 255, 35 / 255)  # #C62D23
+BLUE = (29 / 255, 91 / 255, 184 / 255)  # #1D5BB8
 SOURCE_TYPES = {
     "design": {"label": "設計図書", "color": RED},
     "minutes": {"label": "議事録", "color": RED},

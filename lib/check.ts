@@ -37,6 +37,13 @@ export type Finding = {
   checklist_id?: string | null;
   // 議事録の指摘の根拠になった項目（番号と本文）
   minutes_refs?: { id: string; text: string }[] | null;
+  // 朱書きの短い注記と、すべての枠
+  comment?: string | null;
+  regions?: Box[];
+  // 根拠カードで並べる値（設計図書または議事録で決まった値）と、根拠の資料
+  sheet_value?: string | null;
+  design_value?: string | null;
+  sources?: { doc: string; page: string; where: string }[];
 };
 
 export type OrderChange = {
