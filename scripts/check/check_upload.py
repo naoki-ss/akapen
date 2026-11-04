@@ -1,0 +1,367 @@
+"""アップロードされた施工図PDFを判定し、朱書きPDFを作る。
+
+  python check_upload.py <ジョブのフォルダ>
+
+ジョブのフォルダは ~/sekozu-data/uploads/<id>/（リポジトリの外）。input.pdf と job.json を置いて起動する。
+進み具合は status.json に書く（画面はこれを読む）。結果は result.json、marked.pdf、pages/、findings/。
+
+物件ごとの設計図書は ~/sekozu-data/projects.json に登録する（図面の場所を含むのでコミットしない）。
+
+照合を足すときは CHECKERS に足す。今は設計図書との照合だけで、議事録とナレッジはこれから足す。
+1つの照合は (page_context) -> (指摘のリスト, 費用) を返す。指摘の source_type で色と種類が決まる。
+"""
+import copy
+import json
+import os
+import re
+import sys
+import threading
+import time
+import traceback
+from concurrent.futures import ThreadPoolExecutor
+from datetime import datetime
+from pathlib import Path
+
+import anthropic
+import pymupdf
+
+from ai_review import call_claude, load_env
+from common import PRIVATE, REPO, write_json
+from index_steel_sheets import SCHEMA as INDEX_SCHEMA, SYSTEM as INDEX_SYSTEM
+from markup_pdf import SOURCE_TYPES, make_marked_pdf, to_rect, valid_regions
+from repeat_runs import PRICE_INPUT, PRICE_OUTPUT
+from review_steel_sheet import SYSTEM as STEEL_SYSTEM, red_pixels, render
+from steel_experiment import REVISED_NOTE, ROOT as EXPERIMENTS, build_inputs, image_block, record_cost, schema_for, tiles
+
+PROJECTS = PRIVATE / "projects.json"
+UPLOADS = PRIVATE / "uploads"
+WORKERS = 3
+MAX_PAGES = 40
+PAGE_DPI = 130
+CROP_DPI = 150
+CROP_MARGIN = 45
+
+# 条件Dの入力と手順はそのままで、朱書きPDFのために出力の形だけ足す
+OUTPUT_NOTE = """
+
+出力について:
+- regions に、指摘の場所ごとの範囲を入れてください。指摘が複数の場所を指すときは、場所ごとに範囲を分けて全部入れます。
+- comment は図面に書き込む短いコメントです。30文字以内で、何を確認するのかが分かるように書きます。
+- needs_confirmation は、図面だけでは食い違いと言い切れず、人の確認が必要なときに true にします。"""
+
+# 鉄骨以外の施工図では、製作会社向けの言い方だけを変える
+FOUNDATION_WORDS = [
+    ("鉄骨製作会社から提出された鉄骨施工図", "協力会社から提出された基礎・杭の施工図"),
+    ("製作に入る前に", "施工の前に"),
+    ("製作上の調整", "施工上の調整"),
+    ("製作前の確認", "施工前の確認"),
+    ("製作前に", "施工前に"),
+]
+
+
+class Job:
+    """進み具合の記録。ページを並行して判定するので鍵を掛ける"""
+
+    def __init__(self, folder):
+        self.folder = Path(folder)
+        self.lock = threading.Lock()
+        self.started = time.time()
+        self.status = {"state": "running", "stage": "準備中", "message": "準備中です", "pid": os.getpid(),
+                       "pages_total": 0, "pages_done": 0, "active_pages": [], "usd": 0.0, "seconds": 0,
+                       "started_at": datetime.now().isoformat(timespec="seconds")}
+        self.write()
+
+    def write(self):
+        self.status["seconds"] = round(time.time() - self.started, 1)
+        # 画面が書きかけを読まないように、書き終えてから置き換える
+        temp = self.folder / "status.json.tmp"
+        temp.write_text(json.dumps(self.status, ensure_ascii=False))
+        temp.replace(self.folder / "status.json")
+
+    def update(self, **values):
+        with self.lock:
+            self.status.update(values)
+            self.write()
+
+    def page_started(self, number):
+        with self.lock:
+            self.status["active_pages"] = sorted({*self.status["active_pages"], number})
+            self._page_message()
+            self.write()
+
+    def page_finished(self, number, usd):
+        with self.lock:
+            self.status["active_pages"] = [p for p in self.status["active_pages"] if p != number]
+            self.status["pages_done"] += 1
+            self.status["usd"] = round(self.status["usd"] + usd, 3)
+            self._page_message()
+            self.write()
+
+    def _page_message(self):
+        pages = "、".join(str(p) for p in self.status["active_pages"])
+        total = self.status["pages_total"]
+        self.status["stage"] = "確認中"
+        self.status["message"] = (f"{pages} ページ目を確認中（全 {total} ページ、{self.status['pages_done']} ページ完了）"
+                                  if pages else f"{self.status['pages_done']} / {total} ページ完了")
+
+
+def message_cost(path):
+    usage = json.loads(Path(path).read_text())["usage"]
+    return usage["input_tokens"], usage["output_tokens"], (usage["input_tokens"] * PRICE_INPUT + usage["output_tokens"] * PRICE_OUTPUT) / 1_000_000
+
+
+def load_project(slug):
+    projects = json.loads(PROJECTS.read_text())
+    if slug not in projects:
+        raise ValueError("設計図書が登録されていない物件です")
+    return projects[slug]
+
+
+def output_schema():
+    schema = copy.deepcopy(schema_for("D"))
+    finding = schema["properties"]["findings"]["items"]
+    finding["required"].remove("region")
+    del finding["properties"]["region"]
+    finding["required"] += ["regions", "comment", "needs_confirmation"]
+    finding["properties"]["regions"] = {"type": "array", "items": {"type": "array", "items": {"type": "number"}}}
+    finding["properties"]["comment"] = {"type": "string"}
+    finding["properties"]["needs_confirmation"] = {"type": "boolean"}
+    return schema
+
+
+def system_prompt(project):
+    system = STEEL_SYSTEM.replace("region に全体図に対する 0〜1 の範囲 [x0, y0, x1, y1] を入れます",
+                                  "regions に全体図に対する 0〜1 の範囲 [x0, y0, x1, y1] を入れます")
+    if project.get("kind") == "foundation":
+        for steel, other in FOUNDATION_WORDS:
+            system = system.replace(steel, other)
+    return system + (REVISED_NOTE if project.get("revised") else "")
+
+
+def classify_page(client, page, raw_dir):
+    """図面の種類と階を読む。照合に使う設計図のページを決めるのに使う"""
+    content = [{"type": "text", "text": "施工図：全体図"}, image_block(render(page))]
+    for png, place in tiles(page, 3, 2):
+        content += [{"type": "text", "text": f"施工図：{place} の分割図"}, image_block(png)]
+    content.append({"type": "text", "text": "このページを読み取ってください。"})
+    reply = call_claude(client, INDEX_SYSTEM, content, INDEX_SCHEMA, raw_dir, "classify")
+    return reply, message_cost(raw_dir / "classify.json")[2]
+
+
+def plan_for(project, classified):
+    """伏図なら同じ階の伏図のページを返す。それ以外は共通のページだけで照合する"""
+    if classified["kind"] == "伏図":
+        for frame in classified["frames"]:
+            plan = project.get("plan_by_level", {}).get(frame["level"])
+            if plan:
+                return plan, frame["level"]
+    return project.get("default_plan") or {}, None
+
+
+def run_design_check(context):
+    """設計図書との照合（条件D：照合の手順あり）"""
+    project, classified = context["project"], context["classified"]
+    plan, level = plan_for(project, classified)
+    config = {"sheet": context["input"], "design": project["design"], "revised": project.get("revised"),
+              "deny_sha256": {}, "design_common_pages": project["common_pages"], "allow_red": True}
+    page_config = {"sheet_page": context["number"], "design_plan": plan.get("design"), "revised_plan": plan.get("revised")}
+    content, record = build_inputs("D", page_config, config)
+    content[-1]["text"] += OUTPUT_NOTE
+    system = system_prompt(project)
+    schema = output_schema()
+    raw_dir = context["raw_dir"]
+    write_json(raw_dir / "inputs.json", record)
+    write_json(raw_dir / "prompt.json", {"system": system, "text_blocks": [b["text"] for b in content if b["type"] == "text"]})
+    reply = call_claude(context["client"], system, content, schema, raw_dir, "review")
+    write_json(raw_dir / "review-result.json", reply)
+    tokens = message_cost(raw_dir / "review.json")
+    findings = []
+    for item in reply["findings"]:
+        findings.append({**item, "source_type": "design", "page": context["number"],
+                         "regions": valid_regions(item.get("regions")), "floor_level": level})
+    return findings, tokens[2], {"unreadable": reply.get("unreadable", []), "input_tokens": tokens[0], "output_tokens": tokens[1]}
+
+
+# 照合の一覧。議事録とナレッジはここに足す（minutes は赤、knowledge は青で描かれる）
+CHECKERS = [run_design_check]
+
+
+def check_page(job, client, project, input_path, number, job_id):
+    job.page_started(number)
+    raw_dir = job.folder / "raw" / f"p{number}"
+    raw_dir.mkdir(parents=True, exist_ok=True)
+    page = pymupdf.open(input_path)[number - 1]
+    usd, tokens = 0.0, {}
+    started = time.time()
+    try:
+        classified, cost = classify_page(client, page, raw_dir)
+        usd += cost
+        write_json(raw_dir / "classified.json", classified)
+        context = {"client": client, "project": project, "classified": classified, "input": str(input_path),
+                   "number": number, "raw_dir": raw_dir}
+        findings = []
+        for checker in CHECKERS:
+            found, cost, tokens = checker(context)
+            usd += cost
+            findings += found
+        return {"number": number, "ok": True, "findings": findings, "classified": classified, "usd": usd,
+                "seconds": round(time.time() - started, 1), "red_pixels": red_pixels(page), **tokens}
+    except (Exception, SystemExit) as error:  # 1ページの失敗で全体を止めない。一覧に「判定できなかった」と書く
+        (raw_dir / "error.txt").write_text(traceback.format_exc())
+        # 途中で止まった回の費用も記録する（読み取りの分は成功した時点で足してある）
+        if (raw_dir / "review.json").exists():
+            usd += message_cost(raw_dir / "review.json")[2]
+        return {"number": number, "ok": False, "findings": [], "error": type(error).__name__, "usd": usd,
+                "seconds": round(time.time() - started, 1)}
+    finally:
+        record_cost(EXPERIMENTS / "ledger.json", f"upload-{job_id[:8]}-p{number}", round(usd, 3))
+        job.page_finished(number, usd)
+
+
+def member_refs(item, classified, slug):
+    """3Dで強調する部材。階は図面の種類から、部材は符号と通りから決める"""
+    model_path = REPO / "demo-data" / slug / "model.json"
+    if not model_path.exists():
+        return [], None
+    model = json.loads(model_path.read_text())
+    project = load_project(slug)
+    floor = project.get("floor_by_level", {}).get(item.get("floor_level")) or project.get("default_floor")
+    # 軸組図の指摘は、図の通りを手がかりにする
+    tokens = set(re.findall(r"[XY]\d", " ".join(item["grids"])))
+    refs = []
+    for member in model["members"]:
+        if floor and member["floor"] != floor:
+            continue
+        grids = set(re.findall(r"[XY]\d", member["grid"]))
+        same_mark = member["mark"] in item["marks"]
+        exact_grid = member["grid"] in item["grids"]
+        if exact_grid or (same_mark and (not tokens or tokens & grids)):
+            refs.append(f"{member['type']}|{member['floor']}|{member['grid']}")
+    return refs, floor
+
+
+def render_outputs(job, marked_path, findings, page_count):
+    """画面に出すページの画像と、指摘ごとの切り抜きを、朱書きを重ねたPDFから作る"""
+    doc = pymupdf.open(marked_path)
+    sheets = []
+    (job.folder / "pages").mkdir(exist_ok=True)
+    (job.folder / "findings").mkdir(exist_ok=True)
+    for number in range(1, page_count + 1):
+        page = doc[number - 1]
+        zoom = PAGE_DPI / 72
+        pix = page.get_pixmap(matrix=pymupdf.Matrix(zoom, zoom), alpha=False)
+        pix.save(job.folder / f"pages/p{number}.png")
+        sheets.append({"id": f"p{number}", "doc": "アップロードした施工図", "page": number, "title": f"{number} ページ目（朱書き）",
+                       "image": f"pages/p{number}.png", "width": pix.width, "height": pix.height})
+    for item in findings:
+        page = doc[item["page"] - 1]
+        rects = [to_rect(page, box) for box in item["regions"]]
+        clip = page.rect
+        if rects:
+            whole = rects[0]
+            for rect in rects[1:]:
+                whole |= rect
+            clip = (whole + (-CROP_MARGIN, -CROP_MARGIN, CROP_MARGIN, CROP_MARGIN)) & page.rect
+        zoom = CROP_DPI / 72
+        page.get_pixmap(matrix=pymupdf.Matrix(zoom, zoom), clip=clip, alpha=False).save(job.folder / f"findings/{item['number']}.png")
+    return sheets
+
+
+def to_view(item, slug, classified):
+    refs, floor = member_refs(item, classified, slug)
+    box = item["regions"][0] if item["regions"] else [0, 0, 1, 1]
+    sources = "、".join(f"{e['drawing']} {e['page']}" for e in item.get("evidence", []))
+    label = SOURCE_TYPES[item["source_type"]]["label"]
+    return {
+        "id": str(item["number"]),
+        "severity": item["severity"],
+        "category": item["category"],
+        "title": item["title"],
+        "content": item["content"] + (f"（根拠：{sources}）" if sources else ""),
+        "drawing": {"doc": "アップロードした施工図", "page": item["page"], "bbox": box, "sheet": f"p{item['page']}"},
+        "members": {"grids": item["grids"], "marks": item["marks"], "floor": floor or ""},
+        "model_refs": refs,
+        "source": "ai",
+        "key_ids": [],
+        "planted": False,
+        "evidence": [{"doc": "アップロードした施工図", "page": item["page"], "where": f"朱書き {item['number']}", "text": "",
+                      "bbox": box, "image": f"findings/{item['number']}.png"}],
+        "number": item["number"],
+        "source_type": item["source_type"],
+        "source_label": label,
+        "needs_confirmation": item["needs_confirmation"],
+    }
+
+
+def main():
+    folder = Path(sys.argv[1]).resolve()
+    if UPLOADS.resolve() not in folder.parents:
+        sys.exit("uploads の外のフォルダは扱いません")
+    job = Job(folder)
+    try:
+        meta = json.loads((folder / "job.json").read_text())
+        slug = meta["project"]
+        project = load_project(slug)
+        input_path = folder / "input.pdf"
+        source = pymupdf.open(input_path)
+        if source.needs_pass:
+            raise ValueError("パスワード付きのPDFは扱えません")
+        page_count = source.page_count
+        source.close()
+        if not 1 <= page_count <= MAX_PAGES:
+            raise ValueError(f"ページ数は {MAX_PAGES} ページまでです（{page_count} ページ）")
+        job.update(pages_total=page_count, stage="確認中", message=f"判定を始めます（全 {page_count} ページ）")
+
+        load_env()
+        if not os.environ.get("ANTHROPIC_API_KEY"):
+            raise ValueError("ANTHROPIC_API_KEY がありません")
+        client = anthropic.Anthropic()
+        with ThreadPoolExecutor(WORKERS) as pool:
+            pages = list(pool.map(lambda n: check_page(job, client, project, input_path, n, folder.name), range(1, page_count + 1)))
+
+        job.update(stage="朱書き", message="朱書きPDFを作成中です", active_pages=[])
+        findings = []
+        for page in pages:
+            findings += page["findings"]
+        for number, item in enumerate(findings, 1):
+            item["number"] = number
+        failed = [page["number"] for page in pages if not page["ok"]]
+        notes = []
+        if failed:
+            notes.append("次のページは判定できませんでした（指摘がないという意味ではありません）： " + "、".join(f"p.{n}" for n in failed))
+        unlocated = [item["number"] for item in findings if not item["regions"]]
+        if unlocated:
+            notes.append("次の指摘は図面上の場所を示せませんでした： " + "、".join(str(n) for n in unlocated))
+        notes.append("今回の照合は設計図書のみです。議事録とナレッジの照合は行っていません。")
+        marked = folder / "marked.pdf"
+        summary = make_marked_pdf(input_path, findings, marked, title="施工図の朱書き", notes=notes)
+        sheets = render_outputs(job, marked, findings, page_count)
+        by_page = {page["number"]: page for page in pages}
+        views = [to_view(item, slug, by_page[item["page"]].get("classified")) for item in findings]
+        usd = round(sum(page["usd"] for page in pages), 3)
+        seconds = round(time.time() - job.started, 1)
+        result = {
+            "mode": f"設計図書との照合（条件D）。{page_count} ページ、{len(findings)} 件。",
+            "findings": views,
+            "changes": [],
+            "sheets": sheets,
+            "failed_pages": failed,
+            "notes": notes,
+            "summary": summary,
+            "pages": [{k: page.get(k) for k in ("number", "ok", "usd", "seconds", "input_tokens", "output_tokens", "red_pixels", "error")} |
+                      {"title": (page.get("classified") or {}).get("title")} for page in pages],
+            "usd": usd,
+            "seconds": seconds,
+        }
+        write_json(folder / "result.json", result)
+        job.update(state="done", stage="完了", message=f"完了しました（{len(findings)} 件）", usd=usd)
+    except (Exception, SystemExit) as error:
+        (folder / "error.txt").write_text(traceback.format_exc())
+        # 画面には詳細を出さない（図面の場所などが混ざるため）
+        message = str(error) if isinstance(error, ValueError) else "判定中にエラーが発生しました"
+        job.update(state="error", stage="エラー", message=message, active_pages=[])
+        sys.exit(1)
+
+
+if __name__ == "__main__":
+    main()

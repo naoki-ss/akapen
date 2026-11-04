@@ -12,6 +12,7 @@ import {
 } from "@/lib/check";
 import type { Box, Sheet } from "@/lib/sheets";
 import CompareViewer, { type CompareTarget } from "./CompareViewer";
+import UploadCheck from "./UploadCheck";
 import styles from "./CheckPanel.module.css";
 
 const SEVERITY_CLASS: Record<Finding["severity"], string> = {
@@ -61,6 +62,11 @@ function FindingDetail({
   return (
     <div className={styles.detail}>
       <p>{finding.content}</p>
+      {finding.needs_confirmation && (
+        <p className={styles.notice}>
+          図面だけでは食い違いと言い切れない点です。人の確認が必要です。
+        </p>
+      )}
       {finding.severity === "要確認" && (
         <p className={styles.notice}>
           現場の担当者に確認中です。確認が取れるまで食い違いとは断定しません。
@@ -286,12 +292,74 @@ function HumanCompare({
   );
 }
 
+export function FindingCards({
+  findings,
+  activeId,
+  onActivate,
+  base,
+  sheets,
+  onOpenSheet,
+  onCompare,
+}: {
+  findings: Finding[];
+  activeId: string | null;
+  onActivate: (finding: Finding | null) => void;
+  base: string;
+  sheets: Sheet[];
+  onOpenSheet: (sheet: Sheet, bbox: Box, label: string) => void;
+  onCompare: (target: CompareTarget) => void;
+}) {
+  return (
+    <>
+      {findings.map((finding) => {
+        const active = finding.id === activeId;
+        return (
+          <article key={finding.id} className={styles.card}>
+            <button
+              className={styles.cardHead}
+              aria-expanded={active}
+              onClick={() => onActivate(active ? null : finding)}
+            >
+              {finding.number !== undefined && (
+                <span className={styles.number}>{finding.number}</span>
+              )}
+              <span
+                className={`${styles.badge} ${SEVERITY_CLASS[finding.severity]}`}
+              >
+                {finding.severity}
+              </span>
+              <span className={styles.title}>{finding.title}</span>
+              {finding.needs_confirmation && (
+                <span className={`${styles.badge} ${styles.unconfirmed}`}>
+                  要確認
+                </span>
+              )}
+              {finding.planted && (
+                <span className={styles.planted}>デモ用に仕込み</span>
+              )}
+            </button>
+            {active && (
+              <FindingDetail
+                finding={finding}
+                base={base}
+                sheets={sheets}
+                onOpenSheet={onOpenSheet}
+                onCompare={onCompare}
+              />
+            )}
+          </article>
+        );
+      })}
+    </>
+  );
+}
+
 const runCountText = (stats: RunStats, id: string) => {
   const hits = stats.detected[id] ?? 0;
   return `${stats.runs}回中${hits}回検出、${stats.runs - hits}回見逃し`;
 };
 
-type Tab = "findings" | "human";
+type Tab = "findings" | "human" | "upload";
 
 export default function CheckPanel({
   result,
@@ -302,6 +370,7 @@ export default function CheckPanel({
   activeId,
   onActivate,
   base,
+  slug,
   sheets,
   onOpenSheet,
 }: {
@@ -314,8 +383,14 @@ export default function CheckPanel({
   activeId: string | null;
   onActivate: (finding: Finding | null) => void;
   base: string;
+  slug: string;
   sheets: Sheet[];
-  onOpenSheet: (sheet: Sheet, bbox: Box, label: string) => void;
+  onOpenSheet: (
+    sheet: Sheet,
+    bbox: Box,
+    label: string,
+    sheetBase?: string,
+  ) => void;
 }) {
   const [tab, setTab] = useState<Tab>("findings");
   const [compare, setCompare] = useState<CompareTarget | null>(null);
@@ -340,8 +415,25 @@ export default function CheckPanel({
         >
           人の朱書きと比較
         </button>
+        <button
+          role="tab"
+          aria-selected={tab === "upload"}
+          onClick={() => setTab("upload")}
+        >
+          施工図を判定
+        </button>
       </div>
-      {tab === "human" ? (
+      {/* 判定には時間がかかるので、タブを切り替えても進み具合を保つ */}
+      <div className={styles.list} hidden={tab !== "upload"}>
+        <UploadCheck
+          slug={slug}
+          activeId={activeId}
+          onActivate={onActivate}
+          onOpenSheet={onOpenSheet}
+          onCompare={setCompare}
+        />
+      </div>
+      {tab === "upload" ? null : tab === "human" ? (
         <HumanCompare
           items={humanItems}
           findings={result.findings}
@@ -356,37 +448,15 @@ export default function CheckPanel({
         <div className={styles.list}>
           <p className={styles.lead}>{result.mode}</p>
           {report && <ScoreSummary report={report} />}
-          {result.findings.map((finding) => {
-            const active = finding.id === activeId;
-            return (
-              <article key={finding.id} className={styles.card}>
-                <button
-                  className={styles.cardHead}
-                  aria-expanded={active}
-                  onClick={() => onActivate(active ? null : finding)}
-                >
-                  <span
-                    className={`${styles.badge} ${SEVERITY_CLASS[finding.severity]}`}
-                  >
-                    {finding.severity}
-                  </span>
-                  <span className={styles.title}>{finding.title}</span>
-                  {finding.planted && (
-                    <span className={styles.planted}>デモ用に仕込み</span>
-                  )}
-                </button>
-                {active && (
-                  <FindingDetail
-                    finding={finding}
-                    base={base}
-                    sheets={sheets}
-                    onOpenSheet={onOpenSheet}
-                    onCompare={setCompare}
-                  />
-                )}
-              </article>
-            );
-          })}
+          <FindingCards
+            findings={result.findings}
+            activeId={activeId}
+            onActivate={onActivate}
+            base={base}
+            sheets={sheets}
+            onOpenSheet={onOpenSheet}
+            onCompare={setCompare}
+          />
           {report && stats && report.missed.length > 0 && (
             <section className={styles.missed}>
               <h3>AIが見逃した例</h3>

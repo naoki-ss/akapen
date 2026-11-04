@@ -35,6 +35,11 @@ export type Finding = {
   planted: boolean;
   evidence: Evidence[];
   human_view?: HumanView;
+  // アップロードの判定：朱書きの番号、種類（設計図書／議事録／ナレッジ）、人の確認が必要か
+  number?: number;
+  source_type?: "design" | "minutes" | "knowledge";
+  source_label?: string;
+  needs_confirmation?: boolean;
 };
 
 export type OrderChange = {

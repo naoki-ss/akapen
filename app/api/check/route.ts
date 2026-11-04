@@ -1,0 +1,27 @@
+import type { NextRequest } from "next/server";
+import { isRegistered, MAX_UPLOAD_BYTES, startJob, uploadEnabled } from "@/lib/jobs";
+
+const error = (message: string, status: number) =>
+  Response.json({ error: message }, { status });
+
+export async function POST(request: NextRequest) {
+  if (!uploadEnabled()) {
+    return error("このサーバーではアップロードを受け付けていません", 403);
+  }
+  // 別のサイトから勝手に判定（API の費用）を走らせられないようにする
+  const origin = request.headers.get("origin");
+  if (origin && new URL(origin).host !== request.headers.get("host")) {
+    return error("別のサイトからの送信は受け付けません", 403);
+  }
+  const form = await request.formData();
+  const file = form.get("file");
+  const project = String(form.get("project") ?? "");
+  if (!(file instanceof File)) return error("PDFを選んでください", 400);
+  if (file.size > MAX_UPLOAD_BYTES) return error("ファイルが大きすぎます（100MBまで）", 413);
+  if (!isRegistered(project)) return error("設計図書が登録されていない物件です", 400);
+  const pdf = Buffer.from(await file.arrayBuffer());
+  if (pdf.subarray(0, 5).toString("latin1") !== "%PDF-") {
+    return error("PDFファイルではありません", 400);
+  }
+  return Response.json({ id: startJob(pdf, project, file.name) });
+}

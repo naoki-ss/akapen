@@ -31,8 +31,21 @@ files = subprocess.run(
 
 
 problems = []
+# アップロードされた図面と結果は、リポジトリの外にだけ置く
+uploads = PRIVATE / "uploads"
+if uploads.resolve().is_relative_to(REPO.resolve()):
+    problems.append("アップロードの保存先がリポジトリの中です")
+upload_hashes = {}
+if uploads.exists():
+    for item in uploads.rglob("*"):
+        if item.is_file():
+            upload_hashes[hashlib.sha256(item.read_bytes()).hexdigest()] = item.name
+print(f"アップロードのファイル {len(upload_hashes)} 種類と照合")
+
 for name in filter(None, files):
     path = REPO / name
+    if path.is_file() and hashlib.sha256(path.read_bytes()).hexdigest() in upload_hashes:
+        problems.append(f"{name}: アップロードされたファイルと同じ内容です")
     if not path.is_file() or path.name == "package-lock.json":
         continue
     if path.suffix.lower() == ".png" and name.startswith("demo-data/"):

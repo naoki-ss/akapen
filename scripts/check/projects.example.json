@@ -1,0 +1,12 @@
+{
+  "物件のフォルダ名（demo-data の下の名前）": {
+    "kind": "steel（鉄骨施工図）または foundation（基礎・杭の施工図）",
+    "design": "構造図PDFの絶対パス",
+    "revised": "差替図面PDFの絶対パス。なければ null",
+    "common_pages": [18, 19, 28],
+    "plan_by_level": { "2SL": { "design": 14, "revised": 5 } },
+    "floor_by_level": { "2SL": "2F" },
+    "default_plan": { "design": 9 },
+    "default_floor": "基礎"
+  }
+}

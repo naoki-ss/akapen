@@ -150,20 +150,26 @@ def record_cost(ledger_path, run_id, usd):
 
 
 def build_inputs(condition, page_config, config):
-    """(content, 記録用の入力一覧)"""
-    for path in (config["sheet"], config["design"], config["revised"]):
+    """(content, 記録用の入力一覧)
+
+    差替図面（revised）と同じ階の伏図（design_plan）はない場合がある。
+    赤の検査は実験で答えが混ざらないようにするためのもの。config の allow_red を立てると検査しない（実務のアップロード用）
+    """
+    has_revised = bool(config.get("revised"))
+    for path in filter(None, (config["sheet"], config["design"], config.get("revised"))):
         if sha256(path) in config["deny_sha256"].values():
             sys.exit(f"AIに見せない図面です: {Path(path).name}")
 
     sheet = pymupdf.open(config["sheet"])
     design = pymupdf.open(config["design"])
-    revised = pymupdf.open(config["revised"])
+    revised = pymupdf.open(config["revised"]) if has_revised else None
     sheet_page = sheet[page_config["sheet_page"] - 1]
-    design_pages = sorted([page_config["design_plan"], *config["design_common_pages"]])
+    design_plan = page_config.get("design_plan")
+    design_pages = sorted({*filter(None, [design_plan]), *config["design_common_pages"]})
 
     red = {"施工図": red_pixels(sheet_page), **{f"構造図 p{p}": red_pixels(design[p - 1]) for p in design_pages}}
     marked = {k: v for k, v in red.items() if v}
-    if marked:
+    if marked and not config.get("allow_red"):
         sys.exit(f"赤い部分があるページは送りません: {marked}")
 
     columns, rows = (4, 3) if condition in ("C", "D", "E") else (3, 2)
@@ -178,13 +184,14 @@ def build_inputs(condition, page_config, config):
         subset.insert_pdf(design, from_page=page_no - 1, to_page=page_no - 1)
     content += [{"type": "text", "text": f"次のPDFは構造図の p{','.join(map(str, design_pages))} です。"},
                 pdf_block(subset.tobytes())]
-    content += [{"type": "text", "text": "次のPDFは差替図面です（全ページ）。"},
-                pdf_block(Path(config["revised"]).read_bytes())]
+    if has_revised:
+        content += [{"type": "text", "text": "次のPDFは差替図面です（全ページ）。"},
+                    pdf_block(Path(config["revised"]).read_bytes())]
 
     plan_tiles = []
     if condition in ("C", "D", "E"):
-        plans = [("構造図", design, page_config["design_plan"])]
-        if page_config["revised_plan"]:
+        plans = [("構造図", design, design_plan)] if design_plan else []
+        if page_config.get("revised_plan"):
             plans.append(("差替図面", revised, page_config["revised_plan"]))
         for name, document, page_no in plans:
             for png, place in tiles(document[page_no - 1], 3, 2):
@@ -203,7 +210,7 @@ def build_inputs(condition, page_config, config):
         "sheet": {"file": Path(config["sheet"]).name, "sha256": sha256(config["sheet"]), "page": page_config["sheet_page"],
                   "tiles": f"{columns}x{rows}"},
         "design": {"file": Path(config["design"]).name, "sha256": sha256(config["design"]), "pages": design_pages},
-        "revised": {"file": Path(config["revised"]).name, "sha256": sha256(config["revised"]), "pages": "all"},
+        "revised": {"file": Path(config["revised"]).name, "sha256": sha256(config["revised"]), "pages": "all"} if has_revised else None,
         "plan_tiles": plan_tiles,
         "red_pixels": red,
     }

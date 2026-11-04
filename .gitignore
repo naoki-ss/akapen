@@ -45,3 +45,6 @@ prototype/model.json
 
 # 公開の確認が取れていない物件のデータを置くときの場所
 demo-data-private/
+
+# アップロードされた図面と結果（保存先は ~/sekozu-data/uploads/。誤って置いたときの備え）
+uploads/

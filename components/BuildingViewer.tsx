@@ -178,8 +178,12 @@ function BuildingView({
   const [activeFinding, setActiveFinding] = useState<Finding | null>(null);
   const [openSheet, setOpenSheet] = useState<SheetTarget | null>(null);
   const closeSheet = useCallback(() => setOpenSheet(null), []);
-  const showSheet = (sheet: Sheet, bbox: Box | undefined, label: string) =>
-    setOpenSheet({ sheet, bbox, label, base });
+  const showSheet = (
+    sheet: Sheet,
+    bbox: Box | undefined,
+    label: string,
+    sheetBase?: string,
+  ) => setOpenSheet({ sheet, bbox, label, base: sheetBase ?? base });
 
   const highlighted = useMemo(
     () => new Set(activeFinding?.model_refs ?? []),
@@ -274,6 +278,7 @@ function BuildingView({
               activeId={activeFinding?.id ?? null}
               onActivate={activateFinding}
               base={base}
+              slug={slug}
               sheets={sheets?.sheets ?? []}
               onOpenSheet={showSheet}
             />
