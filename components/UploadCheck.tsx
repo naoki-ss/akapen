@@ -31,6 +31,7 @@ type Result = CheckResult & {
   sheets: Sheet[];
   notes: string[];
   checklist?: ChecklistRow[] | null;
+  minutes?: ChecklistRow[] | null;
   usd: number;
   seconds: number;
 };
@@ -39,6 +40,31 @@ const minutes = (seconds: number) =>
   seconds < 60
     ? `${Math.round(seconds)} 秒`
     : `${Math.floor(seconds / 60)} 分 ${Math.round(seconds % 60)} 秒`;
+
+function ResultRows({ title, rows }: { title: string; rows: ChecklistRow[] }) {
+  return (
+    <details className={styles.checklist}>
+      <summary>
+        {title}（{rows.length} 項目）
+      </summary>
+      <ul>
+        {rows.map((row) => (
+          <li key={row.id}>
+            <b>
+              {row.id} {row.result}
+              {row.pages.length > 0 &&
+                `（${row.pages.map((n) => `p.${n}`).join("、")}）`}
+            </b>
+            <span>
+              {row.item ? `${row.item}：${row.content}` : row.content}
+            </span>
+            {row.reason && <small>{row.reason}</small>}
+          </li>
+        ))}
+      </ul>
+    </details>
+  );
+}
 
 // 物件を切り替えて戻っても、走っている判定を見失わないようにする
 const storageKey = (slug: string) => `sekozu-job-${slug}`;
@@ -140,7 +166,7 @@ export default function UploadCheck({
         図面はClaude APIで処理されます。アップロードした図面と結果は、このサーバーのリポジトリの外に保存します。
       </p>
       <p className={styles.lead}>
-        選択中の物件の設計図書（構造図・差替図面）と照らし合わせます。鉄骨施工図は社内のチェックリストでも確認します（青の朱書き）。議事録の照合はこれから追加します。1ページで数分、約2ドル掛かります。
+        選択中の物件の設計図書（構造図・差替図面）と照らし合わせます。議事録が登録されていれば、決まったことが反映されているかも確認します（赤の朱書き）。鉄骨施工図は社内のチェックリストでも確認します（青の朱書き）。1ページで数分、約2ドル掛かります。
       </p>
       <input ref={input} type="file" accept="application/pdf,.pdf" disabled={running} aria-label="施工図PDF" />
       <button className={styles.openCompare} onClick={send} disabled={running}>
@@ -186,26 +212,8 @@ export default function UploadCheck({
             }
             onCompare={onCompare}
           />
-          {result.checklist && (
-            <details className={styles.checklist}>
-              <summary>チェックリストの確認結果（{result.checklist.length} 項目）</summary>
-              <ul>
-                {result.checklist.map((row) => (
-                  <li key={row.id}>
-                    <b>
-                      {row.id} {row.result}
-                      {row.pages.length > 0 &&
-                        `（${row.pages.map((n) => `p.${n}`).join("、")}）`}
-                    </b>
-                    <span>
-                      {row.item}：{row.content}
-                    </span>
-                    {row.reason && <small>{row.reason}</small>}
-                  </li>
-                ))}
-              </ul>
-            </details>
-          )}
+          {result.minutes && <ResultRows title="議事録の確認結果" rows={result.minutes} />}
+          {result.checklist && <ResultRows title="チェックリストの確認結果" rows={result.checklist} />}
         </>
       )}
     </div>

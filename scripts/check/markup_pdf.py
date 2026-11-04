@@ -35,7 +35,6 @@ FONT_FILES = [
 FONT_NAME = "skjp"
 NOTICE = "AIが挙げた確認候補です。確定する前に人が確認してください。"
 LEGEND_TITLE = "凡例"
-CHECKLIST_HEADING = "チェックリストの確認結果"
 # A3 の図面での文字の大きさ。ページの大きさに合わせて変える
 BASE_WIDTH = 1191
 COMMENT_SIZE = 8.5
@@ -295,7 +294,7 @@ class ListPages:
     WIDTH, HEIGHT = 842, 595
     MARGIN = 28
     COLUMNS = [("番号", 30), ("種類", 50), ("図面", 34), ("内容", 395), ("根拠の図面とページ", 225), ("要確認", 42)]
-    CHECKLIST_COLUMNS = [("項目", 30), ("確認の内容", 330), ("結果", 130), ("ページ", 40), ("理由", 256)]
+    RESULT_COLUMNS = [("項目", 34), ("内容", 326), ("結果", 130), ("ページ", 40), ("理由", 256)]
     SIZE = 8
 
     def __init__(self, doc, font, font_buffer, title):
@@ -345,9 +344,10 @@ class ListPages:
         self.y += height
 
 
-def checklist_cells(row):
+def result_cells(row):
     pages = "、".join(f"p.{n}" for n in row["pages"])
-    return [row["id"], f"{row['item']}：{row['content']}", row["result"], pages, row["reason"]]
+    content = f"{row['item']}：{row['content']}" if row["item"] else row["content"]
+    return [row["id"], content, row["result"], pages, row["reason"]]
 
 
 def evidence_text(item):
@@ -359,21 +359,21 @@ def content_text(item):
     return f"{item['title']}\n{item['content']}{merged_note(item)}"
 
 
-def collect_text(findings, title, notes, checklist=None):
+def collect_text(findings, title, notes, tables=()):
     text = [LEGEND_TITLE, NOTICE, title, "（番号は最後の一覧ページと対応）赤：設計図書・議事録との矛盾青：ナレッジ一覧0123456789.[要確認] 枠なし（根拠の記載なし）はいあり"]
     text += [name for name, _ in ListPages.COLUMNS] + [spec["label"] for spec in SOURCE_TYPES.values()] + list(notes)
     for item in findings:
         text += [item["comment"] or "", content_text(item), evidence_text(item)]
-    if checklist:
-        text += [CHECKLIST_HEADING] + [name for name, _ in ListPages.CHECKLIST_COLUMNS]
-        for row in checklist:
-            text += [str(cell) for cell in checklist_cells(row)]
+    for heading, rows in tables:
+        text += [heading] + [name for name, _ in ListPages.RESULT_COLUMNS]
+        for row in rows:
+            text += [str(cell) for cell in result_cells(row)]
     return "".join(text)
 
 
-def make_marked_pdf(source_path, findings, out_path, title="施工図の朱書き", notes=(), checklist=None):
-    """朱書きを重ねたPDFを書き出す。notes は一覧の最後に書く注記。checklist は項目ごとの結果（別の表にする）"""
-    font_buffer = build_font(collect_text(findings, title, notes, checklist))
+def make_marked_pdf(source_path, findings, out_path, title="施工図の朱書き", notes=(), tables=()):
+    """朱書きを重ねたPDFを書き出す。notes は一覧の最後に書く注記。tables は [(見出し, 項目ごとの結果)]（別の表にする）"""
+    font_buffer = build_font(collect_text(findings, title, notes, tables))
     font = pymupdf.Font(fontbuffer=font_buffer)
     doc = pymupdf.open(source_path)
     sheet_count = doc.page_count
@@ -397,12 +397,12 @@ def make_marked_pdf(source_path, findings, out_path, title="施工図の朱書�
                 pages.new_page(table=False)
             pages.y += 11
             pages.text((ListPages.MARGIN, pages.y), line, ListPages.SIZE)
-    if checklist:
-        pages.columns = ListPages.CHECKLIST_COLUMNS
-        pages.title = CHECKLIST_HEADING
+    for heading, rows in tables:
+        pages.columns = ListPages.RESULT_COLUMNS
+        pages.title = heading
         pages.new_page()
-        for row in checklist:
-            pages.row(checklist_cells(row))
+        for row in rows:
+            pages.row(result_cells(row))
     doc.save(out_path, garbage=1, deflate=True)
     doc.close()
     return {"sheet_pages": sheet_count, "list_pages": pages.count}
