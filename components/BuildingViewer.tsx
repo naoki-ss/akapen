@@ -17,7 +17,7 @@ import {
   type SheetIndex,
   type SheetTarget,
 } from "@/lib/sheets";
-import { useUploadJob } from "@/lib/useUploadJob";
+import { useUploadJob, type JobSummary } from "@/lib/useUploadJob";
 import CheckPanel from "./CheckPanel";
 import LayerToggles from "./LayerToggles";
 import SheetCanvas from "./SheetCanvas";
@@ -148,6 +148,43 @@ function PenLogo() {
       />
     </svg>
   );
+}
+
+function pagesText(pages: JobSummary["pages"]) {
+  if (pages.length === 1) {
+    return `p.${pages[0].number} ${pages[0].title ?? ""}`.trim();
+  }
+  const numbers = pages.map((page) => page.number);
+  const first = numbers[0];
+  const last = numbers[numbers.length - 1];
+  return last - first === numbers.length - 1
+    ? `p.${first}〜p.${last}（${numbers.length} ページ）`
+    : numbers.map((number) => `p.${number}`).join("、");
+}
+
+// 名前を付けた結果は、1ページのときの図面名も添える
+function resultTitle(job: JobSummary) {
+  if (!job.label) return pagesText(job.pages);
+  const title = job.pages.length === 1 ? job.pages[0].title : null;
+  return title ? `${job.label} ${title}` : job.label;
+}
+
+const dateFormat = new Intl.DateTimeFormat("ja-JP", {
+  month: "numeric",
+  day: "numeric",
+  hour: "2-digit",
+  minute: "2-digit",
+  timeZone: "Asia/Tokyo",
+});
+
+function resultDetail(job: JobSummary) {
+  const { design, minutes, knowledge } = job.counts;
+  return [
+    dateFormat.format(new Date(job.uploaded_at)),
+    `指摘 ${design + minutes + knowledge} 件（設計図書 ${design}・議事録 ${minutes}・ナレッジ ${knowledge}）`,
+    ...(job.stopped ? ["途中で止めた回"] : []),
+    ...(job.masked ? [] : ["公開用の図面なし"]),
+  ].join("・");
 }
 
 export default function BuildingViewer({
@@ -311,6 +348,10 @@ function BuildingView({
     setSheetId(null);
     setSelected(null);
     setZoomed(false);
+    // 別の結果に前の表示を持ち越さない。塗りつぶしも必ずありに戻す
+    setVisibleLayers(new Set(ALL_LAYERS));
+    setPublicView(true);
+    setFocus("drawing");
   };
 
   const toggleType = (type: MemberType, show: boolean) => {
@@ -328,16 +369,15 @@ function BuildingView({
 
   const inResult = screen !== "start";
   const results = [
-    ...(job.result
-      ? [
-          {
-            key: "upload",
-            title: job.result.pages?.[0]?.title ?? "前回チェックした施工図",
-            detail: `入れた施工図の結果・指摘 ${job.result.findings.length} 件`,
-            onOpen: () => goTo("upload"),
-          },
-        ]
-      : []),
+    ...job.history.map((item) => ({
+      key: item.id,
+      title: resultTitle(item),
+      detail: resultDetail(item),
+      onOpen: () => {
+        goTo("upload");
+        void job.open(item.id);
+      },
+    })),
     ...(check
       ? [
           {
@@ -393,11 +433,7 @@ function BuildingView({
       </nav>
 
       {!inResult || !currentSheet ? (
-        <StartView
-          picker={picker}
-          job={job}
-          results={results}
-        />
+        <StartView picker={picker} job={job} results={results} />
       ) : (
         <main className={styles.stage} data-focus={focus}>
           <div className={styles.topBar}>

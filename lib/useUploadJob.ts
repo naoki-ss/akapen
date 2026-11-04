@@ -38,6 +38,17 @@ export type JobResult = CheckResult & {
   seconds: number;
 };
 
+export type JobSummary = {
+  id: string;
+  label?: string;
+  pin?: number;
+  uploaded_at: string;
+  pages: { number: number; title?: string | null }[];
+  counts: { design: number; minutes: number; knowledge: number };
+  masked: boolean;
+  stopped: boolean;
+};
+
 // 物件を切り替えて戻っても、走っているチェックを見失わないようにする
 const storageKey = (slug: string) => `sekozu-job-${slug}`;
 
@@ -50,12 +61,27 @@ export function useUploadJob(slug: string, onFinished: () => void) {
   const [sending, setSending] = useState(false);
   const [draft, setDraft] = useState<Draft | null>(null);
   const [stopping, setStopping] = useState(false);
+  // 過去の結果の一覧と、いま開いている結果のジョブ
+  const [history, setHistory] = useState<JobSummary[]>([]);
+  const [resultId, setResultId] = useState<string | null>(null);
   const startedHere = useRef(false);
   const finished = useRef(onFinished);
 
   useEffect(() => {
     finished.current = onFinished;
   }, [onFinished]);
+
+  const loadHistory = useCallback(async () => {
+    const response = await fetch(
+      `/api/check?project=${encodeURIComponent(slug)}`,
+    );
+    if (response.ok) setHistory((await response.json()).jobs);
+  }, [slug]);
+
+  useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- 一覧はサーバーから読むまで分からない
+    void loadHistory();
+  }, [loadHistory]);
 
   useEffect(() => {
     const saved = window.localStorage.getItem(storageKey(slug));
@@ -89,9 +115,12 @@ export function useUploadJob(slug: string, onFinished: () => void) {
         const data = await fetch(`${base}/files/result.json`);
         const body = (await data.json()) as JobResult;
         if (stopped) return;
-        setResult(body);
+        // チェックが終わったら一覧に足す。開くのは、この画面で始めたチェックだけ
+        void loadHistory();
         if (startedHere.current) {
           startedHere.current = false;
+          setResult(body);
+          setResultId(jobId);
           finished.current();
         }
       }
@@ -101,7 +130,7 @@ export function useUploadJob(slug: string, onFinished: () => void) {
       stopped = true;
       clearTimeout(timer);
     };
-  }, [jobId, slug]);
+  }, [jobId, slug, loadHistory]);
 
   // PDFを送り、ページの小さな画像を受け取る（AIは呼ばない）
   const prepare = useCallback(
@@ -163,12 +192,22 @@ export function useUploadJob(slug: string, onFinished: () => void) {
     if (!response.ok) setStopping(false);
   }, [jobId]);
 
+  // 過去の結果を開く。走っているチェックの見張りには影響しない
+  const open = useCallback(async (id: string) => {
+    setResult(null);
+    setResultId(id);
+    const response = await fetch(`/api/check/${id}/files/result.json`);
+    if (response.ok) setResult((await response.json()) as JobResult);
+  }, []);
+
   const cancelDraft = useCallback(() => setDraft(null), []);
 
   return {
     status,
     result,
     error,
+    history,
+    open,
     draft,
     prepare,
     start,
@@ -177,6 +216,6 @@ export function useUploadJob(slug: string, onFinished: () => void) {
     cancelDraft,
     sending,
     running: status?.state === "running",
-    base: `/api/check/${jobId}/files`,
+    base: `/api/check/${resultId}/files`,
   };
 }

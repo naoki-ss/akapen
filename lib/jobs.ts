@@ -7,7 +7,9 @@ import {
   existsSync,
   mkdirSync,
   openSync,
+  readdirSync,
   readFileSync,
+  statSync,
   writeFileSync,
 } from "node:fs";
 import { homedir } from "node:os";
@@ -43,6 +45,58 @@ export function jobFolder(id: string) {
   if (!JOB_ID.test(id)) return null;
   const folder = path.join(UPLOADS, id);
   return existsSync(folder) ? folder : null;
+}
+
+export type JobSummary = {
+  id: string;
+  // デモで見せる結果の名前と並び順（job.json の label と pin。手で書く）
+  label?: string;
+  pin?: number;
+  uploaded_at: string;
+  pages: { number: number; title?: string | null }[];
+  counts: { design: number; minutes: number; knowledge: number };
+  masked: boolean;
+  stopped: boolean;
+};
+
+// 物件の過去の結果。元のファイル名は社名が入ることがあるので返さない
+export function listJobs(project: string): JobSummary[] {
+  if (!existsSync(UPLOADS)) return [];
+  const jobs: JobSummary[] = [];
+  for (const id of readdirSync(UPLOADS)) {
+    const folder = jobFolder(id);
+    if (!folder || !existsSync(path.join(folder, "result.json"))) continue;
+    const meta = JSON.parse(
+      readFileSync(path.join(folder, "job.json"), "utf8"),
+    );
+    if (meta.project !== project) continue;
+    const result = JSON.parse(
+      readFileSync(path.join(folder, "result.json"), "utf8"),
+    );
+    const findings = result.findings as {
+      source_type: keyof JobSummary["counts"];
+    }[];
+    const counts = { design: 0, minutes: 0, knowledge: 0 };
+    for (const finding of findings) counts[finding.source_type] += 1;
+    jobs.push({
+      id,
+      label: meta.label,
+      pin: meta.pin,
+      // input.pdf は入れたときに書いたまま。朱書きを作り直しても変わらない
+      uploaded_at: statSync(path.join(folder, "input.pdf")).mtime.toISOString(),
+      pages: result.pages.map((page: { number: number; title?: string }) => ({
+        number: page.number,
+        title: page.title,
+      })),
+      counts,
+      masked: Boolean(result.masked),
+      stopped: Boolean(result.stopped_pages?.length),
+    });
+  }
+  const rank = (job: JobSummary) => job.pin ?? Number.MAX_SAFE_INTEGER;
+  return jobs.sort(
+    (a, b) => rank(a) - rank(b) || b.uploaded_at.localeCompare(a.uploaded_at),
+  );
 }
 
 export function publicFile(folder: string, relative: string) {
