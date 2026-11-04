@@ -13,7 +13,7 @@ const PROJECTS = path.join(homedir(), "sekozu-data", "projects.json");
 const fromRoot = (...parts: string[]) => [process.cwd(), ...parts].join(path.sep);
 const JOB_ID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
 // 返してよいファイルだけを通す（図面の場所や生の応答は返さない）
-const PUBLIC_FILE = /^(marked\.pdf|result\.json|pages\/p\d+\.png|findings\/\d+\.png)$/;
+const PUBLIC_FILE = /^(marked\.pdf|result\.json|pages\/p\d+(-(base|design|minutes|knowledge))?\.png|findings\/\d+\.png)$/;
 
 export const MAX_UPLOAD_BYTES = 100 * 1024 * 1024;
 

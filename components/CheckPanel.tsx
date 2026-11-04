@@ -10,7 +10,7 @@ import {
   type HumanItem,
   type RunStats,
 } from "@/lib/check";
-import type { Box, Sheet } from "@/lib/sheets";
+import type { Box, LayerKey, Sheet } from "@/lib/sheets";
 import CompareViewer, { type CompareTarget } from "./CompareViewer";
 import UploadCheck from "./UploadCheck";
 import styles from "./CheckPanel.module.css";
@@ -378,6 +378,8 @@ export default function CheckPanel({
   slug,
   sheets,
   onOpenSheet,
+  visibleLayers,
+  onToggleLayer,
 }: {
   result: CheckResult;
   // 正解ファイルがある物件だけ採点を出す
@@ -392,10 +394,12 @@ export default function CheckPanel({
   sheets: Sheet[];
   onOpenSheet: (
     sheet: Sheet,
-    bbox: Box,
+    bbox: Box | undefined,
     label: string,
     sheetBase?: string,
   ) => void;
+  visibleLayers: ReadonlySet<LayerKey>;
+  onToggleLayer: (key: LayerKey) => void;
 }) {
   const [tab, setTab] = useState<Tab>("findings");
   const [compare, setCompare] = useState<CompareTarget | null>(null);
@@ -436,6 +440,8 @@ export default function CheckPanel({
           onActivate={onActivate}
           onOpenSheet={onOpenSheet}
           onCompare={setCompare}
+          visibleLayers={visibleLayers}
+          onToggleLayer={onToggleLayer}
         />
       </div>
       {tab === "upload" ? null : tab === "human" ? (

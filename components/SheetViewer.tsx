@@ -2,16 +2,21 @@
 
 import Image from "next/image";
 import { useEffect, useRef, useState } from "react";
-import type { SheetTarget } from "@/lib/sheets";
+import { LAYER_LABELS, type LayerKey, type SheetTarget } from "@/lib/sheets";
+import LayerToggles from "./LayerToggles";
 import styles from "./SheetViewer.module.css";
 
 // 施工図の1ページを開く。bbox があれば、その範囲に赤枠を重ねる
 export default function SheetViewer({
   target,
   onClose,
+  visibleLayers,
+  onToggleLayer,
 }: {
   target: SheetTarget;
   onClose: () => void;
+  visibleLayers: ReadonlySet<LayerKey>;
+  onToggleLayer: (key: LayerKey) => void;
 }) {
   const { sheet, bbox, label, base } = target;
   const [zoomed, setZoomed] = useState(false);
@@ -30,7 +35,8 @@ export default function SheetViewer({
     frame.current?.scrollIntoView({ block: "center", inline: "center" });
   }, [zoomed]);
 
-  const src = `${base}/${sheet.image}`;
+  const layered = sheet.base_image !== undefined;
+  const src = `${base}/${sheet.base_image ?? sheet.image}`;
   return (
     <div className={styles.backdrop} role="dialog" aria-label={sheet.title}>
       <div className={styles.window}>
@@ -42,12 +48,23 @@ export default function SheetViewer({
             {label && <span>{label}</span>}
           </div>
           <div className={styles.actions}>
+            {sheet.layers && (
+              <LayerToggles
+                counts={Object.fromEntries(
+                  sheet.layers.map((layer) => [layer.key, null]),
+                )}
+                visible={visibleLayers}
+                onToggle={onToggleLayer}
+              />
+            )}
             <button onClick={() => setZoomed(!zoomed)}>
               {zoomed ? "全体を表示" : "拡大"}
             </button>
-            <a href={src} target="_blank" rel="noreferrer">
-              別のタブで開く
-            </a>
+            {!layered && (
+              <a href={src} target="_blank" rel="noreferrer">
+                別のタブで開く
+              </a>
+            )}
             <button onClick={onClose}>閉じる</button>
           </div>
         </header>
@@ -63,6 +80,19 @@ export default function SheetViewer({
               height={sheet.height}
               unoptimized
             />
+            {sheet.layers
+              ?.filter((layer) => visibleLayers.has(layer.key))
+              .map((layer) => (
+                <Image
+                  key={layer.key}
+                  className={styles.layer}
+                  src={`${base}/${layer.image}`}
+                  alt={`朱書き（${LAYER_LABELS[layer.key]}）`}
+                  width={sheet.width}
+                  height={sheet.height}
+                  unoptimized
+                />
+              ))}
             {bbox && (
               <div
                 ref={frame}

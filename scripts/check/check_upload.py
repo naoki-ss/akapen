@@ -31,7 +31,7 @@ from index_steel_sheets import SCHEMA as INDEX_SCHEMA, SYSTEM as INDEX_SYSTEM
 import knowledge_check
 import merge_findings
 import minutes_check
-from markup_pdf import SOURCE_TYPES, make_marked_pdf, to_rect, valid_regions
+from markup_pdf import SOURCE_TYPES, layer_overlay, make_marked_pdf, set_visible_layers, to_rect, valid_regions
 from repeat_runs import PRICE_INPUT, PRICE_OUTPUT
 from review_steel_sheet import SYSTEM as STEEL_SYSTEM, red_pixels, render
 from steel_experiment import REVISED_NOTE, ROOT as EXPERIMENTS, build_inputs, image_block, record_cost, schema_for, tiles
@@ -329,14 +329,30 @@ def render_outputs(job, marked_path, findings, page_count):
     sheets = []
     (job.folder / "pages").mkdir(exist_ok=True)
     (job.folder / "findings").mkdir(exist_ok=True)
+    zoom = PAGE_DPI / 72
+    matrix = pymupdf.Matrix(zoom, zoom)
     for number in range(1, page_count + 1):
-        page = doc[number - 1]
-        zoom = PAGE_DPI / 72
-        pix = page.get_pixmap(matrix=pymupdf.Matrix(zoom, zoom), alpha=False)
+        set_visible_layers(doc, SOURCE_TYPES)
+        pix = doc[number - 1].get_pixmap(matrix=matrix, alpha=False)
         pix.save(job.folder / f"pages/p{number}.png")
+        # 画面で種類ごとに表示を切り替えるので、朱書きのない図面と、種類ごとの透明な画像も作る
+        set_visible_layers(doc, [])
+        base = doc[number - 1].get_pixmap(matrix=matrix, alpha=False)
+        base.save(job.folder / f"pages/p{number}-base.png")
+        layers = []
+        for key in SOURCE_TYPES:
+            if not any(item["page"] == number and item["source_type"] == key for item in findings):
+                continue
+            set_visible_layers(doc, [key])
+            overlay = layer_overlay(base, doc[number - 1].get_pixmap(matrix=matrix, alpha=False))
+            overlay.save(job.folder / f"pages/p{number}-{key}.png")
+            layers.append({"key": key, "image": f"pages/p{number}-{key}.png"})
         sheets.append({"id": f"p{number}", "doc": "アップロードした施工図", "page": number, "title": f"{number} ページ目（朱書き）",
-                       "image": f"pages/p{number}.png", "width": pix.width, "height": pix.height})
+                       "image": f"pages/p{number}.png", "base_image": f"pages/p{number}-base.png", "layers": layers,
+                       "width": pix.width, "height": pix.height})
     for item in findings:
+        # 指摘の切り抜きには、その種類の朱書きだけを出す
+        set_visible_layers(doc, [item["source_type"]])
         page = doc[item["page"] - 1]
         rects = [to_rect(page, box) for box in item["regions"]]
         clip = page.rect

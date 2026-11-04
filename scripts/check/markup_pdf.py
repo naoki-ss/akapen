@@ -408,6 +408,23 @@ def make_marked_pdf(source_path, findings, out_path, title="施工図の朱書�
     return {"sheet_pages": sheet_count, "list_pages": pages.count}
 
 
+def set_visible_layers(doc, source_types):
+    """指定した種類の朱書きの層だけを表示する。凡例は常に表示する"""
+    labels = {f"朱書き（{SOURCE_TYPES[key]['label']}）" for key in source_types}
+    for config in doc.layer_ui_configs():
+        if config["text"].startswith("朱書き"):
+            doc.set_layer_ui_config(config["number"], 0 if config["text"] in labels else 2)
+
+
+def layer_overlay(base, layered):
+    """朱書きの層だけを透明な背景の画像にする。base は朱書きなし、layered はその層だけを表示したページの Pixmap"""
+    before = np.frombuffer(base.samples, dtype=np.uint8).reshape(base.h, base.w, base.n)
+    after = np.frombuffer(layered.samples, dtype=np.uint8).reshape(layered.h, layered.w, layered.n)
+    alpha = (before != after).any(axis=2).astype(np.uint8) * 255
+    rgba = np.dstack([after, alpha])
+    return pymupdf.Pixmap(pymupdf.csRGB, layered.w, layered.h, rgba.tobytes(), True)
+
+
 def layers_off_pixmap(path, page_number, zoom=1.0):
     """朱書きの層を全部消してページを描く（元の図面と同じになることの確認用）"""
     doc = pymupdf.open(path)

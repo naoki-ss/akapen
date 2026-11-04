@@ -11,7 +11,20 @@ export type Sheet = {
   width: number;
   height: number;
   note?: string;
+  // アップロードの判定：朱書きのない図面と、種類ごとの透明な朱書き（重ねて表示する）
+  base_image?: string;
+  layers?: { key: LayerKey; image: string }[];
 };
+
+export type LayerKey = "design" | "minutes" | "knowledge";
+
+export const LAYER_LABELS: Record<LayerKey, string> = {
+  design: "設計図書",
+  minutes: "議事録",
+  knowledge: "ナレッジ",
+};
+
+export const ALL_LAYERS: LayerKey[] = ["design", "minutes", "knowledge"];
 
 export type MemberSheetRef = {
   sheet: string;

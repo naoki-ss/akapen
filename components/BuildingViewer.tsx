@@ -9,7 +9,14 @@ import type {
   HumanItem,
   RunStats,
 } from "@/lib/check";
-import type { Box, Sheet, SheetIndex, SheetTarget } from "@/lib/sheets";
+import {
+  ALL_LAYERS,
+  type Box,
+  type LayerKey,
+  type Sheet,
+  type SheetIndex,
+  type SheetTarget,
+} from "@/lib/sheets";
 import CheckPanel from "./CheckPanel";
 import SheetViewer from "./SheetViewer";
 import {
@@ -178,6 +185,18 @@ function BuildingView({
   const [activeFinding, setActiveFinding] = useState<Finding | null>(null);
   const [openSheet, setOpenSheet] = useState<SheetTarget | null>(null);
   const closeSheet = useCallback(() => setOpenSheet(null), []);
+  // アップロードの判定の朱書きの表示。一覧と図面で同じ状態を使う
+  const [visibleLayers, setVisibleLayers] = useState<ReadonlySet<LayerKey>>(
+    () => new Set(ALL_LAYERS),
+  );
+  const toggleLayer = useCallback((key: LayerKey) => {
+    setVisibleLayers((current) => {
+      const next = new Set(current);
+      if (next.has(key)) next.delete(key);
+      else next.add(key);
+      return next;
+    });
+  }, []);
   const showSheet = (
     sheet: Sheet,
     bbox: Box | undefined,
@@ -281,6 +300,8 @@ function BuildingView({
               slug={slug}
               sheets={sheets?.sheets ?? []}
               onOpenSheet={showSheet}
+              visibleLayers={visibleLayers}
+              onToggleLayer={toggleLayer}
             />
           ) : (
             <p className={styles.noCheck}>
@@ -289,7 +310,14 @@ function BuildingView({
           )}
         </aside>
       </main>
-      {openSheet && <SheetViewer target={openSheet} onClose={closeSheet} />}
+      {openSheet && (
+        <SheetViewer
+          target={openSheet}
+          onClose={closeSheet}
+          visibleLayers={visibleLayers}
+          onToggleLayer={toggleLayer}
+        />
+      )}
     </div>
   );
 }

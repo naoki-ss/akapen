@@ -69,6 +69,12 @@
   height: auto;
 }
 
+.page img.layer {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+}
+
 .frame {
   position: absolute;
   border: 3px solid #c8361d;

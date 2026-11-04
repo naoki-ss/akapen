@@ -2,9 +2,10 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { CheckResult, Finding } from "@/lib/check";
-import type { Box, Sheet } from "@/lib/sheets";
+import { ALL_LAYERS, type Box, type LayerKey, type Sheet } from "@/lib/sheets";
 import { FindingCards } from "./CheckPanel";
 import type { CompareTarget } from "./CompareViewer";
+import LayerToggles from "./LayerToggles";
 import styles from "./CheckPanel.module.css";
 
 const POLL_MS = 3000;
@@ -75,17 +76,21 @@ export default function UploadCheck({
   onActivate,
   onOpenSheet,
   onCompare,
+  visibleLayers,
+  onToggleLayer,
 }: {
   slug: string;
   activeId: string | null;
   onActivate: (finding: Finding | null) => void;
   onOpenSheet: (
     sheet: Sheet,
-    bbox: Box,
+    bbox: Box | undefined,
     label: string,
     sheetBase?: string,
   ) => void;
   onCompare: (target: CompareTarget) => void;
+  visibleLayers: ReadonlySet<LayerKey>;
+  onToggleLayer: (key: LayerKey) => void;
 }) {
   const [jobId, setJobId] = useState<string | null>(null);
   const [status, setStatus] = useState<Status | null>(null);
@@ -154,6 +159,24 @@ export default function UploadCheck({
   }, [slug, onActivate]);
 
   const running = sending || status?.state === "running";
+  // 以前の結果には種類ごとの画像がないので、切り替えを出さない
+  const hasLayers = result?.sheets.some((sheet) => sheet.layers) ?? false;
+  const counts = hasLayers && result
+    ? (Object.fromEntries(
+        ALL_LAYERS.filter((key) =>
+          key === "minutes"
+            ? result.minutes || result.findings.some((f) => f.source_type === key)
+            : key === "knowledge"
+              ? result.checklist || result.findings.some((f) => f.source_type === key)
+              : true,
+        ).map((key) => [key, result.findings.filter((f) => f.source_type === key).length]),
+      ) as Partial<Record<LayerKey, number>>)
+    : null;
+  const shown = result
+    ? result.findings.filter(
+        (f) => !hasLayers || !f.source_type || visibleLayers.has(f.source_type),
+      )
+    : [];
   const base = `/api/check/${jobId}/files`;
   const percent = status?.pages_total
     ? Math.round((status.pages_done / status.pages_total) * 100)
@@ -201,8 +224,26 @@ export default function UploadCheck({
               {note}
             </p>
           ))}
+          {counts && (
+            <>
+              <LayerToggles counts={counts} visible={visibleLayers} onToggle={onToggleLayer} />
+              <div className={styles.openPage}>
+                {result.sheets.map((sheet) => (
+                  <button
+                    key={sheet.id}
+                    className={styles.openCompare}
+                    onClick={() =>
+                      onOpenSheet(sheet, undefined, "朱書きを表示", base)
+                    }
+                  >
+                    p.{sheet.page} の朱書きを開く
+                  </button>
+                ))}
+              </div>
+            </>
+          )}
           <FindingCards
-            findings={result.findings}
+            findings={shown}
             activeId={activeId}
             onActivate={onActivate}
             base={base}
