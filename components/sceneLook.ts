@@ -11,6 +11,8 @@ import {
 } from "three";
 import { GLASS, MATERIALS, type Pattern } from "@/lib/materials";
 
+export const HORIZON = "#C4DCEE";
+
 // 決まった乱数。読み込むたびに雲が変わらないようにする
 function seeded(seed: number) {
   let value = seed;
@@ -27,29 +29,34 @@ export function makeSky() {
   canvas.height = 1024;
   const ctx = canvas.getContext("2d")!;
   const sky = ctx.createLinearGradient(0, 0, 0, canvas.height);
-  sky.addColorStop(0, "#1F5FB0");
-  sky.addColorStop(0.3, "#3A83D2");
-  sky.addColorStop(0.42, "#6FAEE4");
-  sky.addColorStop(0.485, "#BFDCF0");
-  sky.addColorStop(0.5, "#E2ECF1");
-  sky.addColorStop(0.56, "#E2ECF1");
-  sky.addColorStop(1, "#B5B3AC");
+  // 画面に映るのは地平線の近くだけなので、薄い色の帯は細くして、すぐ青にする
+  sky.addColorStop(0, "#1F5AA6");
+  sky.addColorStop(0.3, "#2F75C8");
+  sky.addColorStop(0.44, "#4C95DC");
+  sky.addColorStop(0.485, "#7DB6E6");
+  sky.addColorStop(0.5, HORIZON);
+  sky.addColorStop(0.51, "#8F9194");
+  sky.addColorStop(1, "#77797C");
   ctx.fillStyle = sky;
   ctx.fillRect(0, 0, canvas.width, canvas.height);
   const random = seeded(4242);
-  for (let cloud = 0; cloud < 22; cloud += 1) {
+  for (let cloud = 0; cloud < 12; cloud += 1) {
     const x = random() * canvas.width;
-    const y = 230 + random() * 245;
+    const y = 240 + random() * 225;
     const size = 60 + random() * 150;
     for (let puff = 0; puff < 14; puff += 1) {
       const px = x + (random() - 0.5) * size * 2.6;
       const py = y + (random() - 0.5) * size * 0.5;
       const radius = size * (0.25 + random() * 0.5);
-      const glow = ctx.createRadialGradient(px, py, 0, px, py, radius);
-      glow.addColorStop(0, "rgba(255,255,255,0.55)");
-      glow.addColorStop(1, "rgba(255,255,255,0)");
-      ctx.fillStyle = glow;
-      ctx.fillRect(px - radius, py - radius, radius * 2, radius * 2);
+      // 空の継ぎ目（画像の左右の端）で雲が切れないよう、端をまたいで描く
+      for (const wrap of [-canvas.width, 0, canvas.width]) {
+        const at = px + wrap;
+        const glow = ctx.createRadialGradient(at, py, 0, at, py, radius);
+        glow.addColorStop(0, "rgba(255,255,255,0.26)");
+        glow.addColorStop(1, "rgba(255,255,255,0)");
+        ctx.fillStyle = glow;
+        ctx.fillRect(at - radius, py - radius, radius * 2, radius * 2);
+      }
     }
   }
   const texture = new CanvasTexture(canvas);
@@ -57,8 +64,6 @@ export function makeSky() {
   texture.colorSpace = SRGBColorSpace;
   return texture;
 }
-
-export const HORIZON = "#E2ECF1";
 
 // 模様は白地に薄い線。素材の色に掛け合わせる
 function makePattern(pattern: Pattern) {

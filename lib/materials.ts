@@ -43,7 +43,7 @@ export const GLASS = {
   envMapIntensity: 1.5,
 };
 
-export const GROUND_COLOR = "#E3E0D8";
+export const GROUND_COLOR = "#ABAAA6";
 
 // 構造の種類ごとの標準（意匠図がない物件）
 const STRUCTURE_MEMBERS: Record<

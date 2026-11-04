@@ -53,6 +53,8 @@ const WALL_THICKNESS = 200;
 const GLASS_THICKNESS = 30;
 const MULLION_SPACING = 1200;
 const NO_RAYCAST = () => null;
+const WORLD_UP = new Vector3(0, 1, 0);
+const MIN_EYE = 0.5;
 
 type Vec3 = [number, number, number];
 
@@ -289,18 +291,64 @@ type Frame = {
   height: number;
   // 正面から見て、カメラを置く向き（three.js の平面上の単位ベクトル）
   front: [number, number];
+  // 地上に見えている範囲の角。視点を合わせるときに画面へ収める
+  corners: Vec3[];
 };
 
 const FOV = 38;
-const ASPECT = 1.45;
+// 建物が見える範囲に占める割合
+const FILL = 0.84;
 
-// 正面に立って少し見上げる距離。全体が画面に入るように、建物の大きさから決める
-function eyeDistance({ width, depth, height, front }: Frame) {
-  const across = Math.abs(width * front[1]) + Math.abs(depth * front[0]);
-  const half = Math.tan((FOV / 2) * (Math.PI / 180));
-  // 手前の角までの分を足す。高さは見上げる分だけ余裕をみる
-  const near = (Math.abs(width * front[0]) + Math.abs(depth * front[1])) / 2;
-  return Math.max(height * 0.72, (across * 0.62) / ASPECT) / half + near;
+// 見える範囲（パネルを除いた部分）の中央に建物が収まるよう、カメラと注視点を動かす。
+// 向きは変えずに、横にずらして、距離を変える。keepEye は目の高さを保つ（見上げる視点）
+function fitView(
+  position: Vector3,
+  target: Vector3,
+  corners: Vec3[],
+  aspect: number,
+  keepEye: boolean,
+) {
+  const eye = position.clone();
+  const look = target.clone();
+  const halfY = Math.tan((FOV / 2) * (Math.PI / 180)) * FILL;
+  const halfX = halfY * aspect;
+  const forward = new Vector3();
+  const right = new Vector3();
+  const up = new Vector3();
+  const point = new Vector3();
+  // 遠近があるので、1回では合わない。少しずつ合わせる
+  for (let step = 0; step < 10; step += 1) {
+    forward.subVectors(look, eye).normalize();
+    right.crossVectors(forward, WORLD_UP).normalize();
+    up.crossVectors(right, forward);
+    let x0 = Infinity;
+    let x1 = -Infinity;
+    let y0 = Infinity;
+    let y1 = -Infinity;
+    for (const corner of corners) {
+      point.set(...corner).sub(eye);
+      const depth = Math.max(point.dot(forward), 0.1);
+      const sx = point.dot(right) / depth;
+      const sy = point.dot(up) / depth;
+      x0 = Math.min(x0, sx);
+      x1 = Math.max(x1, sx);
+      y0 = Math.min(y0, sy);
+      y1 = Math.max(y1, sy);
+    }
+    const distance = eye.distanceTo(look);
+    const across = ((x0 + x1) / 2) * distance;
+    eye.addScaledVector(right, across);
+    look.addScaledVector(right, across);
+    // 見上げる視点は注視点だけを動かす。それ以外は向きを保ったまま平行に動かす
+    const lift = ((y0 + y1) / 2) * distance;
+    look.addScaledVector(up, lift);
+    if (!keepEye) eye.addScaledVector(up, lift);
+    const scale = Math.max((x1 - x0) / (2 * halfX), (y1 - y0) / (2 * halfY));
+    const height = eye.y;
+    eye.sub(look).multiplyScalar(scale).add(look);
+    if (keepEye) eye.y = height;
+  }
+  return { position: eye, target: look };
 }
 
 function viewPosition(view: ViewName, frame: Frame): Vec3 {
@@ -320,7 +368,8 @@ function viewPosition(view: ViewName, frame: Frame): Vec3 {
     case "west":
       return [x - d, y + d * 0.18, z];
     case "oblique": {
-      const distance = eyeDistance(frame);
+      // 距離は fitView で決める
+      const distance = frame.size * 2;
       // 人の目の高さに近いところから、建物を少し見上げる
       const eye = Math.max(1.6, frame.height * 0.1);
       return [x + frame.front[0] * distance, eye, z + frame.front[1] * distance];
@@ -349,6 +398,7 @@ function CameraRig({
   focus,
   insetLeft,
   looksInside,
+  underground,
 }: {
   view: ViewName;
   frame: Frame;
@@ -356,6 +406,8 @@ function CameraRig({
   insetLeft: number;
   // 屋根を外しているときは、中が見えるよう見下ろす
   looksInside: boolean;
+  // 透かしのときは地面の下からも見られる
+  underground: boolean;
 }) {
   const camera = useThree((state) => state.camera);
   const size = useThree((state) => state.size);
@@ -363,8 +415,14 @@ function CameraRig({
     (state) => state.controls,
   ) as unknown as OrbitControlsImpl | null;
   const goal = useRef<{ position: Vector3; target: Vector3 } | null>(null);
+  // 開いた直後は動かさず、最初から収まった視点で見せる
+  const opening = useRef(true);
+  const visibleAspect =
+    size.width > insetLeft && size.height > 0
+      ? (size.width - insetLeft) / size.height
+      : 0;
 
-  // 左のパネルに隠れない分だけ、建物を右に寄せて見せる
+  // 画面の中心を、左のパネルを除いた見える範囲の中心へずらす
   useEffect(() => {
     if (!insetLeft || !("setViewOffset" in camera)) return;
     camera.setViewOffset(
@@ -386,21 +444,26 @@ function CameraRig({
   useEffect(() => {
     const focused =
       fx !== undefined && fy !== undefined && fz !== undefined && fs !== undefined;
+    if (!focused && !visibleAspect) return;
+    const inside = looksInside && view === "oblique";
     goal.current = focused
       ? {
           position: new Vector3(...focusPosition([fx, fy, fz], fs, frame.front)),
           target: new Vector3(fx, fy, fz),
         }
-      : {
-          position: new Vector3(
-            ...(looksInside && view === "oblique"
+      : fitView(
+          new Vector3(
+            ...(inside
               ? focusPosition(frame.center, frame.size * 0.95, frame.front)
               : viewPosition(view, frame)),
           ),
-          target: new Vector3(...frame.center),
-        };
+          new Vector3(...frame.center),
+          frame.corners,
+          visibleAspect,
+          view === "oblique" && !inside,
+        );
     invalidate();
-  }, [view, frame, fx, fy, fz, fs, looksInside]);
+  }, [view, frame, fx, fy, fz, fs, looksInside, visibleAspect]);
 
   useEffect(() => {
     if (!controls) return;
@@ -411,12 +474,21 @@ function CameraRig({
     return () => controls.removeEventListener("start", stop);
   }, [controls]);
 
-  useFrame((_, delta) => {
-    if (!goal.current || !controls) return;
-    const k = 1 - Math.exp(-Math.min(delta, 0.1) * 5);
+  useFrame((state, delta) => {
+    const orbit = state.controls as unknown as OrbitControlsImpl | null;
+    if (!orbit) return;
+    // 見上げられるようにしつつ、カメラが地面より下に行かないようにする
+    const reach = camera.position.distanceTo(orbit.target);
+    const above = (orbit.target.y - MIN_EYE) / Math.max(reach, 0.01);
+    orbit.maxPolarAngle = underground
+      ? Math.PI
+      : Math.PI / 2 + Math.asin(Math.min(1, Math.max(0, above)));
+    if (!goal.current) return;
+    const k = opening.current ? 1 : 1 - Math.exp(-Math.min(delta, 0.1) * 5);
+    opening.current = false;
     camera.position.lerp(goal.current.position, k);
-    controls.target.lerp(goal.current.target, k);
-    controls.update();
+    orbit.target.lerp(goal.current.target, k);
+    orbit.update();
     if (camera.position.distanceTo(goal.current.position) < 0.02) {
       goal.current = null;
     }
@@ -455,6 +527,30 @@ function ShadowUpdater({ stamp }: { stamp: string }) {
     const later = requestAnimationFrame(redraw);
     return () => cancelAnimationFrame(later);
   }, [get, stamp]);
+  return null;
+}
+
+// 描き上がった絵を画像にして渡す（① の小さな画像）。カメラと影が落ち着くまで数フレーム待つ
+function Capture({ onCapture }: { onCapture: (image: string) => void }) {
+  const get = useThree((state) => state.get);
+  useEffect(() => {
+    let frames = 0;
+    let request = 0;
+    const tick = () => {
+      invalidate();
+      frames += 1;
+      if (frames < 5) {
+        request = requestAnimationFrame(tick);
+        return;
+      }
+      const { gl, scene, camera } = get();
+      gl.shadowMap.needsUpdate = true;
+      gl.render(scene, camera);
+      onCapture(gl.domElement.toDataURL("image/jpeg", 0.88));
+    };
+    request = requestAnimationFrame(tick);
+    return () => cancelAnimationFrame(request);
+  }, [get, onCapture]);
   return null;
 }
 
@@ -1037,6 +1133,8 @@ export type SceneProps = {
   sun?: { x: number; y: number; z: number } | null;
   // 左のパネルで隠れる幅（px）。その分だけ建物を右に寄せる
   insetLeft?: number;
+  // 渡すと、描き上がった絵を画像にして返す
+  onCapture?: (image: string) => void;
 };
 
 // 正面を決める：ガラスの開口が一番広い面。読めなければ南。
@@ -1084,6 +1182,7 @@ export default function BuildingScene({
   showRooms = false,
   sun = null,
   insetLeft = 0,
+  onCapture,
 }: SceneProps) {
   const floors = floorsOf(model);
   const roofIndex = floors.findIndex((floor) => /^R/.test(floor));
@@ -1118,6 +1217,30 @@ export default function BuildingScene({
     const depth = (Math.max(...ys) - Math.min(...ys)) * MM;
     // 視点は地上の部分で決める（杭や基礎は地面の下）
     const height = zMax * MM;
+    // 外周の壁や庇は通り芯の外に出るので、合わせて範囲に入れる
+    const architecture = model.architecture;
+    const plan = [
+      ...xs.flatMap((x) => ys.map((y) => [x, y] as [number, number])),
+      ...(architecture?.floors.flatMap((floor) => floor.outline) ?? []),
+    ];
+    const reach = (side: ArchOpening["side"]) =>
+      Math.max(
+        0,
+        ...(architecture?.materials?.projections
+          .filter((p) => p.side === side)
+          .map((p) => p.depth) ?? []),
+      );
+    const planX = plan.map((p) => p[0]);
+    const planY = plan.map((p) => p[1]);
+    const corners: Vec3[] = [
+      Math.min(...planX) - reach("west"),
+      Math.max(...planX) + reach("east"),
+    ].flatMap((x) =>
+      [
+        Math.min(...planY) - reach("south"),
+        Math.max(...planY) + reach("north"),
+      ].flatMap((y) => [toScene(x, y, 0), toScene(x, y, zMax)]),
+    );
     return {
       center: toScene(xMid, yMid, zMax * 0.45),
       size: Math.max(Math.hypot(width, depth), height),
@@ -1125,6 +1248,7 @@ export default function BuildingScene({
       depth,
       height,
       front: frontOf(model, xMid),
+      corners,
       zMin,
     };
   }, [model]);
@@ -1196,15 +1320,16 @@ export default function BuildingScene({
     <div className={styles.stage}>
     <Canvas
       frameloop="demand"
-      dpr={[1, 1.5]}
+      dpr={onCapture ? 2 : [1, 1.5]}
       shadows={{ type: PCFShadowMap, autoUpdate: false }}
-      gl={{ toneMapping: ACESFilmicToneMapping, toneMappingExposure: 1.0 }}
+      gl={{ toneMapping: ACESFilmicToneMapping, toneMappingExposure: 0.82 }}
       camera={{ fov: FOV, near: 0.1, far: 2500, position: start }}
       onPointerMissed={() => onSelect(null)}
     >
       <SkySetup />
+      {onCapture && <Capture onCapture={onCapture} />}
       <fog attach="fog" args={[HORIZON, frame.size * 7, frame.size * 26]} />
-      <hemisphereLight args={["#DCE9F5", "#B9B6AE", sun && sun.z <= 0 ? 0.2 : 0.45]} />
+      <hemisphereLight args={["#D3E3F4", "#8E9093", sun && sun.z <= 0 ? 0.2 : 0.45]} />
       <SunLight direction={light} frame={frame} />
       <ShadowUpdater
         stamp={[display, topFloorIndex, highlighted.size, light.x, light.y, light.z].join()}
@@ -1213,13 +1338,13 @@ export default function BuildingScene({
         makeDefault
         target={frame.center}
         enableDamping
-        maxPolarAngle={xray ? Math.PI : Math.PI / 2 - 0.01}
       />
       <CameraRig
         view={view}
         frame={frame}
         focus={focus}
         insetLeft={insetLeft}
+        underground={xray}
         looksInside={
           !compact &&
           Boolean(model.architecture) &&

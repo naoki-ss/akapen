@@ -5,6 +5,7 @@ import { useState } from "react";
 import type { ProjectCard } from "@/lib/buildings";
 import AppFrame from "../AppFrame";
 import Hint from "../Hint";
+import SceneThumb from "../SceneThumb";
 import styles from "./screens.module.css";
 
 type Running = {
@@ -27,10 +28,12 @@ function Thumb({ card }: { card: ProjectCard }) {
   const { viewBox, columns, beams } = card.thumbnail;
   return (
     <div className={styles.thumb}>
+      {/* 画像ができるまでと、WebGL が使えないときは線で見せる */}
       <svg viewBox={viewBox} aria-hidden>
         <path d={columns} className={styles.thumbColumn} />
         <path d={beams} className={styles.thumbBeam} />
       </svg>
+      <SceneThumb slug={card.slug} />
     </div>
   );
 }

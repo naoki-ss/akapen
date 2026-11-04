@@ -127,6 +127,8 @@
 }
 
 .thumb {
+  position: relative;
+  overflow: hidden;
   height: 170px;
   display: flex;
   align-items: center;
@@ -140,6 +142,24 @@
 .thumb svg {
   width: 100%;
   height: 100%;
+}
+
+.thumbImage,
+.thumbStage {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+}
+
+.thumbImage {
+  object-fit: cover;
+}
+
+/* 画像を作る間の3D。見せずに描く */
+.thumbStage {
+  opacity: 0;
+  pointer-events: none;
 }
 
 .thumbColumn,
