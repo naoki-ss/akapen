@@ -64,9 +64,10 @@ export default function SheetCanvas({
               unoptimized
             />
           ))}
-        {marks?.map((mark) => (
+        {marks?.map((mark, index) => (
+          // 同じ場所を指す指摘があるので、場所だけではキーにならない
           <div
-            key={mark.join()}
+            key={index}
             className={styles.mark}
             style={{
               left: `${mark[0] * 100}%`,

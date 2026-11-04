@@ -374,15 +374,19 @@ def collect_text(findings, title, notes, tables=()):
     return "".join(text)
 
 
-def mask_pdf(source_path, out_path, masks):
+def mask_pdf(source_path, out_path, masks, pages=None):
     """名前の欄を塗りつぶした公開用のPDFを作る。masks はページに対する 0〜1 の範囲のリスト。
 
     図面を画像にしてから塗る。上に四角を重ねるだけでは、塗った下の線や文字、PDFの作成者などの情報がファイルに残る。
+    pages（1始まり）を渡すと、それ以外のページは白紙にする（ページ番号は元のまま）。
     """
     source = pymupdf.open(source_path)
     out = pymupdf.open()
     zoom = MASK_DPI / 72
     for page in source:
+        if pages is not None and page.number + 1 not in pages:
+            out.new_page(width=page.rect.width, height=page.rect.height)
+            continue
         pix = page.get_pixmap(matrix=pymupdf.Matrix(zoom, zoom), colorspace=pymupdf.csRGB, alpha=False)
         for box in masks:
             pix.set_rect(pymupdf.IRect(int(box[0] * pix.width), int(box[1] * pix.height),
@@ -394,41 +398,44 @@ def mask_pdf(source_path, out_path, masks):
     source.close()
 
 
-def make_marked_pdf(source_path, findings, out_path, title="施工図の朱書き", notes=(), tables=()):
-    """朱書きを重ねたPDFを書き出す。notes は一覧の最後に書く注記。tables は [(見出し, 項目ごとの結果)]（別の表にする）"""
+def make_marked_pdf(source_path, findings, out_path, title="施工図の朱書き", notes=(), tables=(), pages=None):
+    """朱書きを重ねたPDFを書き出す。notes は一覧の最後に書く注記。tables は [(見出し, 項目ごとの結果)]（別の表にする）
+    pages は残すページの番号（1始まり）。省略すると全ページ。指摘の page は元のPDFのページ番号のまま"""
     font_buffer = build_font(collect_text(findings, title, notes, tables))
     font = pymupdf.Font(fontbuffer=font_buffer)
     doc = pymupdf.open(source_path)
-    sheet_count = doc.page_count
+    numbers = list(pages) if pages else list(range(1, doc.page_count + 1))
+    sheet_count = len(numbers)
     layers = {key: doc.add_ocg(f"朱書き（{spec['label']}）", on=True) for key, spec in SOURCE_TYPES.items()}
     legend_layer = doc.add_ocg("凡例", on=True)
-    for number in range(sheet_count):
-        items = [item for item in findings if item["page"] == number + 1]
-        mark_page(doc, doc[number], items, layers, font, font_buffer, legend_layer)
+    for number in numbers:
+        items = [item for item in findings if item["page"] == number]
+        mark_page(doc, doc[number - 1], items, layers, font, font_buffer, legend_layer)
+    doc.select([number - 1 for number in numbers])
 
-    pages = ListPages(doc, font, font_buffer, title)
-    pages.new_page()
+    list_pages = ListPages(doc, font, font_buffer, title)
+    list_pages.new_page()
     for item in findings:
         spec = SOURCE_TYPES[item["source_type"]]
-        pages.row([item["number"], spec["label"], f"p.{item['page']}", content_text(item), evidence_text(item),
+        list_pages.row([item["number"], spec["label"], f"p.{item['page']}", content_text(item), evidence_text(item),
                    "はい" if item.get("needs_confirmation") else ""], color=spec["color"])
     for note in notes:
-        pages.y += 8
+        list_pages.y += 8
         for line in wrap(note, font, ListPages.SIZE, ListPages.WIDTH - 2 * ListPages.MARGIN):
             # 注記は下の余白まで使う。1行のために表の見出しだけのページを作らない
-            if pages.y + 11 > ListPages.HEIGHT - ListPages.MARGIN / 2:
-                pages.new_page(table=False)
-            pages.y += 11
-            pages.text((ListPages.MARGIN, pages.y), line, ListPages.SIZE)
+            if list_pages.y + 11 > ListPages.HEIGHT - ListPages.MARGIN / 2:
+                list_pages.new_page(table=False)
+            list_pages.y += 11
+            list_pages.text((ListPages.MARGIN, list_pages.y), line, ListPages.SIZE)
     for heading, rows in tables:
-        pages.columns = ListPages.RESULT_COLUMNS
-        pages.title = heading
-        pages.new_page()
+        list_pages.columns = ListPages.RESULT_COLUMNS
+        list_pages.title = heading
+        list_pages.new_page()
         for row in rows:
-            pages.row(result_cells(row))
-    doc.save(out_path, garbage=1, deflate=True)
+            list_pages.row(result_cells(row))
+    doc.save(out_path, garbage=3, deflate=True)
     doc.close()
-    return {"sheet_pages": sheet_count, "list_pages": pages.count}
+    return {"sheet_pages": sheet_count, "list_pages": list_pages.count}
 
 
 def set_visible_layers(doc, source_types):

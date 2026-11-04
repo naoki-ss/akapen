@@ -4,6 +4,8 @@
 
 ジョブのフォルダは ~/sekozu-data/uploads/<id>/（リポジトリの外）。input.pdf と job.json を置いて起動する。
 進み具合は status.json に書く（画面はこれを読む）。結果は result.json、marked.pdf、pages/、findings/。
+判定するページは job.json の pages（1始まり。ページ番号は元のPDFのまま）。
+stop.flag が置かれると、終わったページの結果だけで朱書きを作り、走っている呼び出しを打ち切って終わる。
 物件に masks（名前の入る欄）が登録してあれば、masked/ に塗りつぶした同じ組（marked.pdf、pages/、findings/）も作る。
 
 物件ごとの設計図書は ~/sekozu-data/projects.json に登録する（図面の場所を含むのでコミットしない）。
@@ -19,7 +21,7 @@ import sys
 import threading
 import time
 import traceback
-from concurrent.futures import ThreadPoolExecutor
+from concurrent.futures import FIRST_COMPLETED, ThreadPoolExecutor, wait
 from datetime import datetime
 from pathlib import Path
 
@@ -72,6 +74,8 @@ class Job:
         self.folder = Path(folder)
         self.lock = threading.Lock()
         self.started = time.time()
+        # 止めている間は、打ち切るページの進み具合で画面の表示や費用の記録を変えない
+        self.stopping = False
         self.status = {"state": "running", "stage": "準備中", "message": "準備中です", "pid": os.getpid(),
                        "pages_total": 0, "pages_done": 0, "active_pages": [], "usd": 0.0, "seconds": 0,
                        "started_at": datetime.now().isoformat(timespec="seconds")}
@@ -91,12 +95,16 @@ class Job:
 
     def page_started(self, number):
         with self.lock:
+            if self.stopping:
+                return
             self.status["active_pages"] = sorted({*self.status["active_pages"], number})
             self._page_message()
             self.write()
 
     def page_finished(self, number, usd):
         with self.lock:
+            if self.stopping:
+                return
             self.status["active_pages"] = [p for p in self.status["active_pages"] if p != number]
             self.status["pages_done"] += 1
             self.status["usd"] = round(self.status["usd"] + usd, 3)
@@ -114,6 +122,12 @@ class Job:
 def message_cost(path):
     usage = json.loads(Path(path).read_text())["usage"]
     return usage["input_tokens"], usage["output_tokens"], (usage["input_tokens"] * PRICE_INPUT + usage["output_tokens"] * PRICE_OUTPUT) / 1_000_000
+
+
+def raw_cost(raw_dir):
+    """このページで応答が返った呼び出しの費用の合計"""
+    names = ["classify", *MESSAGE_FILES.values()]
+    return sum(message_cost(raw_dir / f"{name}.json")[2] for name in names if (raw_dir / f"{name}.json").exists())
 
 
 def load_project(slug):
@@ -263,7 +277,14 @@ def stopped_cost(raw_dir, name):
     return message_cost(path)[2] if path.exists() else 0.0
 
 
+def stop_requested(folder):
+    return (folder / "stop.flag").exists()
+
+
 def check_page(job, client, project, checklist, minutes, input_path, number, job_id):
+    """1ページの結果。始める前に止める指示が来ていたら None"""
+    if stop_requested(job.folder):
+        return None
     job.page_started(number)
     raw_dir = job.folder / "raw" / f"p{number}"
     raw_dir.mkdir(parents=True, exist_ok=True)
@@ -300,8 +321,27 @@ def check_page(job, client, project, checklist, minutes, input_path, number, job
         return {"number": number, "ok": False, "failed_checks": [], "findings": [], "error": type(error).__name__, "usd": usd,
                 "seconds": round(time.time() - started, 1)}
     finally:
-        record_cost(EXPERIMENTS / "ledger.json", f"upload-{job_id[:8]}-p{number}", round(usd, 3))
+        # 止めたあとに終わったページは、打ち切ったページとしてまとめて記録する
+        if not job.stopping:
+            record_cost(EXPERIMENTS / "ledger.json", f"upload-{job_id[:8]}-p{number}", round(usd, 3))
         job.page_finished(number, usd)
+
+
+def run_pages(job, numbers, work):
+    """ページを並行して判定する。(終わったページの結果, 終わらなかったページ番号)。止める指示が来たら待たずに返す"""
+    pool = ThreadPoolExecutor(WORKERS)
+    futures = {number: pool.submit(work, number) for number in numbers}
+    pending = set(futures.values())
+    while pending and not stop_requested(job.folder):
+        _, pending = wait(pending, timeout=1, return_when=FIRST_COMPLETED)
+    pool.shutdown(wait=not pending, cancel_futures=bool(pending))
+    # 止める指示のあとは、結果に入れるページをここで決める。job.stopping より先に数えると、記録の漏れが出る
+    with job.lock:
+        job.stopping = bool(pending)
+    results = {number: future.result() for number, future in futures.items() if future.done() and not future.cancelled()}
+    finished = [result for result in results.values() if result is not None]
+    done = {result["number"] for result in finished}
+    return finished, [number for number in numbers if number not in done]
 
 
 def member_refs(item, classified, slug):
@@ -326,7 +366,7 @@ def member_refs(item, classified, slug):
     return refs, floor
 
 
-def render_outputs(folder, marked_path, findings, page_count):
+def render_outputs(folder, marked_path, findings, numbers):
     """画面に出すページの画像と、指摘ごとの切り抜きを、朱書きを重ねたPDFから作る"""
     doc = pymupdf.open(marked_path)
     sheets = []
@@ -334,20 +374,22 @@ def render_outputs(folder, marked_path, findings, page_count):
     (folder / "findings").mkdir(exist_ok=True)
     zoom = PAGE_DPI / 72
     matrix = pymupdf.Matrix(zoom, zoom)
-    for number in range(1, page_count + 1):
+    # 朱書きPDFには判定したページだけが入っている。ファイル名と画面の番号は元のPDFのページ番号
+    at = {number: index for index, number in enumerate(numbers)}
+    for number in numbers:
         set_visible_layers(doc, SOURCE_TYPES)
-        pix = doc[number - 1].get_pixmap(matrix=matrix, alpha=False)
+        pix = doc[at[number]].get_pixmap(matrix=matrix, alpha=False)
         pix.save(folder / f"pages/p{number}.png")
         # 画面で種類ごとに表示を切り替えるので、朱書きのない図面と、種類ごとの透明な画像も作る
         set_visible_layers(doc, [])
-        base = doc[number - 1].get_pixmap(matrix=matrix, alpha=False)
+        base = doc[at[number]].get_pixmap(matrix=matrix, alpha=False)
         base.save(folder / f"pages/p{number}-base.png")
         layers = []
         for key in SOURCE_TYPES:
             if not any(item["page"] == number and item["source_type"] == key for item in findings):
                 continue
             set_visible_layers(doc, [key])
-            overlay = layer_overlay(base, doc[number - 1].get_pixmap(matrix=matrix, alpha=False))
+            overlay = layer_overlay(base, doc[at[number]].get_pixmap(matrix=matrix, alpha=False))
             overlay.save(folder / f"pages/p{number}-{key}.png")
             layers.append({"key": key, "image": f"pages/p{number}-{key}.png"})
         sheets.append({"id": f"p{number}", "doc": "アップロードした施工図", "page": number, "title": f"{number} ページ目（朱書き）",
@@ -356,7 +398,7 @@ def render_outputs(folder, marked_path, findings, page_count):
     for item in findings:
         # 指摘の切り抜きには、その種類の朱書きだけを出す
         set_visible_layers(doc, [item["source_type"]])
-        page = doc[item["page"] - 1]
+        page = doc[at[item["page"]]]
         rects = [to_rect(page, box) for box in item["regions"]]
         clip = page.rect
         if rects:
@@ -414,6 +456,8 @@ def merge_same(client, findings, raw_dir):
         same = {entry["pair"] for entry in json.loads((raw_dir / "merge-result.json").read_text())["pairs"] if entry["same"]}
         merge_findings.apply_merges(findings, [(red, blue) for red, blue in pairs if merge_findings.pair_id(red, blue) in same])
         return 0.0, None
+    if client is None:  # 止めたあとは、新しくAIを呼ばない
+        return 0.0, "赤と青が同じ内容かの判定をしていないので、枠はまとめていません。"
     content = [{"type": "text", "text": merge_findings.prompt_text(pairs)}]
     usd = 0.0
     try:
@@ -430,15 +474,15 @@ def merge_same(client, findings, raw_dir):
     return usd, None
 
 
-def write_masked(folder, input_path, masks, findings, page_count, **marks):
+def write_masked(folder, input_path, masks, findings, numbers, **marks):
     """塗りつぶした同じ組を masked/ に作る。朱書きは塗ったあとの図面に重ねる。作れたら True"""
     out = folder / "masked"
     out.mkdir(exist_ok=True)
     masked_input = out / "input.pdf"
     try:
-        mask_pdf(input_path, masked_input, masks)
+        mask_pdf(input_path, masked_input, masks, numbers)
         make_marked_pdf(masked_input, findings, out / "marked.pdf", **marks)
-        render_outputs(out, out / "marked.pdf", findings, page_count)
+        render_outputs(out, out / "marked.pdf", findings, numbers)
         return True
     except Exception:
         (folder / "error-masked.txt").write_text(traceback.format_exc())
@@ -447,8 +491,9 @@ def write_masked(folder, input_path, masks, findings, page_count, **marks):
         masked_input.unlink(missing_ok=True)
 
 
-def finish_job(job, folder, slug, pages, checklist, use_knowledge, client, input_path, page_count, minutes=(), masks=None):
-    """ページごとの結果から、朱書きPDFと result.json を作る"""
+def finish_job(job, folder, slug, pages, checklist, use_knowledge, client, input_path, minutes=(), masks=None, stopped=(), stopped_usd=0.0):
+    """ページごとの結果から、朱書きPDFと result.json を作る。stopped は途中で止めて結果がないページ、stopped_usd はその費用"""
+    numbers = [page["number"] for page in pages]
     job.update(stage="朱書き", message="朱書きPDFを作成中です", active_pages=[])
     findings = []
     for page in pages:
@@ -457,6 +502,8 @@ def finish_job(job, folder, slug, pages, checklist, use_knowledge, client, input
         item["number"] = number
     failed = [page["number"] for page in pages if not page["ok"]]
     notes = []
+    if stopped:
+        notes.append("途中で止めました。次のページは判定していません（指摘がないという意味ではありません）： " + "、".join(f"p.{n}" for n in stopped))
     merge_usd, merge_note = merge_same(client, findings, folder / "raw")
     if merge_usd:
         record_cost(EXPERIMENTS / "ledger.json", f"upload-{folder.name[:8]}-merge", round(merge_usd, 3))
@@ -493,21 +540,22 @@ def finish_job(job, folder, slug, pages, checklist, use_knowledge, client, input
     if checklist_rows:
         tables.append(("チェックリストの確認結果", checklist_rows))
     marked = folder / "marked.pdf"
-    marks = {"title": "施工図の朱書き", "notes": notes, "tables": tables}
+    marks = {"title": "施工図の朱書き", "notes": notes, "tables": tables, "pages": numbers}
     summary = make_marked_pdf(input_path, findings, marked, **marks)
-    sheets = render_outputs(folder, marked, findings, page_count)
-    masked = bool(masks) and write_masked(folder, input_path, masks, findings, page_count, **marks)
+    sheets = render_outputs(folder, marked, findings, numbers)
+    masked = bool(masks) and write_masked(folder, input_path, masks, findings, numbers, **marks)
     by_page = {page["number"]: page for page in pages}
     views = [to_view(item, slug, by_page[item["page"]].get("classified")) for item in findings]
-    usd = round(sum(page["usd"] for page in pages) + merge_usd, 3)
+    usd = round(sum(page["usd"] for page in pages) + merge_usd + stopped_usd, 3)
     seconds = round(time.time() - job.started, 1)
     write_json(folder / "result.json", {
-        "mode": f"{'、'.join(used)}の照合（設計図書は条件D）。{page_count} ページ、{len(findings)} 件。",
+        "mode": f"{'、'.join(used)}の照合（設計図書は条件D）。{len(numbers)} ページ、{len(findings)} 件。",
         "findings": views,
         "changes": [],
         "sheets": sheets,
         "masked": masked,
         "failed_pages": failed,
+        "stopped_pages": list(stopped),
         "notes": notes,
         "summary": summary,
         "checklist": checklist_rows,
@@ -518,7 +566,8 @@ def finish_job(job, folder, slug, pages, checklist, use_knowledge, client, input
         "usd": usd,
         "seconds": seconds,
     })
-    job.update(state="done", stage="完了", message=f"完了しました（{len(findings)} 件）", usd=usd)
+    message = f"止めました（{len(numbers)} ページ分の結果、{len(findings)} 件）" if stopped else f"完了しました（{len(findings)} 件）"
+    job.update(state="done", stage="完了", message=message, usd=usd)
 
 
 def main():
@@ -536,9 +585,10 @@ def main():
             raise ValueError("パスワード付きのPDFは扱えません")
         page_count = source.page_count
         source.close()
-        if not 1 <= page_count <= MAX_PAGES:
-            raise ValueError(f"ページ数は {MAX_PAGES} ページまでです（{page_count} ページ）")
-        job.update(pages_total=page_count, stage="確認中", message=f"チェックを始めます（全 {page_count} ページ）")
+        numbers = meta.get("pages") or [1]
+        if not all(1 <= number <= page_count for number in numbers):
+            raise ValueError("選んだページがPDFにありません")
+        job.update(pages_total=len(numbers), stage="確認中", message=f"チェックを始めます（全 {len(numbers)} ページ）")
 
         load_env()
         if not os.environ.get("ANTHROPIC_API_KEY"):
@@ -547,16 +597,26 @@ def main():
         checklist = knowledge_check.load_checklist(project)
         minutes = minutes_check.load_minutes(project)
         use_knowledge = "knowledge" in checkers_for(project, checklist, minutes)
-        with ThreadPoolExecutor(WORKERS) as pool:
-            pages = list(pool.map(lambda n: check_page(job, client, project, checklist, minutes, input_path, n, folder.name), range(1, page_count + 1)))
-
-        finish_job(job, folder, slug, pages, checklist, use_knowledge, client, input_path, page_count, minutes, project.get("masks"))
+        pages, stopped = run_pages(job, numbers, lambda n: check_page(job, client, project, checklist, minutes, input_path, n, folder.name))
+        masks = project.get("masks")
+        if not stopped:
+            finish_job(job, folder, slug, pages, checklist, use_knowledge, client, input_path, minutes, masks)
+            return
+        job.update(stage="止めています", message="止めています。終わったページの朱書きを作っています", active_pages=[])
+        partial = lambda: sum(raw_cost(folder / "raw" / f"p{number}") for number in stopped)
+        if pages:
+            finish_job(job, folder, slug, pages, checklist, use_knowledge, None, input_path, minutes, masks, stopped, partial())
+        else:
+            job.update(state="stopped", stage="止めました", message="止めました。終わったページはありません", usd=round(partial(), 3))
+        # 応答が返らなかった呼び出しの費用は分からないので、記録に入らない
+        record_cost(EXPERIMENTS / "ledger.json", f"upload-{folder.name[:8]}-stopped", round(partial(), 3))
+        os._exit(0)  # 走っている呼び出しを待たない
     except (Exception, SystemExit) as error:
         (folder / "error.txt").write_text(traceback.format_exc())
         # 画面には詳細を出さない（図面の場所などが混ざるため）
         message = str(error) if isinstance(error, ValueError) else "判定中にエラーが発生しました"
         job.update(state="error", stage="エラー", message=message, active_pages=[])
-        sys.exit(1)
+        os._exit(1)  # 走っている呼び出しを待たない
 
 
 if __name__ == "__main__":

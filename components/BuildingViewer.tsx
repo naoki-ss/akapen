@@ -395,10 +395,7 @@ function BuildingView({
       {!inResult || !currentSheet ? (
         <StartView
           picker={picker}
-          status={job.status}
-          error={job.error}
-          running={job.running}
-          onSend={job.send}
+          job={job}
           results={results}
         />
       ) : (

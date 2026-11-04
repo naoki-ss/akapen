@@ -7,12 +7,16 @@ import type { Sheet } from "./sheets";
 const POLL_MS = 3000;
 
 export type JobStatus = {
-  state: "running" | "done" | "error";
+  state: "running" | "done" | "error" | "stopped";
   message: string;
   pages_total: number;
   pages_done: number;
   seconds: number;
 };
+
+// 判定するページを選んでいるPDF
+export type PageThumb = { number: number; width: number; height: number };
+export type Draft = { id: string; name: string; pages: PageThumb[] };
 
 export type ResultRow = {
   id: string;
@@ -44,6 +48,8 @@ export function useUploadJob(slug: string, onFinished: () => void) {
   const [result, setResult] = useState<JobResult | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [sending, setSending] = useState(false);
+  const [draft, setDraft] = useState<Draft | null>(null);
+  const [stopping, setStopping] = useState(false);
   const startedHere = useRef(false);
   const finished = useRef(onFinished);
 
@@ -71,7 +77,11 @@ export function useUploadJob(slug: string, onFinished: () => void) {
       }
       const next = (await response.json()) as JobStatus;
       setStatus(next);
-      if (next.state === "running") {
+      if (next.state !== "running") setStopping(false);
+      if (next.state === "stopped") {
+        // 終わったページがないので、見せる結果がない
+        window.localStorage.removeItem(storageKey(slug));
+      } else if (next.state === "running") {
         // 読み込み直しても、走っている途中なら終わったときに結果へ進む
         startedHere.current = true;
         timer = setTimeout(poll, POLL_MS);
@@ -93,35 +103,80 @@ export function useUploadJob(slug: string, onFinished: () => void) {
     };
   }, [jobId, slug]);
 
-  const send = useCallback(
+  // PDFを送り、ページの小さな画像を受け取る（AIは呼ばない）
+  const prepare = useCallback(
     async (file: File) => {
       setSending(true);
       setError(null);
-      setResult(null);
-      setStatus(null);
+      setDraft(null);
       const form = new FormData();
       form.append("file", file);
       form.append("project", slug);
-      const response = await fetch("/api/check", { method: "POST", body: form });
+      const response = await fetch("/api/check", {
+        method: "POST",
+        body: form,
+      });
       const body = await response.json();
       setSending(false);
       if (!response.ok) {
         setError(body.error);
         return;
       }
-      window.localStorage.setItem(storageKey(slug), body.id);
-      startedHere.current = true;
-      setJobId(body.id);
+      setDraft({ id: body.id, name: file.name, pages: body.pages });
     },
     [slug],
   );
+
+  // 選んだページの判定を始める
+  const start = useCallback(
+    async (pages: number[]) => {
+      if (!draft) return;
+      setSending(true);
+      setError(null);
+      const response = await fetch(`/api/check/${draft.id}/start`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ pages }),
+      });
+      const body = await response.json();
+      setSending(false);
+      if (!response.ok) {
+        setError(body.error);
+        return;
+      }
+      setResult(null);
+      setStatus(null);
+      setDraft(null);
+      window.localStorage.setItem(storageKey(slug), draft.id);
+      startedHere.current = true;
+      setJobId(draft.id);
+    },
+    [draft, slug],
+  );
+
+  const stop = useCallback(async () => {
+    if (!jobId) return;
+    setStopping(true);
+    const response = await fetch(`/api/check/${jobId}/stop`, {
+      method: "POST",
+    });
+    if (!response.ok) setStopping(false);
+  }, [jobId]);
+
+  const cancelDraft = useCallback(() => setDraft(null), []);
 
   return {
     status,
     result,
     error,
-    send,
-    running: sending || status?.state === "running",
+    draft,
+    prepare,
+    start,
+    stop,
+    stopping,
+    cancelDraft,
+    sending,
+    running: status?.state === "running",
     base: `/api/check/${jobId}/files`,
   };
 }
