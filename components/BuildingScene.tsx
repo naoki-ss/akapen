@@ -5,6 +5,7 @@ import { Canvas, useFrame, useThree, type ThreeEvent } from "@react-three/fiber"
 import { useEffect, useMemo, useRef, type CSSProperties } from "react";
 import {
   CanvasTexture,
+  type DirectionalLight,
   ExtrudeGeometry,
   Shape as OutlineShape,
   Vector2,
@@ -182,6 +183,8 @@ function MemberMesh({
       position={shape.position}
       rotation={shape.rotation}
       onClick={handleClick}
+      castShadow={!ghost}
+      receiveShadow={!ghost}
     >
       {shape.cylinder ? (
         <cylinderGeometry
@@ -437,13 +440,11 @@ function Plate({
   z,
   thickness,
   color,
-  opacity,
 }: {
   outline: [number, number][];
   z: number;
   thickness: number;
   color: string;
-  opacity?: number;
 }) {
   const geometry = useMemo(() => {
     const shape = new OutlineShape(outline.map(([x, y]) => new Vector2(x * MM, y * MM)));
@@ -456,13 +457,14 @@ function Plate({
   }, [outline, thickness]);
   useEffect(() => () => geometry.dispose(), [geometry]);
   return (
-    <mesh geometry={geometry} position={[0, z * MM, 0]} raycast={NO_RAYCAST}>
-      <meshStandardMaterial
-        color={color}
-        transparent={opacity !== undefined}
-        opacity={opacity ?? 1}
-        depthWrite={opacity === undefined}
-      />
+    <mesh
+      geometry={geometry}
+      position={[0, z * MM, 0]}
+      raycast={NO_RAYCAST}
+      castShadow
+      receiveShadow
+    >
+      <meshStandardMaterial color={color} />
     </mesh>
   );
 }
@@ -472,7 +474,13 @@ function FloorWalls({ floor, ghost }: { floor: ArchFloor; ghost: boolean }) {
   return (
     <group>
       {boxes.map((item, index) => (
-        <mesh key={index} position={item.center} raycast={NO_RAYCAST}>
+        <mesh
+          key={index}
+          position={item.center}
+          raycast={NO_RAYCAST}
+          castShadow={!ghost && !item.glass}
+          receiveShadow={!item.glass}
+        >
           <boxGeometry args={item.size} />
           <meshStandardMaterial
             key={`${item.glass}-${ghost}`}
@@ -528,7 +536,7 @@ function Exterior({
         <Plate outline={topMain.outline} z={topMain.z0} thickness={60} color="#EFEBE2" />
       )}
       {architecture.roofs
-        .filter(() => roofOn || ghost)
+        .filter(() => roofOn)
         .map((roof, index) => (
           <Plate
             key={index}
@@ -536,7 +544,6 @@ function Exterior({
             z={roof.z}
             thickness={200}
             color={ROOF}
-            opacity={ghost ? 0.06 : undefined}
           />
         ))}
       {showRooms &&
@@ -565,6 +572,47 @@ function Exterior({
   );
 }
 
+// 太陽の光と影。sun がなければ、見やすさのための固定の光にする
+function SunLight({
+  direction,
+  frame,
+}: {
+  direction: { x: number; y: number; z: number };
+  frame: Frame;
+}) {
+  const light = useRef<DirectionalLight>(null);
+  const [cx, cy, cz] = frame.center;
+  const distance = frame.size * 3;
+  useEffect(() => {
+    if (!light.current) return;
+    light.current.target.position.set(cx, cy, cz);
+    light.current.target.updateMatrixWorld();
+  }, [cx, cy, cz]);
+  const reach = frame.size * 1.6;
+  const up = direction.z > 0;
+  return (
+    <directionalLight
+      ref={light}
+      position={[
+        cx + direction.x * distance,
+        cy + direction.z * distance,
+        cz - direction.y * distance,
+      ]}
+      intensity={up ? 0.8 + 2 * direction.z : 0}
+      color="#FFF4DF"
+      castShadow={up}
+      shadow-mapSize={[2048, 2048]}
+      shadow-bias={-0.0005}
+      shadow-camera-left={-reach}
+      shadow-camera-right={reach}
+      shadow-camera-top={reach}
+      shadow-camera-bottom={-reach}
+      shadow-camera-near={0.1}
+      shadow-camera-far={distance * 2.5}
+    />
+  );
+}
+
 export type SceneProps = {
   model: BuildingModel;
   topFloorIndex: number;
@@ -581,6 +629,8 @@ export type SceneProps = {
   compact?: boolean;
   // 部屋名を出す（屋根を外しているとき）
   showRooms?: boolean;
+  // 太陽のある向き（建物の座標）。日当たりを見せるときだけ渡す
+  sun?: { x: number; y: number; z: number } | null;
 };
 
 export default function BuildingScene({
@@ -595,6 +645,7 @@ export default function BuildingScene({
   callout,
   compact = false,
   showRooms = false,
+  sun = null,
 }: SceneProps) {
   const floors = floorsOf(model);
   const roofIndex = floors.findIndex((floor) => /^R/.test(floor));
@@ -657,16 +708,27 @@ export default function BuildingScene({
 
   return (
     <Canvas
+      shadows
       camera={{ fov: 40, near: 0.1, far: 2000, position: start }}
       onPointerMissed={() => onSelect(null)}
     >
       <color attach="background" args={[FOG]} />
       <fog attach="fog" args={[FOG, frame.size * 2.6, frame.size * 8]} />
-      <hemisphereLight args={["#ffffff", "#b8b4a8", 1.1]} />
-      <directionalLight position={[30, 50, 20]} intensity={1.2} />
+      <hemisphereLight
+        args={["#ffffff", "#b8b4a8", sun ? (sun.z > 0 ? 0.75 : 0.35) : 1.1]}
+      />
+      {sun ? (
+        <SunLight direction={sun} frame={frame} />
+      ) : (
+        <directionalLight position={[30, 50, 20]} intensity={1.2} />
+      )}
       <OrbitControls makeDefault target={frame.center} enableDamping />
       <CameraRig view={view} frame={frame} focus={focus} />
-      <mesh position={[frame.center[0], groundY, frame.center[2]]} rotation={[-Math.PI / 2, 0, 0]}>
+      <mesh
+        position={[frame.center[0], groundY, frame.center[2]]}
+        rotation={[-Math.PI / 2, 0, 0]}
+        receiveShadow
+      >
         <circleGeometry args={[frame.size * 12, 64]} />
         <meshStandardMaterial color={GROUND} />
       </mesh>

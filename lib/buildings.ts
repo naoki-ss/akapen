@@ -72,8 +72,24 @@ export function listBuildings(): Building[] {
   ];
 }
 
-export const getBuilding = (slug: string) =>
-  listBuildings().find((building) => building.slug === slug) ?? null;
+// 登録の情報にある建設地と向きを、3Dで使えるようにモデルに足す
+export function getBuilding(slug: string) {
+  const building = listBuildings().find((item) => item.slug === slug);
+  if (!building) return null;
+  const info = uploadEnabled() ? projectInfo(slug) : null;
+  if (building.model.site || !info?.site) return building;
+  return {
+    ...building,
+    model: {
+      ...building.model,
+      site: {
+        lat: info.site.lat,
+        lon: info.site.lon,
+        north_deg: info.north_deg ?? 0,
+      },
+    },
+  };
+}
 
 export type ProjectCard = {
   slug: string;

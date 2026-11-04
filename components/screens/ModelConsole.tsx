@@ -9,11 +9,13 @@ import { floorsOf, type Member } from "@/lib/model";
 import type { KnowledgeApp, ProjectDocument } from "@/lib/projects";
 import { ALL_LAYERS, type LayerKey, type SheetTarget } from "@/lib/sheets";
 import { useJobResult } from "@/lib/useJobResult";
+import { sunDirection, sunPosition } from "@/lib/sun";
 import { useUploadJob } from "@/lib/useUploadJob";
 import { Logo } from "../AppFrame";
 import type { Display, ViewName } from "../BuildingScene";
 import BuildingScene from "../BuildingSceneLazy";
 import MemberCard from "../MemberCard";
+import SunBar, { DEFAULT_SUN, type SunState } from "../SunBar";
 import { ChecksList } from "../RegisterView";
 import SheetViewer from "../SheetViewer";
 import UploadPanel from "../UploadPanel";
@@ -23,6 +25,8 @@ import panel from "../console/console.module.css";
 import styles from "./screens.module.css";
 
 type Tab = "sheets" | "knowledge" | "documents";
+
+const TOKYO = { lat: 35.69, lon: 139.69, north_deg: 0 };
 
 const VIEWS: { key: ViewName; label: string }[] = [
   { key: "oblique", label: "斜め" },
@@ -99,6 +103,8 @@ export default function ModelConsole({
   const [showChecks, setShowChecks] = useState(false);
   const [showArchChecks, setShowArchChecks] = useState(false);
   const [showRooms, setShowRooms] = useState(false);
+  const [sunOn, setSunOn] = useState(false);
+  const [sun, setSun] = useState<SunState>(DEFAULT_SUN);
   const [visibleLayers, setVisibleLayers] = useState<ReadonlySet<LayerKey>>(
     () => new Set(ALL_LAYERS),
   );
@@ -172,6 +178,8 @@ export default function ModelConsole({
     setView("oblique");
   };
 
+  // 建設地がない物件は東京の値で計算する（画面に注記する）
+  const site = model.site ?? TOKYO;
   const counts = {
     columns: model.members.filter((m) => m.type === "column").length,
     beams: model.members.filter((m) => m.type === "beam").length,
@@ -192,6 +200,14 @@ export default function ModelConsole({
             display={display}
             view={view}
             showRooms={showRooms}
+            sun={
+              sunOn
+                ? sunDirection(
+                    sunPosition(site.lat, site.lon, sun.month, sun.day, sun.hours),
+                    site.north_deg,
+                  )
+                : null
+            }
             callout={
               active
                 ? {
@@ -379,6 +395,15 @@ export default function ModelConsole({
               }
             }}
           />
+          <h2>日当たり</h2>
+          <label className={appStyles.typeToggle}>
+            <input
+              type="checkbox"
+              checked={sunOn}
+              onChange={(e) => setSunOn(e.target.checked)}
+            />
+            太陽と影を表示
+          </label>
           {model.architecture && (
             <>
               <h2>部屋</h2>
@@ -418,6 +443,16 @@ export default function ModelConsole({
             }
           />
         </div>
+      )}
+
+      {hasModel && sunOn && (
+        <SunBar
+          lat={site.lat}
+          lon={site.lon}
+          value={sun}
+          note={model.site ? undefined : "建設地が未登録のため東京の値"}
+          onChange={setSun}
+        />
       )}
 
       {hasModel && (

@@ -1,0 +1,96 @@
+.bar {
+  position: absolute;
+  z-index: 2;
+  left: 364px;
+  right: 12px;
+  bottom: 30px;
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 8px 14px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: var(--panel-3d);
+  backdrop-filter: blur(8px);
+  font-size: 12px;
+}
+
+.date {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--muted);
+}
+
+.date input {
+  padding: 3px 5px;
+  border: 1px solid var(--line-strong);
+  border-radius: 5px;
+  background: var(--panel);
+  color: var(--ink);
+  font-size: 12px;
+}
+
+.seasons {
+  display: flex;
+  gap: 3px;
+}
+
+.seasons button {
+  padding: 4px 8px;
+  border: 1px solid var(--line-strong);
+  border-radius: 5px;
+  background: var(--panel);
+  color: var(--ink);
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.seasons button[aria-pressed="true"] {
+  border-color: var(--accent);
+  background: var(--accent);
+  color: #fff;
+}
+
+.slider {
+  flex: 1;
+  min-width: 140px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.slider span {
+  width: 38px;
+  font-size: 13px;
+  font-weight: 700;
+  text-align: right;
+}
+
+.slider input {
+  flex: 1;
+  height: 8px;
+  border-radius: 4px;
+  appearance: none;
+  cursor: pointer;
+}
+
+.slider input::-webkit-slider-thumb {
+  width: 16px;
+  height: 16px;
+  border: 2px solid #fff;
+  border-radius: 50%;
+  background: var(--ink);
+  appearance: none;
+}
+
+.readout {
+  display: flex;
+  flex-direction: column;
+  white-space: nowrap;
+}
+
+.readout small {
+  color: var(--muted);
+  font-size: 10px;
+}
