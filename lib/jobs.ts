@@ -84,7 +84,7 @@ export function readStatus(folder: string) {
   const status = JSON.parse(readFileSync(path.join(folder, "status.json"), "utf8"));
   // 処理が落ちていたら、いつまでも「実行中」と見せない
   if (status.state === "running" && !alive(status.pid)) {
-    return { ...status, state: "error", stage: "エラー", message: "判定の処理が途中で止まりました" };
+    return { ...status, state: "error", stage: "エラー", message: "チェックが途中で止まりました" };
   }
   // 状態が変わらない間も、経過時間は進める
   if (status.state === "running" && status.started_at) {

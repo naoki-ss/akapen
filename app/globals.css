@@ -1,9 +1,21 @@
+/*
+ * 色の決まり
+ * 赤と青は朱書きの意味を持つので、画面の飾りには使わない（--red はロゴと朱書きの表示だけ）。
+ * 画面の操作の色は深緑。
+ */
 :root {
-  --bg: #f5f4f0;
-  --ink: #1d1d1b;
-  --muted: #6b6a65;
-  --line: #d9d6cc;
-  --panel: #fffdf8;
+  --bg: #ffffff;
+  --ink: #1f2a27;
+  --muted: #5d6a65;
+  --line: #dde3df;
+  --line-strong: #aeb9b4;
+  --panel: #ffffff;
+  --tint: #f3f5f3;
+  --tint-strong: #d6e4de;
+  --accent: #1f5c4a;
+  --accent-dark: #174638;
+  --red: #cc1a1a;
+  --blue: #0d4dcc;
 }
 
 * {
@@ -12,7 +24,13 @@
 
 body {
   margin: 0;
-  font-family: "Hiragino Sans", "Noto Sans JP", system-ui, sans-serif;
+  font-family: "Hiragino Sans", "Noto Sans JP", "Noto Sans CJK JP", system-ui, sans-serif;
+  font-size: 14px;
+  line-height: 1.55;
   background: var(--bg);
   color: var(--ink);
+}
+
+button {
+  font: inherit;
 }

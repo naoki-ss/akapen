@@ -1,7 +1,7 @@
 "use client";
 
 import Image from "next/image";
-import { useState } from "react";
+import { useCallback, useState } from "react";
 import {
   SOURCE_LABELS,
   type CheckResult,
@@ -10,9 +10,9 @@ import {
   type HumanItem,
   type RunStats,
 } from "@/lib/check";
-import type { Box, LayerKey, Sheet } from "@/lib/sheets";
+import type { Box, Sheet } from "@/lib/sheets";
+import type { ResultRow } from "@/lib/useUploadJob";
 import CompareViewer, { type CompareTarget } from "./CompareViewer";
-import UploadCheck from "./UploadCheck";
 import styles from "./CheckPanel.module.css";
 
 const SEVERITY_CLASS: Record<Finding["severity"], string> = {
@@ -82,7 +82,7 @@ function FindingDetail({
           {[...finding.members.grids, ...finding.members.marks].join("、")}
           （{finding.members.floor}）
         </dd>
-        <dt>判定</dt>
+        <dt>確認の方法</dt>
         <dd>{SOURCE_LABELS[finding.source]}</dd>
       </dl>
       {finding.human_view ? (
@@ -309,19 +309,32 @@ export function FindingCards({
   onOpenSheet: (sheet: Sheet, bbox: Box, label: string) => void;
   onCompare: (target: CompareTarget) => void;
 }) {
+  // 開いた指摘の内容が枠の外に隠れないように、枠の上端まで動かす
+  const showOpened = useCallback((card: HTMLElement | null) => {
+    card?.scrollIntoView({ block: "start" });
+  }, []);
   return (
     <>
       {findings.map((finding) => {
         const active = finding.id === activeId;
         return (
-          <article key={finding.id} className={styles.card}>
+          <article
+            key={finding.id}
+            ref={active ? showOpened : undefined}
+            className={styles.card}
+          >
             <button
               className={styles.cardHead}
               aria-expanded={active}
               onClick={() => onActivate(active ? null : finding)}
             >
               {finding.number !== undefined && (
-                <span className={styles.number}>{finding.number}</span>
+                <span
+                  className={styles.number}
+                  data-source={finding.source_type}
+                >
+                  {finding.number}
+                </span>
               )}
               <span
                 className={`${styles.badge} ${SEVERITY_CLASS[finding.severity]}`}
@@ -364,45 +377,77 @@ const runCountText = (stats: RunStats, id: string) => {
   return `${stats.runs}回中${hits}回検出、${stats.runs - hits}回見逃し`;
 };
 
-type Tab = "findings" | "human" | "upload";
+function ResultRows({ rows }: { rows: ResultRow[] }) {
+  return (
+    <ul className={styles.rows}>
+      {rows.map((row) => (
+        <li key={row.id}>
+          <b>
+            {row.id} {row.result}
+            {row.pages.length > 0 &&
+              `（${row.pages.map((n) => `p.${n}`).join("、")}）`}
+          </b>
+          <span>{row.item ? `${row.item}：${row.content}` : row.content}</span>
+          {row.reason && <small>{row.reason}</small>}
+        </li>
+      ))}
+    </ul>
+  );
+}
 
+type Tab = "findings" | "human" | "minutes" | "checklist";
+
+// 指摘の一覧。チェック済みの結果には人の朱書きとの比較、入れた施工図の結果には項目ごとの確認結果のタブが付く
 export default function CheckPanel({
-  result,
+  findings,
+  totalFindings,
+  lead,
+  notes,
   report,
   stats,
+  changes,
   humanItems,
   humanLead,
+  minutes,
+  checklist,
   activeId,
   onActivate,
   base,
-  slug,
   sheets,
   onOpenSheet,
-  visibleLayers,
-  onToggleLayer,
 }: {
-  result: CheckResult;
+  findings: Finding[];
+  totalFindings: number;
+  lead?: string;
+  notes?: string[];
   // 正解ファイルがある物件だけ採点を出す
   report?: EvalReport;
   stats?: RunStats;
-  humanItems: HumanItem[];
+  changes?: CheckResult["changes"];
+  humanItems?: HumanItem[];
   humanLead?: string;
+  minutes?: ResultRow[] | null;
+  checklist?: ResultRow[] | null;
   activeId: string | null;
   onActivate: (finding: Finding | null) => void;
   base: string;
-  slug: string;
   sheets: Sheet[];
-  onOpenSheet: (
-    sheet: Sheet,
-    bbox: Box | undefined,
-    label: string,
-    sheetBase?: string,
-  ) => void;
-  visibleLayers: ReadonlySet<LayerKey>;
-  onToggleLayer: (key: LayerKey) => void;
+  onOpenSheet: (sheet: Sheet, bbox: Box, label: string) => void;
 }) {
   const [tab, setTab] = useState<Tab>("findings");
   const [compare, setCompare] = useState<CompareTarget | null>(null);
+  const tabs: { key: Tab; label: string }[] = [
+    {
+      key: "findings",
+      label:
+        findings.length === totalFindings
+          ? `指摘 ${totalFindings} 件`
+          : `指摘 ${findings.length} / ${totalFindings} 件`,
+    },
+    ...(humanItems ? [{ key: "human" as Tab, label: "人の朱書きと比較" }] : []),
+    ...(minutes ? [{ key: "minutes" as Tab, label: "議事録" }] : []),
+    ...(checklist ? [{ key: "checklist" as Tab, label: "チェックリスト" }] : []),
+  ];
 
   return (
     <div className={styles.root}>
@@ -410,44 +455,21 @@ export default function CheckPanel({
         <CompareViewer target={compare} onClose={() => setCompare(null)} />
       )}
       <div className={styles.tabs} role="tablist">
-        <button
-          role="tab"
-          aria-selected={tab === "findings"}
-          onClick={() => setTab("findings")}
-        >
-          指摘一覧（{result.findings.length}）
-        </button>
-        <button
-          role="tab"
-          aria-selected={tab === "human"}
-          onClick={() => setTab("human")}
-        >
-          人の朱書きと比較
-        </button>
-        <button
-          role="tab"
-          aria-selected={tab === "upload"}
-          onClick={() => setTab("upload")}
-        >
-          施工図を判定
-        </button>
+        {tabs.map((item) => (
+          <button
+            key={item.key}
+            role="tab"
+            aria-selected={tab === item.key}
+            onClick={() => setTab(item.key)}
+          >
+            {item.label}
+          </button>
+        ))}
       </div>
-      {/* 判定には時間がかかるので、タブを切り替えても進み具合を保つ */}
-      <div className={styles.list} hidden={tab !== "upload"}>
-        <UploadCheck
-          slug={slug}
-          activeId={activeId}
-          onActivate={onActivate}
-          onOpenSheet={onOpenSheet}
-          onCompare={setCompare}
-          visibleLayers={visibleLayers}
-          onToggleLayer={onToggleLayer}
-        />
-      </div>
-      {tab === "upload" ? null : tab === "human" ? (
+      {tab === "human" && humanItems ? (
         <HumanCompare
           items={humanItems}
-          findings={result.findings}
+          findings={findings}
           stats={stats}
           base={base}
           sheets={sheets}
@@ -455,12 +477,34 @@ export default function CheckPanel({
           onCompare={setCompare}
           lead={humanLead}
         />
+      ) : tab === "minutes" && minutes ? (
+        <div className={styles.list}>
+          <p className={styles.lead}>
+            議事録の項目ごとに、この施工図に関係するか、反映されているかを確認した結果です。
+          </p>
+          <ResultRows rows={minutes} />
+        </div>
+      ) : tab === "checklist" && checklist ? (
+        <div className={styles.list}>
+          <p className={styles.lead}>
+            社内チェックリストの項目ごとの確認結果です。
+          </p>
+          <ResultRows rows={checklist} />
+        </div>
       ) : (
         <div className={styles.list}>
-          <p className={styles.lead}>{result.mode}</p>
+          <p className={styles.lead}>
+            AIが挙げた確認候補です。確定する前に人が確認してください。
+            {lead && ` ${lead}`}
+          </p>
+          {notes?.map((note) => (
+            <p key={note} className={styles.notice}>
+              {note}
+            </p>
+          ))}
           {report && <ScoreSummary report={report} />}
           <FindingCards
-            findings={result.findings}
+            findings={findings}
             activeId={activeId}
             onActivate={onActivate}
             base={base}
@@ -492,14 +536,14 @@ export default function CheckPanel({
               </ul>
             </section>
           )}
-          {result.changes.length > 0 && (
+          {changes && changes.length > 0 && (
             <section className={styles.changes}>
               <h3>意図した変更（指摘ではありません）</h3>
               <p>
                 施工順変更版の目的どおりの変更です。指摘には含めていません。
               </p>
               <ul>
-                {result.changes.map((c) => (
+                {changes.map((c) => (
                   <li key={c.no}>
                     No.{c.no}（{c.grid}）：{c.before} → {c.after} 番目
                   </li>

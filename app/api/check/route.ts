@@ -6,7 +6,7 @@ const error = (message: string, status: number) =>
 
 export async function POST(request: NextRequest) {
   if (!uploadEnabled()) {
-    return error("このサーバーではアップロードを受け付けていません", 403);
+    return error("この環境では施工図のチェックはできません", 403);
   }
   // 別のサイトから勝手に判定（API の費用）を走らせられないようにする
   const origin = request.headers.get("origin");

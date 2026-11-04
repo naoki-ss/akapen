@@ -276,7 +276,7 @@ export default function BuildingScene({
   const target = toScene(xMax / 2, yMax / 2, (zMin + zMax) / 2);
   // 高い建物は高さで、平たい建物は平面の対角で距離を決める
   const zoom =
-    Math.max(1.4 * Math.hypot(xMax, yMax), zMax - zMin) / CAMERA_BASE_SIZE;
+    Math.max(1.15 * Math.hypot(xMax, yMax), zMax - zMin) / CAMERA_BASE_SIZE;
   const cameraPosition: Vec3 = [
     target[0] + 50 * zoom,
     target[1] + 14 * zoom,
@@ -288,7 +288,7 @@ export default function BuildingScene({
       camera={{ fov: 40, near: 0.1, far: 1000, position: cameraPosition }}
       onPointerMissed={() => onSelect(null)}
     >
-      <color attach="background" args={["#f5f4f0"]} />
+      <color attach="background" args={["#f3f5f3"]} />
       <hemisphereLight args={["#ffffff", "#b8b4a8", 1.1]} />
       <directionalLight position={[30, 50, 20]} intensity={1.2} />
       <OrbitControls makeDefault target={target} enableDamping />

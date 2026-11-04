@@ -25,7 +25,7 @@
 .tabs button[aria-selected="true"] {
   color: inherit;
   font-weight: 700;
-  border-bottom-color: #c8361d;
+  border-bottom-color: var(--accent);
 }
 
 .list {
@@ -41,6 +41,10 @@
   margin: 0;
   font-size: 12px;
   color: var(--muted);
+}
+
+.list > * {
+  flex-shrink: 0;
 }
 
 .score {
@@ -85,7 +89,7 @@
 }
 
 .cardHead[aria-expanded="true"] {
-  background: #fbf0ec;
+  background: var(--tint);
 }
 
 .title {
@@ -104,33 +108,36 @@
   color: #fff;
 }
 
+/* 重要度は朱書きの赤・青と混ざらないように、濃淡で分ける */
 .high {
-  background: #c8361d;
+  background: var(--ink);
 }
 
 .middle {
-  background: #c77a12;
+  background: #6f7a75;
 }
 
 .low {
-  background: #77756d;
+  background: #fff;
+  color: var(--muted);
+  box-shadow: inset 0 0 0 1.5px var(--line-strong);
 }
 
 .unconfirmed {
   background: #fff;
-  color: #2b5f9e;
-  box-shadow: inset 0 0 0 1.5px #2b5f9e;
+  color: var(--accent);
+  box-shadow: inset 0 0 0 1.5px var(--accent);
 }
 
 .layerToggles {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
-  gap: 4px 12px;
+  gap: 4px 14px;
   margin: 0;
   padding: 0;
   border: 0;
-  font-size: 12px;
+  font-size: 13px;
 }
 
 .layerToggles legend {
@@ -143,42 +150,58 @@
 .layerToggles label {
   display: inline-flex;
   align-items: center;
-  gap: 4px;
+  gap: 5px;
   white-space: nowrap;
   cursor: pointer;
 }
 
-.openPage {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 6px;
+.layerToggles label[data-color="赤"] {
+  --layer: var(--red);
+}
+
+.layerToggles label[data-color="青"] {
+  --layer: var(--blue);
+}
+
+.layerToggles input {
+  width: 15px;
+  height: 15px;
+  margin: 0;
+  accent-color: var(--layer);
+}
+
+.layerToggles label b {
+  color: var(--layer);
+}
+
+.swatch {
+  width: 14px;
+  height: 14px;
+  border: 2px solid var(--layer);
+  border-radius: 2px;
 }
 
 .knowledge {
-  background: #0d4dcc;
+  background: var(--blue);
   color: #fff;
 }
 
-.checklist {
-  font-size: 12px;
-}
-
-.checklist summary {
-  cursor: pointer;
-  font-weight: 600;
-}
-
-.checklist ul {
-  margin: 6px 0 0;
+.rows {
+  margin: 0;
   padding: 0;
+  font-size: 12px;
   list-style: none;
 }
 
-.checklist li {
+.rows li {
   display: grid;
   gap: 2px;
   padding: 6px 0;
-  border-top: 1px solid #e3e3e3;
+  border-top: 1px solid var(--line);
+}
+
+.rows small {
+  color: var(--muted);
 }
 
 .planted {
@@ -201,8 +224,9 @@
 
 .notice {
   padding: 6px 8px;
-  border-left: 3px solid #2b5f9e;
-  background: #eef3f9;
+  margin: 0;
+  border-left: 3px solid var(--accent);
+  background: var(--tint);
   font-size: 12px;
 }
 
@@ -330,10 +354,10 @@
 .openSheet {
   margin-top: 8px;
   padding: 5px 10px;
-  border: 1px solid #c8361d;
+  border: 1px solid var(--accent);
   border-radius: 4px;
   background: #fff;
-  color: #c8361d;
+  color: var(--accent);
   font-size: 12px;
   cursor: pointer;
 }
@@ -348,69 +372,12 @@
   display: block;
   margin-bottom: 8px;
   padding: 5px 10px;
-  border: 1px solid #c8361d;
+  border: 1px solid var(--accent);
   border-radius: 4px;
-  background: #c8361d;
+  background: var(--accent);
   color: #fff;
   font-size: 12px;
   cursor: pointer;
-}
-
-.upload h3 {
-  margin: 0 0 8px;
-  font-size: 14px;
-}
-
-.upload input[type="file"] {
-  display: block;
-  margin: 8px 0;
-  font-size: 12px;
-}
-
-.upload button:disabled {
-  opacity: 0.5;
-  cursor: default;
-}
-
-.uploadError {
-  color: #c8361d;
-  font-size: 13px;
-}
-
-.progress {
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-  margin: 10px 0;
-  padding: 10px;
-  border: 1px solid var(--line);
-  border-radius: 4px;
-  font-size: 13px;
-}
-
-.bar {
-  height: 6px;
-  border-radius: 3px;
-  background: #e5e2d9;
-  overflow: hidden;
-}
-
-.bar div {
-  height: 100%;
-  background: #c8361d;
-  transition: width 0.3s;
-}
-
-.download {
-  display: inline-block;
-  margin-bottom: 8px;
-  padding: 8px 14px;
-  border-radius: 4px;
-  background: #c8361d;
-  color: #fff;
-  font-size: 13px;
-  font-weight: 600;
-  text-decoration: none;
 }
 
 .number {
@@ -418,9 +385,14 @@
   min-width: 20px;
   padding: 1px 4px;
   border-radius: 3px;
-  background: #c8361d;
+  background: var(--red);
   color: #fff;
   font-size: 12px;
   font-weight: 700;
   text-align: center;
+}
+
+/* 朱書きの番号と同じ色にする */
+.number[data-source="knowledge"] {
+  background: var(--blue);
 }

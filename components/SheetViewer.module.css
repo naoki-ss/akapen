@@ -55,12 +55,25 @@
 
 .scroller {
   flex: 1;
+  min-height: 0;
   overflow: auto;
-  background: #eee;
+  background: var(--tint);
+  /* 図面を枠の中に収めるために、枠の大きさを基準にする */
+  container-type: size;
+  display: flex;
 }
 
 .page {
   position: relative;
+  flex: none;
+  margin: auto;
+  background: #fff;
+}
+
+.mark {
+  position: absolute;
+  border: 2px solid var(--red);
+  pointer-events: none;
 }
 
 .page img {
@@ -77,9 +90,10 @@
 
 .frame {
   position: absolute;
-  border: 3px solid #c8361d;
+  /* 朱書きの赤・青と区別できるように、確認中の範囲は深緑で囲む */
+  border: 3px solid var(--accent);
   border-radius: 3px;
-  box-shadow: 0 0 0 2px rgb(255 255 255 / 70%);
+  box-shadow: 0 0 0 2px rgb(255 255 255 / 85%);
   pointer-events: none;
 }
 
@@ -92,6 +106,7 @@
 }
 
 .compare {
+  container-type: normal;
   display: grid;
   grid-template-columns: 1fr 1fr;
   align-items: start;

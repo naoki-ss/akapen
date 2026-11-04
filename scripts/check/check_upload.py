@@ -506,7 +506,7 @@ def main():
         source.close()
         if not 1 <= page_count <= MAX_PAGES:
             raise ValueError(f"ページ数は {MAX_PAGES} ページまでです（{page_count} ページ）")
-        job.update(pages_total=page_count, stage="確認中", message=f"判定を始めます（全 {page_count} ページ）")
+        job.update(pages_total=page_count, stage="確認中", message=f"チェックを始めます（全 {page_count} ページ）")
 
         load_env()
         if not os.environ.get("ANTHROPIC_API_KEY"):

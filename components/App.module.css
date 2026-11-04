@@ -1,0 +1,636 @@
+.root {
+  height: 100vh;
+  display: flex;
+  background: var(--bg);
+}
+
+/* 左の工程 */
+.rail {
+  width: 160px;
+  flex: none;
+  display: flex;
+  flex-direction: column;
+  gap: 22px;
+  padding: 16px 12px;
+  background: var(--tint);
+  border-right: 1px solid var(--line);
+}
+
+.logo {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 0 4px;
+  border: 0;
+  background: none;
+  color: var(--ink);
+  font-size: 21px;
+  font-weight: 800;
+  letter-spacing: 0.06em;
+  cursor: pointer;
+}
+
+.steps {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.steps button {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 4px;
+  border: 0;
+  border-radius: 6px;
+  background: none;
+  color: var(--muted);
+  font-size: 13px;
+  text-align: left;
+  cursor: pointer;
+}
+
+.steps button:disabled {
+  cursor: default;
+}
+
+.steps button:not(:disabled):hover {
+  background: var(--tint-strong);
+}
+
+.steps i {
+  flex: none;
+  width: 24px;
+  height: 24px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: 2px solid var(--line-strong);
+  border-radius: 50%;
+  font-size: 12px;
+  font-style: normal;
+  font-weight: 700;
+}
+
+.steps button[data-state="active"] {
+  color: var(--accent);
+  font-weight: 800;
+}
+
+.steps button[data-state="active"] i {
+  border-color: var(--accent);
+  background: var(--accent);
+  color: #fff;
+}
+
+.steps button[data-state="done"] i {
+  border-color: var(--tint-strong);
+  background: var(--tint-strong);
+  color: var(--accent);
+}
+
+.railProject {
+  margin-top: auto;
+  padding: 0 4px;
+  font-size: 12px;
+  line-height: 1.5;
+  overflow-wrap: anywhere;
+}
+
+.railProject small {
+  display: block;
+  color: var(--muted);
+  font-size: 11px;
+}
+
+/* 共通の部品 */
+.primary,
+.primarySmall {
+  border: 0;
+  border-radius: 6px;
+  background: var(--accent);
+  color: #fff;
+  font-weight: 700;
+  text-decoration: none;
+  cursor: pointer;
+}
+
+.primary {
+  padding: 12px 30px;
+  font-size: 16px;
+}
+
+.primarySmall {
+  padding: 6px 12px;
+  font-size: 13px;
+  white-space: nowrap;
+}
+
+.primary:hover,
+.primarySmall:hover {
+  background: var(--accent-dark);
+}
+
+.secondary {
+  padding: 5px 10px;
+  border: 1px solid var(--line-strong);
+  border-radius: 6px;
+  background: var(--panel);
+  color: var(--ink);
+  font-size: 13px;
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.secondary:hover:not(:disabled) {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+.secondary:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+.fine {
+  margin: 0;
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.error {
+  margin: 0;
+  color: var(--ink);
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.error::before {
+  content: "！ ";
+}
+
+/* 最初の画面 */
+.start {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  padding: 28px 64px;
+  overflow-y: auto;
+}
+
+.hero h1 {
+  margin: 0;
+  font-size: 32px;
+  font-weight: 800;
+  letter-spacing: 0.02em;
+}
+
+.hero p {
+  margin: 4px 0 0;
+  color: var(--muted);
+  font-size: 15px;
+}
+
+.startStep {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.grow {
+  flex: 1;
+  min-height: 200px;
+}
+
+.startStep h2 {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0;
+  font-size: 15px;
+  font-weight: 700;
+}
+
+.startStep h2 i {
+  width: 24px;
+  height: 24px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  background: var(--accent);
+  color: #fff;
+  font-size: 13px;
+  font-style: normal;
+}
+
+.picker {
+  max-width: 560px;
+  padding: 10px 12px;
+  border: 1px solid var(--line-strong);
+  border-radius: 6px;
+  background: var(--panel);
+  color: var(--ink);
+  font: inherit;
+  font-size: 16px;
+  font-weight: 600;
+}
+
+.drop {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  border: 2px dashed var(--line-strong);
+  border-radius: 10px;
+  background: var(--tint);
+  font-size: 18px;
+}
+
+.drop[data-over="true"] {
+  border-color: var(--accent);
+  background: var(--tint-strong);
+}
+
+.drop small {
+  color: var(--muted);
+  font-size: 13px;
+}
+
+.fileName {
+  font-size: 16px;
+  overflow-wrap: anywhere;
+}
+
+.dropActions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.dropActions .secondary {
+  padding: 12px 14px;
+}
+
+.progress {
+  width: min(460px, 80%);
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  font-size: 15px;
+  text-align: center;
+}
+
+.bar {
+  height: 8px;
+  overflow: hidden;
+  border-radius: 4px;
+  background: var(--tint-strong);
+}
+
+.bar div {
+  height: 100%;
+  background: var(--accent);
+  transition: width 0.3s;
+}
+
+.results {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.results button {
+  min-width: 260px;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 10px 14px;
+  border: 1px solid var(--line-strong);
+  border-radius: 6px;
+  background: var(--panel);
+  color: var(--ink);
+  text-align: left;
+  cursor: pointer;
+}
+
+.results button:hover {
+  border-color: var(--accent);
+}
+
+.results b {
+  font-size: 14px;
+}
+
+.results span {
+  color: var(--muted);
+  font-size: 12px;
+}
+
+/* 結果の画面 */
+.stage {
+  flex: 1;
+  min-width: 0;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 400px;
+  grid-template-rows: auto minmax(0, 1fr) minmax(0, 1fr);
+  grid-template-areas:
+    "bar bar"
+    "large list"
+    "large small";
+}
+
+.topBar {
+  grid-area: bar;
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px 18px;
+  padding: 8px 14px;
+  background: var(--panel);
+  border-bottom: 1px solid var(--line);
+}
+
+.pageTitle {
+  font-size: 15px;
+}
+
+.pageSelect {
+  padding: 4px 8px;
+  border: 1px solid var(--line-strong);
+  border-radius: 6px;
+  background: var(--panel);
+  color: var(--ink);
+  font: inherit;
+  font-size: 14px;
+  font-weight: 700;
+}
+
+.topActions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-left: auto;
+}
+
+.drawingPane,
+.modelPane,
+.listPane {
+  position: relative;
+  min-width: 0;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.listPane {
+  grid-area: list;
+  background: var(--panel);
+  border-left: 1px solid var(--line);
+  border-bottom: 1px solid var(--line);
+}
+
+.stage[data-focus="drawing"] .drawingPane,
+.stage[data-focus="model"] .modelPane {
+  grid-area: large;
+}
+
+.stage[data-focus="drawing"] .modelPane,
+.stage[data-focus="model"] .drawingPane {
+  grid-area: small;
+  border-left: 1px solid var(--line);
+}
+
+.swap {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  z-index: 2;
+  padding: 5px 10px;
+  border: 1px solid var(--line-strong);
+  border-radius: 6px;
+  background: var(--panel);
+  color: var(--ink);
+  font-size: 13px;
+  cursor: pointer;
+}
+
+.modelPane {
+  background: var(--tint);
+}
+
+.modelBar {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 4px 12px;
+  padding: 6px 10px;
+  background: var(--panel);
+  border-bottom: 1px solid var(--line);
+  font-size: 12px;
+}
+
+.modelBar b {
+  font-size: 13px;
+}
+
+.modelBar .secondary {
+  margin-left: auto;
+  padding: 3px 8px;
+  font-size: 12px;
+}
+
+.floor {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-weight: 700;
+}
+
+.floor input {
+  width: 90px;
+  accent-color: var(--accent);
+}
+
+.typeToggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.typeToggle input {
+  accent-color: var(--accent);
+}
+
+.modelView {
+  position: relative;
+  flex: 1;
+  min-height: 0;
+}
+
+.modelSource {
+  margin: 0;
+  padding: 3px 10px;
+  color: var(--muted);
+  font-size: 11px;
+}
+
+.loading {
+  margin: 16px;
+  color: var(--muted);
+  font-size: 13px;
+}
+
+.hint {
+  position: absolute;
+  right: 8px;
+  bottom: 6px;
+  padding: 2px 6px;
+  border-radius: 4px;
+  background: rgb(243 245 243 / 85%);
+  color: var(--muted);
+  font-size: 12px;
+  pointer-events: none;
+}
+
+.memberCard {
+  position: absolute;
+  left: 8px;
+  bottom: 8px;
+  width: min(300px, calc(100% - 16px));
+  max-height: calc(100% - 16px);
+  overflow-y: auto;
+  padding: 10px 12px;
+  border: 1px solid var(--line-strong);
+  border-radius: 6px;
+  background: var(--panel);
+  box-shadow: 0 2px 8px rgb(0 0 0 / 15%);
+  font-size: 12px;
+}
+
+.closeMember {
+  float: right;
+  border: 0;
+  background: none;
+  color: var(--muted);
+  font-size: 16px;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.mark {
+  font-size: 18px;
+  font-weight: 800;
+}
+
+.type {
+  margin-left: 6px;
+  padding: 1px 6px;
+  border: 1px solid var(--line-strong);
+  border-radius: 3px;
+  font-size: 11px;
+  vertical-align: middle;
+}
+
+.details {
+  display: grid;
+  grid-template-columns: 56px 1fr;
+  gap: 2px 8px;
+  margin: 6px 0;
+}
+
+.details dt {
+  color: var(--muted);
+}
+
+.details dd {
+  margin: 0;
+}
+
+.sheets h3 {
+  margin: 8px 0 4px;
+  font-size: 12px;
+}
+
+.sheets ul {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.sheets button {
+  width: 100%;
+  padding: 5px 8px;
+  border: 1px solid var(--line);
+  border-radius: 4px;
+  background: var(--panel);
+  color: var(--ink);
+  font-size: 12px;
+  text-align: left;
+  cursor: pointer;
+}
+
+.sheets button:hover {
+  border-color: var(--accent);
+}
+
+.sheets span {
+  display: block;
+  color: var(--muted);
+}
+
+/* 狭い画面では縦に並べる */
+@media (max-width: 1000px) {
+  .root {
+    flex-direction: column;
+    height: auto;
+    min-height: 100vh;
+  }
+
+  .rail {
+    width: auto;
+    flex-direction: row;
+    flex-wrap: wrap;
+    align-items: center;
+    border-right: 0;
+    border-bottom: 1px solid var(--line);
+  }
+
+  .steps {
+    flex-direction: row;
+  }
+
+  .railProject {
+    margin: 0 0 0 auto;
+  }
+
+  .start {
+    padding: 20px;
+  }
+
+  .stage {
+    display: flex;
+    flex-direction: column;
+  }
+
+  .drawingPane {
+    height: 70vh;
+  }
+
+  .listPane,
+  .modelPane {
+    height: 60vh;
+    border-left: 0;
+  }
+}
