@@ -259,7 +259,7 @@ class ListPages:
         self.count = 0
         self.columns = self.COLUMNS
 
-    def new_page(self):
+    def new_page(self, table=True):
         self.page = self.doc.new_page(width=self.WIDTH, height=self.HEIGHT)
         self.page.insert_font(fontname=FONT_NAME, fontbuffer=self.font_buffer)
         self.count += 1
@@ -274,7 +274,8 @@ class ListPages:
             x += 12 + self.font.text_length(spec["label"], fontsize=self.SIZE) + 12
         self.text((x + 6, y), NOTICE, self.SIZE, (0.3, 0.3, 0.3))
         self.y = y + 8
-        self.row([name for name, _ in self.columns], header=True)
+        if table:
+            self.row([name for name, _ in self.columns], header=True)
 
     def text(self, point, text, size, color=(0, 0, 0)):
         self.page.insert_text(point, text, fontname=FONT_NAME, fontsize=size, color=color)
@@ -346,8 +347,9 @@ def make_marked_pdf(source_path, findings, out_path, title="施工図の朱書�
     for note in notes:
         pages.y += 8
         for line in wrap(note, font, ListPages.SIZE, ListPages.WIDTH - 2 * ListPages.MARGIN):
-            if pages.y + 14 > ListPages.HEIGHT - ListPages.MARGIN:
-                pages.new_page()
+            # 注記は下の余白まで使う。1行のために表の見出しだけのページを作らない
+            if pages.y + 11 > ListPages.HEIGHT - ListPages.MARGIN / 2:
+                pages.new_page(table=False)
             pages.y += 11
             pages.text((ListPages.MARGIN, pages.y), line, ListPages.SIZE)
     if checklist:
