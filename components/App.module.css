@@ -744,3 +744,149 @@
 .thumbs button[aria-pressed="true"] i {
   background: var(--accent);
 }
+
+.registerRow {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+}
+
+.registerForm {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  max-width: 760px;
+}
+
+.formRow {
+  display: grid;
+  grid-template-columns: 180px minmax(0, 1fr);
+  align-items: center;
+  gap: 2px 12px;
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.formRow input[type="text"],
+.formRow select {
+  padding: 8px 10px;
+  border: 1px solid var(--line-strong);
+  border-radius: 6px;
+  background: #fff;
+  font-size: 14px;
+}
+
+.formRow input[type="file"] {
+  font-size: 13px;
+  font-weight: 400;
+}
+
+.formRow small {
+  grid-column: 2;
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 400;
+}
+
+.estimate {
+  margin: 0;
+  font-size: 14px;
+  line-height: 1.7;
+}
+
+.pageTable {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: #fff;
+}
+
+.pageTable table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 13px;
+}
+
+.pageTable th {
+  position: sticky;
+  top: 0;
+  padding: 6px 10px;
+  background: var(--tint);
+  text-align: left;
+}
+
+.pageTable td {
+  padding: 4px 10px;
+  border-top: 1px solid var(--line);
+  color: var(--muted);
+}
+
+.pageTable tr[data-read="true"] td {
+  color: var(--ink);
+  font-weight: 600;
+}
+
+.checks {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  font-size: 14px;
+  line-height: 1.6;
+}
+
+.checks p {
+  margin: 0;
+}
+
+.checks h3 {
+  margin: 6px 0 0;
+  font-size: 14px;
+}
+
+.checks ul {
+  max-height: 300px;
+  overflow-y: auto;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  font-size: 13px;
+}
+
+.checks li {
+  padding: 4px 0;
+  border-top: 1px solid var(--line);
+}
+
+.projectChecks {
+  position: fixed;
+  inset: 0;
+  z-index: 20;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgb(0 0 0 / 35%);
+}
+
+.projectChecks > div {
+  width: min(720px, 90vw);
+  max-height: 80vh;
+  overflow-y: auto;
+  padding: 20px 24px;
+  border-radius: 10px;
+  background: var(--panel);
+}
+
+.noModel {
+  display: flex;
+  flex: 1;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+  color: var(--muted);
+  font-size: 14px;
+  line-height: 1.8;
+  text-align: center;
+}

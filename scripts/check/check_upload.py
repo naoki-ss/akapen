@@ -346,11 +346,12 @@ def run_pages(job, numbers, work):
 
 def member_refs(item, classified, slug):
     """3Dで強調する部材。階は図面の種類から、部材は符号と通りから決める"""
-    model_path = REPO / "demo-data" / slug / "model.json"
+    project = load_project(slug)
+    # 画面から登録した物件の3Dはリポジトリの外にある
+    model_path = Path(project["model"]) if project.get("model") else REPO / "demo-data" / slug / "model.json"
     if not model_path.exists():
         return [], None
     model = json.loads(model_path.read_text())
-    project = load_project(slug)
     floor = project.get("floor_by_level", {}).get(item.get("floor_level")) or project.get("default_floor")
     # 軸組図の指摘は、図の通りを手がかりにする
     tokens = set(re.findall(r"[XY]\d", " ".join(item["grids"])))

@@ -141,6 +141,14 @@ def build(reads, doc_of):
             value = text_value if text_value is not None else ai_value
             if status in ("不一致", "読めず"):
                 check("通り芯の寸法", f"{pair[0]}〜{pair[1]}：文字 {text_value}、AI {ai_value}", [pair[0], pair[1]])
+            # 多数決で隠れないように、ページで読みが違うときも出す
+            for name, values in (("AIの読み", ai_values[pair]), ("図面の文字", text_values[pair])):
+                by_value = defaultdict(set)
+                for value, refs in values:
+                    by_value[value].add(refs["page"])
+                if len(by_value) > 1:
+                    detail = "、".join(f"{value}（p.{'、'.join(str(n) for n in sorted(pages))}）" for value, pages in sorted(by_value.items()))
+                    check("通り芯の寸法", f"{pair[0]}〜{pair[1]}：{name}がページで違います。{detail}", [pair[0], pair[1]])
             span_rows.append({"axis": axis, "from": pair[0], "to": pair[1], "mm": value, "text": text_value, "ai": ai_value, "status": status})
 
     positions_mm = {}
@@ -194,7 +202,7 @@ def build(reads, doc_of):
         story = count.most_common(1)[0][0] if count else None
         status = "一致" if story in frame_numbers else "AIのみ"
         if count and len(count) > 1:
-            check("階高", f"{name} の階高が通りで違います：{dict(count)}")
+            check("階高", f"{name} の階高が通りで違います：" + "、".join(f"{value}（{times} 図）" for value, times in count.most_common()))
         level_rows.append({"name": name, "story_mm": story, "elevation_mm": elevation, "status": status if story is not None else "最上階"})
         if story is None and name != order[-1]:
             check("階高", f"{name} の階高を読めませんでした")
@@ -235,6 +243,16 @@ def build(reads, doc_of):
         if len(counts) > 1:
             check("柱の符号", f"{floor} {x}-{y}：図によって符号が違います（{dict(counts)}）", [x, y])
         column_rows.append({"mark": mark, "floor": floor, "x": x, "y": y, "status": "一致" if len(votes) > 1 and len(counts) == 1 else "1つの図のみ"})
+
+    # 柱：軸組図の柱の符号が、伏図の文字にもあるか。伏図は上下の階の柱を書くことがあるので、その階と1つ上の階の図を見る
+    floor_order = [row["name"] for row in level_rows]
+    for row in column_rows:
+        index = floor_order.index(row["floor"]) if row["floor"] in floor_order else -1
+        nearby = floor_order[index:index + 2] if index >= 0 else []
+        views = [view for view in plans if set(view["reply"]["floors"]) & set(nearby)]
+        if views and not any(column_mark_near(view["words"], row) for view in views):
+            row["status"] = "軸組図のみ"
+            check("柱", f"{row['floor']} {row['x']}-{row['y']} の {row['mark']}：軸組図にありますが、伏図にこの符号の文字がありません", [row["x"], row["y"]])
 
     # 梁：伏図を元にし、軸組図と比べる。文字の場所でも確かめる
     beam_rows = {}
@@ -309,6 +327,14 @@ def build(reads, doc_of):
         "checks": checks,
         "model_status": None,
     }
+
+
+def column_mark_near(words, row):
+    positions = grid_positions(words)
+    if row["x"] not in positions or row["y"] not in positions:
+        return False
+    return any(w[4] == row["mark"] and abs((w[0] + w[2]) / 2 - positions[row["x"]]) <= MARK_NEAR_COLUMN
+               and abs((w[1] + w[3]) / 2 - positions[row["y"]]) <= MARK_NEAR_COLUMN for w in words)
 
 
 def apply_slopes(frames, beams, positions_mm, check):

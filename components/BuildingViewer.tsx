@@ -1,7 +1,13 @@
 "use client";
 
 import dynamic from "next/dynamic";
-import { useCallback, useMemo, useState, type ReactNode } from "react";
+import {
+  useCallback,
+  useEffect,
+  useMemo,
+  useState,
+  type ReactNode,
+} from "react";
 import type {
   CheckResult,
   EvalReport,
@@ -20,6 +26,7 @@ import {
 import { useUploadJob, type JobSummary } from "@/lib/useUploadJob";
 import CheckPanel from "./CheckPanel";
 import LayerToggles from "./LayerToggles";
+import RegisterView, { ChecksList, type ProjectSummary } from "./RegisterView";
 import SheetCanvas from "./SheetCanvas";
 import SheetViewer from "./SheetViewer";
 import StartView from "./StartView";
@@ -65,6 +72,26 @@ export type Building = {
   model: BuildingModel;
   check?: BuildingCheck;
   sheets?: SheetIndex;
+  // 画面から登録した物件の検算の結果
+  summary?: ProjectSummary | null;
+};
+
+// 3Dを作れなかった物件。施工図チェックだけを使う
+const emptyModel = (name: string): BuildingModel => ({
+  name,
+  source: "",
+  grid_x: {},
+  grid_y: {},
+  levels: {},
+  floors: ["1F"],
+  members: [],
+});
+
+type RegisteredProject = {
+  slug: string;
+  name: string;
+  model: BuildingModel | null;
+  summary: ProjectSummary | null;
 };
 
 function MemberSheets({
@@ -192,8 +219,39 @@ export default function BuildingViewer({
 }: {
   buildings: Building[];
 }) {
+  const [registered, setRegistered] = useState<RegisteredProject[]>([]);
+  const [maskChoices, setMaskChoices] = useState<
+    { slug: string; name: string }[]
+  >([]);
+  const [enabled, setEnabled] = useState(false);
+
+  const loadProjects = useCallback(async () => {
+    const response = await fetch("/api/projects");
+    if (!response.ok) return;
+    const body = await response.json();
+    setRegistered(body.projects);
+    setMaskChoices(body.maskChoices);
+    setEnabled(body.enabled);
+  }, []);
+
+  useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- 登録した物件はサーバーから読むまで分からない
+    void loadProjects();
+  }, [loadProjects]);
+
+  const all: Building[] = [
+    ...buildings,
+    ...registered.map((project) => ({
+      slug: project.slug,
+      model: project.model
+        ? { ...project.model, name: project.name }
+        : emptyModel(project.name),
+      summary: project.summary,
+    })),
+  ];
   const [name, setName] = useState(buildings[0].model.name);
-  const building = buildings.find((b) => b.model.name === name) ?? buildings[0];
+  const [registering, setRegistering] = useState(false);
+  const building = all.find((b) => b.model.name === name) ?? all[0];
 
   const picker = (
     <select
@@ -202,7 +260,7 @@ export default function BuildingViewer({
       value={building.model.name}
       onChange={(e) => setName(e.target.value)}
     >
-      {buildings.map((b) => (
+      {all.map((b) => (
         <option key={b.model.name} value={b.model.name}>
           {b.model.name}
         </option>
@@ -210,9 +268,41 @@ export default function BuildingViewer({
     </select>
   );
 
+  if (registering) {
+    return (
+      <div className={styles.root}>
+        <nav className={styles.rail}>
+          <button className={styles.logo} onClick={() => setRegistering(false)}>
+            <PenLogo />
+            アカペン
+          </button>
+        </nav>
+        <RegisterView
+          maskChoices={maskChoices.map((choice) => ({
+            ...choice,
+            name:
+              all.find((b) => b.slug === choice.slug)?.model.name ??
+              choice.name,
+          }))}
+          onCancel={() => setRegistering(false)}
+          onDone={async (registeredName) => {
+            await loadProjects();
+            setName(registeredName);
+            setRegistering(false);
+          }}
+        />
+      </div>
+    );
+  }
+
   // 物件を切り替えたら、表示の状態とカメラを最初からにする
   return (
-    <BuildingView key={building.model.name} {...building} picker={picker} />
+    <BuildingView
+      key={building.model.name}
+      {...building}
+      picker={picker}
+      onRegister={enabled ? () => setRegistering(true) : undefined}
+    />
   );
 }
 
@@ -223,9 +313,13 @@ function BuildingView({
   model,
   check,
   sheets,
+  summary,
   picker,
-}: Building & { picker: ReactNode }) {
+  onRegister,
+}: Building & { picker: ReactNode; onRegister?: () => void }) {
   const savedBase = `/demo-data/${slug}`;
+  const hasModel = model.members.length > 0;
+  const [showChecks, setShowChecks] = useState(false);
   const [screen, setScreen] = useState<Screen>("start");
   const showUploaded = useCallback(() => setScreen("upload"), []);
   const job = useUploadJob(slug, showUploaded);
@@ -433,7 +527,23 @@ function BuildingView({
       </nav>
 
       {!inResult || !currentSheet ? (
-        <StartView picker={picker} job={job} results={results} />
+        <StartView
+          picker={picker}
+          job={job}
+          results={results}
+          onRegister={onRegister}
+          projectNote={
+            summary && (
+              <button
+                className={styles.secondary}
+                onClick={() => setShowChecks(true)}
+              >
+                {hasModel ? "3D あり" : "3D なし"}・要確認{" "}
+                {summary.checks.filter((c) => c.result === "要確認").length} 件
+              </button>
+            )
+          }
+        />
       ) : (
         <main className={styles.stage} data-focus={focus}>
           <div className={styles.topBar}>
@@ -555,76 +665,106 @@ function BuildingView({
               </section>
 
               <section className={styles.modelPane} aria-label="3Dモデル">
-                <div className={styles.modelBar}>
-                  <b>3Dモデル</b>
-                  <label className={styles.floor}>
-                    {floors[topFloorIndex]}
-                    <input
-                      type="range"
-                      aria-label="表示する階"
-                      min={0}
-                      max={floors.length - 1}
-                      value={topFloorIndex}
-                      onChange={(e) => changeTopFloor(Number(e.target.value))}
-                    />
-                  </label>
-                  {TOGGLEABLE.filter((type) =>
-                    model.members.some((m) => m.type === type),
-                  ).map((type) => (
-                    <label key={type} className={styles.typeToggle}>
-                      <input
-                        type="checkbox"
-                        checked={!hiddenTypes.has(type)}
-                        onChange={(e) => toggleType(type, e.target.checked)}
-                      />
-                      {TYPE_LABELS[type]}
-                    </label>
-                  ))}
-                  {focus === "drawing" && (
-                    <button
-                      className={styles.secondary}
-                      onClick={() => setFocus("model")}
-                    >
-                      3Dを大きく
-                    </button>
-                  )}
-                </div>
-                <div className={styles.modelView}>
-                  <BuildingScene
-                    model={model}
-                    topFloorIndex={topFloorIndex}
-                    hiddenTypes={hiddenTypes}
-                    selected={selected}
-                    highlighted={highlighted}
-                    onSelect={setSelected}
-                  />
-                  {selected ? (
-                    <div className={styles.memberCard}>
-                      <button
-                        className={styles.closeMember}
-                        aria-label="部材の情報を閉じる"
-                        onClick={() => setSelected(null)}
-                      >
-                        ×
-                      </button>
-                      <MemberInfo member={selected} />
-                      <MemberSheets
-                        member={selected}
-                        index={sheets}
-                        onOpen={showSheet}
-                      />
+                {!hasModel ? (
+                  <div className={styles.noModel}>
+                    この物件は3Dなしで登録しています。
+                    <br />
+                    施工図チェックは使えます。
+                  </div>
+                ) : (
+                  <>
+                    <div className={styles.modelBar}>
+                      <b>3Dモデル</b>
+                      <label className={styles.floor}>
+                        {floors[topFloorIndex]}
+                        <input
+                          type="range"
+                          aria-label="表示する階"
+                          min={0}
+                          max={floors.length - 1}
+                          value={topFloorIndex}
+                          onChange={(e) =>
+                            changeTopFloor(Number(e.target.value))
+                          }
+                        />
+                      </label>
+                      {TOGGLEABLE.filter((type) =>
+                        model.members.some((m) => m.type === type),
+                      ).map((type) => (
+                        <label key={type} className={styles.typeToggle}>
+                          <input
+                            type="checkbox"
+                            checked={!hiddenTypes.has(type)}
+                            onChange={(e) => toggleType(type, e.target.checked)}
+                          />
+                          {TYPE_LABELS[type]}
+                        </label>
+                      ))}
+                      {focus === "drawing" && (
+                        <button
+                          className={styles.secondary}
+                          onClick={() => setFocus("model")}
+                        >
+                          3Dを大きく
+                        </button>
+                      )}
                     </div>
-                  ) : (
-                    <div className={styles.hint}>
-                      ドラッグで回転・ホイールで拡大・部材をクリック
+                    <div className={styles.modelView}>
+                      <BuildingScene
+                        model={model}
+                        topFloorIndex={topFloorIndex}
+                        hiddenTypes={hiddenTypes}
+                        selected={selected}
+                        highlighted={highlighted}
+                        onSelect={setSelected}
+                      />
+                      {selected ? (
+                        <div className={styles.memberCard}>
+                          <button
+                            className={styles.closeMember}
+                            aria-label="部材の情報を閉じる"
+                            onClick={() => setSelected(null)}
+                          >
+                            ×
+                          </button>
+                          <MemberInfo member={selected} />
+                          <MemberSheets
+                            member={selected}
+                            index={sheets}
+                            onOpen={showSheet}
+                          />
+                        </div>
+                      ) : (
+                        <div className={styles.hint}>
+                          ドラッグで回転・ホイールで拡大・部材をクリック
+                        </div>
+                      )}
                     </div>
-                  )}
-                </div>
-                <p className={styles.modelSource}>{model.source}</p>
+                    <p className={styles.modelSource}>{model.source}</p>
+                  </>
+                )}
               </section>
             </>
           )}
         </main>
+      )}
+      {showChecks && summary && (
+        <div
+          className={styles.projectChecks}
+          role="dialog"
+          aria-label="検算の結果"
+          onClick={() => setShowChecks(false)}
+        >
+          <div onClick={(e) => e.stopPropagation()}>
+            <ChecksList summary={summary} />
+            <button
+              className={styles.secondary}
+              onClick={() => setShowChecks(false)}
+            >
+              閉じる
+            </button>
+          </div>
+        </div>
       )}
       {openSheet && (
         <SheetViewer

@@ -86,8 +86,12 @@ export default function StartView({
   picker,
   job,
   results,
+  onRegister,
+  projectNote,
 }: {
   picker: ReactNode;
+  onRegister?: () => void;
+  projectNote?: ReactNode;
   job: ReturnType<typeof useUploadJob>;
   results: { key: string; title: string; detail: string; onOpen: () => void }[];
 }) {
@@ -120,7 +124,15 @@ export default function StartView({
         <h2>
           <i>1</i>物件を選ぶ
         </h2>
-        {picker}
+        <div className={styles.registerRow}>
+          {picker}
+          {onRegister && (
+            <button className={styles.secondary} onClick={onRegister}>
+              ＋ 新しい物件を登録
+            </button>
+          )}
+          {projectNote}
+        </div>
       </section>
 
       <section className={`${styles.startStep} ${styles.grow}`}>
