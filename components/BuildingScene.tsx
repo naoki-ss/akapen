@@ -1,8 +1,14 @@
 "use client";
 
-import { Html, Line, OrbitControls } from "@react-three/drei";
+import { Line, OrbitControls } from "@react-three/drei";
 import { Canvas, useFrame, useThree, type ThreeEvent } from "@react-three/fiber";
-import { useEffect, useMemo, useRef, type CSSProperties } from "react";
+import {
+  useEffect,
+  useMemo,
+  useRef,
+  type CSSProperties,
+  type RefObject,
+} from "react";
 import {
   CanvasTexture,
   type DirectionalLight,
@@ -525,18 +531,35 @@ function spreadLabels(rooms: ArchRoom[]) {
 const floorIndexOf = (floors: string[], name: string) =>
   floors.indexOf(name === "PH" ? "RF" : name);
 
+// 部屋名を出す階（表示している一番上の階）
+function labeledFloor(
+  architecture: Architecture,
+  floors: string[],
+  topFloorIndex: number,
+) {
+  return architecture.floors
+    .filter(
+      (floor) =>
+        floor.floor !== "PH" &&
+        floor.rooms.length > 0 &&
+        floorIndexOf(floors, floor.floor) <= topFloorIndex,
+    )
+    .reduce<ArchFloor | null>(
+      (top, floor) => (!top || floor.z0 > top.z0 ? floor : top),
+      null,
+    );
+}
+
 function Exterior({
   architecture,
   floors,
   topFloorIndex,
   display,
-  showRooms,
 }: {
   architecture: Architecture;
   floors: string[];
   topFloorIndex: number;
   display: Display;
-  showRooms: boolean;
 }) {
   const ghost = display === "xray";
   const visible = architecture.floors.filter(
@@ -544,13 +567,7 @@ function Exterior({
   );
   const everything = topFloorIndex >= floors.length - 1;
   const roofOn = everything && display === "normal";
-  const mainFloors = visible.filter((floor) => floor.floor !== "PH");
-  const topMain = mainFloors.reduce<ArchFloor | null>(
-    (top, floor) =>
-      floor.rooms.length > 0 && (!top || floor.z0 > top.z0) ? floor : top,
-    null,
-  );
-  const labels = topMain ? spreadLabels(topMain.rooms) : [];
+  const topMain = labeledFloor(architecture, floors, topFloorIndex);
   return (
     <group>
       {visible
@@ -572,29 +589,31 @@ function Exterior({
             color={ROOF}
           />
         ))}
-      {showRooms &&
-        !roofOn &&
-        !ghost &&
-        topMain &&
-        labels.map((room) => (
-          <Html
-            key={room.name}
-            position={toScene(room.x, room.y, topMain.z0 + 300)}
-            center
-            zIndexRange={[1, 0]}
-            pointerEvents="none"
-          >
-            <div className={styles.room} data-status={room.status}>
-              {room.name}
-              {room.area_m2 !== null && (
-                <small className="mono">{room.area_m2}㎡</small>
-              )}
-              {room.status === "要確認" && <small>要確認</small>}
-            </div>
-          </Html>
-        ))}
     </group>
   );
+}
+
+// 3Dの位置を画面の位置に写し、部屋名や吹き出しを動かす（カメラが動いても部材からずれない）
+function Projector({
+  points,
+  nodes,
+}: {
+  points: Vec3[];
+  nodes: RefObject<(HTMLDivElement | null)[]>;
+}) {
+  const vector = useMemo(() => new Vector3(), []);
+  useFrame(({ camera, size }) => {
+    points.forEach((point, index) => {
+      const node = nodes.current[index];
+      if (!node) return;
+      vector.set(...point).project(camera);
+      const x = ((vector.x + 1) / 2) * size.width;
+      const y = ((1 - vector.y) / 2) * size.height;
+      node.style.transform = `translate(${x}px, ${y}px)`;
+      node.style.visibility = vector.z < 1 ? "visible" : "hidden";
+    });
+  });
+  return null;
 }
 
 // 太陽の光と影。sun がなければ、見やすさのための固定の光にする
@@ -731,7 +750,40 @@ export default function BuildingScene({
   const groundY = frame.groundLevel * MM;
   const start = useMemo(() => viewPosition("oblique", frame), [frame]);
 
+  // 丸は光らせた部材のうち、まとまりの中心に一番近いものの中心に置く（部材のないところを指さない）
+  const marker = useMemo(() => {
+    if (!focus) return null;
+    const lit = model.members.filter((m) => highlighted.has(memberKey(m)));
+    const centers = lit.map((m) => shapeOf(m).position);
+    const distance = (p: Vec3) =>
+      Math.hypot(
+        p[0] - focus.center[0],
+        p[1] - focus.center[1],
+        p[2] - focus.center[2],
+      );
+    return centers.reduce((best, p) =>
+      distance(p) < distance(best) ? p : best,
+    );
+  }, [model, highlighted, focus]);
+
+  const topLabeled = model.architecture
+    ? labeledFloor(model.architecture, floors, topFloorIndex)
+    : null;
+  const roofOff = display !== "normal" || topFloorIndex < floors.length - 1;
+  const roomLabels =
+    showRooms && roofOff && display !== "xray" && topLabeled
+      ? spreadLabels(topLabeled.rooms)
+      : [];
+  const labelPoints: Vec3[] = [
+    ...roomLabels.map((room) =>
+      toScene(room.x, room.y, (topLabeled?.z0 ?? 0) + 300),
+    ),
+    ...(callout && marker ? [marker] : []),
+  ];
+  const labelNodes = useRef<(HTMLDivElement | null)[]>([]);
+
   return (
+    <div className={styles.stage}>
     <Canvas
       shadows
       camera={{ fov: 40, near: 0.1, far: 2000, position: start }}
@@ -777,11 +829,35 @@ export default function BuildingScene({
           floors={floors}
           topFloorIndex={topFloorIndex}
           display={display}
-          showRooms={showRooms}
         />
       )}
-      {callout && focus && (
-        <Html position={focus.center} center zIndexRange={[1, 0]} pointerEvents="none">
+      <Projector points={labelPoints} nodes={labelNodes} />
+    </Canvas>
+    <div className={styles.overlay}>
+      {roomLabels.map((room, index) => (
+        <div
+          key={room.name}
+          ref={(node) => {
+            labelNodes.current[index] = node;
+          }}
+          className={styles.anchor}
+        >
+          <div className={styles.room} data-status={room.status}>
+            {room.name}
+            {room.area_m2 !== null && (
+              <small className="mono">{room.area_m2}㎡</small>
+            )}
+            {room.status === "要確認" && <small>要確認</small>}
+          </div>
+        </div>
+      ))}
+      {callout && marker && (
+        <div
+          ref={(node) => {
+            labelNodes.current[roomLabels.length] = node;
+          }}
+          className={styles.anchor}
+        >
           <div
             className={styles.callout}
             style={{ "--callout": callout.color } as CSSProperties}
@@ -792,8 +868,9 @@ export default function BuildingScene({
               {callout.title}
             </span>
           </div>
-        </Html>
+        </div>
       )}
-    </Canvas>
+    </div>
+    </div>
   );
 }

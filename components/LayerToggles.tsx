@@ -3,14 +3,13 @@
 import { ALL_LAYERS, LAYER_LABELS, type LayerKey } from "@/lib/sheets";
 import styles from "./check/check.module.css";
 
-const COLOR_NAME: Record<LayerKey, string> = {
-  design: "赤",
-  minutes: "赤",
-  knowledge: "青",
+const COLOR: Record<LayerKey, string> = {
+  design: "red",
+  minutes: "red",
+  knowledge: "blue",
 };
 
-// 赤（設計図書・議事録）と青（ナレッジ）の凡例と、種類ごとの表示の切り替え。
-// onToggle がないときは凡例だけを出す。counts にある種類だけを出し、値が数のときは件数も出す
+// 凡例を兼ねた小さな印。押すとその種類の朱書きを消す。指摘のない種類は出さない
 export default function LayerToggles({
   counts,
   visible,
@@ -18,32 +17,36 @@ export default function LayerToggles({
   noKnowledge,
 }: {
   counts: Partial<Record<LayerKey, number | null>>;
-  // チェックリストがなく、青の照合をしていない結果
-  noKnowledge?: boolean;
   visible: ReadonlySet<LayerKey>;
   onToggle?: (key: LayerKey) => void;
+  // チェックリストがなく、青の照合をしていない結果
+  noKnowledge?: boolean;
 }) {
   return (
-    <fieldset className={styles.layerToggles}>
-      <legend>朱書きの表示</legend>
-      {ALL_LAYERS.filter((key) => key in counts).map((key) => (
-        <label key={key} data-color={COLOR_NAME[key]}>
-          {onToggle ? (
-            <input
-              type="checkbox"
-              checked={visible.has(key)}
-              onChange={() => onToggle(key)}
-            />
-          ) : (
-            <i className={styles.swatch} aria-hidden />
-          )}
-          <b>{COLOR_NAME[key]}</b>
-          {LAYER_LABELS[key]}
-          {key === "knowledge" && noKnowledge
-            ? " 該当なし"
-            : typeof counts[key] === "number" && ` ${counts[key]}`}
-        </label>
-      ))}
-    </fieldset>
+    <div className={styles.legend} role="group" aria-label="朱書きの種類">
+      {ALL_LAYERS.filter((key) => key in counts && counts[key] !== 0).map(
+        (key) => (
+          <button
+            key={key}
+            data-color={COLOR[key]}
+            aria-pressed={visible.has(key)}
+            title={`${LAYER_LABELS[key]}の朱書きを${visible.has(key) ? "消す" : "出す"}`}
+            onClick={() => onToggle?.(key)}
+          >
+            <i aria-hidden />
+            {LAYER_LABELS[key]}
+            {typeof counts[key] === "number" && (
+              <span className="mono">{counts[key]}</span>
+            )}
+          </button>
+        ),
+      )}
+      {noKnowledge && (
+        <span className={styles.legendNone} data-color="blue">
+          <i aria-hidden />
+          ナレッジ 該当なし
+        </span>
+      )}
+    </div>
   );
 }

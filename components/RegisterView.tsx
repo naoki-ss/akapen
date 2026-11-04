@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import type { ProjectSummary } from "@/lib/buildings";
 import { PREFECTURES } from "@/lib/prefectures";
+import Hint from "./Hint";
 import styles from "./App.module.css";
 import reg from "./screens/register.module.css";
 
@@ -300,27 +301,17 @@ export default function RegisterView({
   return (
     <div className={reg.layout}>
       <div className={reg.main}>
-        <h1>新しいプロジェクトを登録</h1>
+        <h1>新しい現場をつくる</h1>
+        <Hint id="new" text="名前を入れて図面のPDFを置くと、読むページと目安が出ます。" />
         <section className={reg.section}>
-          <h2>基本情報</h2>
           <fieldset disabled={locked} className={reg.fields}>
-            <label className={reg.wide}>
+            <label>
               <span>名前</span>
               <input
                 type="text"
                 maxLength={60}
                 value={info.name}
                 onChange={(e) => setInfo({ ...info, name: e.target.value })}
-              />
-            </label>
-            <label>
-              <span>用途</span>
-              <input
-                type="text"
-                maxLength={40}
-                placeholder="事務所、共同住宅など"
-                value={info.use}
-                onChange={(e) => setInfo({ ...info, use: e.target.value })}
               />
             </label>
             <label>
@@ -332,6 +323,19 @@ export default function RegisterView({
                 <option>S造</option>
                 <option>RC造</option>
               </select>
+            </label>
+            <details className={reg.more}>
+              <summary>くわしい設定（用途、建設地、建物の向き、名前の塗りつぶし）</summary>
+              <div className={reg.moreFields}>
+            <label>
+              <span>用途</span>
+              <input
+                type="text"
+                maxLength={40}
+                placeholder="事務所、共同住宅など"
+                value={info.use}
+                onChange={(e) => setInfo({ ...info, use: e.target.value })}
+              />
             </label>
             <label>
               <span>建設地（日当たりの計算に使います）</span>
@@ -372,6 +376,8 @@ export default function RegisterView({
                 ))}
               </select>
             </label>
+              </div>
+            </details>
           </fieldset>
         </section>
 
@@ -469,7 +475,7 @@ export default function RegisterView({
                 disabled={sending}
                 onClick={start}
               >
-                登録して3Dモデルをつくる
+                この内容で3Dをつくる
               </button>
               <button className={styles.secondary} onClick={reset}>
                 戻る
@@ -497,7 +503,7 @@ export default function RegisterView({
           )}
           {done && slug && (
             <button className={styles.primary} onClick={() => onDone(slug)}>
-              {hasModel ? "3Dモデルを開く" : "プロジェクトを開く"}
+              {hasModel ? "3Dを開く" : "現場を開く"}
             </button>
           )}
         </div>

@@ -11,128 +11,79 @@
   font-weight: 700;
 }
 
-.summary {
-  display: grid;
-  grid-template-columns: repeat(4, 1fr);
-  gap: 6px;
-  margin: 0;
-}
-
-.summary div {
-  padding: 5px 6px;
-  border-radius: 6px;
-  background: rgb(255 255 255 / 55%);
-}
-
-.summary dt {
-  color: var(--muted);
-  font-size: 11px;
-}
-
-.summary dd {
-  margin: 0;
-  font-size: 13px;
-  font-weight: 500;
-}
-
-.tabs {
-  flex: none;
+.summaryLine {
   display: flex;
-  border-bottom: 1px solid var(--line-strong);
-}
-
-.tabs button {
-  flex: 1;
-  padding: 7px 2px;
-  border: 0;
-  border-bottom: 2px solid transparent;
-  background: none;
-  color: var(--muted);
-  font-size: 13px;
-  cursor: pointer;
-}
-
-.tabs button[aria-selected="true"] {
-  border-bottom-color: var(--ink);
-  color: var(--ink);
-  font-weight: 700;
-}
-
-.tabBody {
-  flex: 1;
-  min-height: 0;
-  overflow-y: auto;
-  display: flex;
-  flex-direction: column;
+  align-items: baseline;
+  justify-content: space-between;
   gap: 8px;
-}
-
-.empty {
   margin: 0;
   color: var(--muted);
   font-size: 12px;
 }
 
-.add {
-  align-self: flex-start;
-  padding: 5px 10px;
+.summaryLine a {
+  color: var(--ink);
+}
+
+.drawingRow {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.drawing {
+  flex: 1;
+  min-width: 0;
+  padding: 5px 6px;
   border: 1px solid var(--line-strong);
   border-radius: 6px;
   background: var(--panel);
   color: var(--ink);
+  font: inherit;
   font-size: 12px;
-  cursor: pointer;
 }
 
-.sheetRows,
-.points ul,
-.rows {
+.findings {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+}
+
+.findings ul {
   display: flex;
   flex-direction: column;
-  gap: 4px;
+  gap: 2px;
   margin: 0;
   padding: 0;
   list-style: none;
 }
 
-.sheetRow {
+.findings button {
   width: 100%;
   display: flex;
-  align-items: center;
-  gap: 6px;
-  padding: 7px 8px;
-  border: 1px solid var(--line);
+  align-items: flex-start;
+  gap: 8px;
+  padding: 6px;
+  border: 1px solid transparent;
   border-radius: 6px;
-  background: var(--panel);
+  background: none;
   color: var(--ink);
+  font-size: 13px;
+  line-height: 1.4;
   text-align: left;
   cursor: pointer;
 }
 
-.sheetRow[aria-expanded="true"] {
+.findings button:hover {
+  background: rgb(255 255 255 / 55%);
+}
+
+.findings button[data-active="true"] {
   border-color: var(--ink);
+  background: var(--panel);
 }
 
-.sheetRow > span {
-  flex: 1;
-  min-width: 0;
-  display: flex;
-  flex-direction: column;
-  font-size: 12px;
-  line-height: 1.4;
-}
-
-.sheetRow b {
-  font-weight: 500;
-}
-
-.sheetRow small {
-  color: var(--muted);
-  font-size: 11px;
-}
-
-.sheetRow i,
-.points i {
+.findings i {
   flex: none;
   min-width: 24px;
   padding: 1px 4px;
@@ -144,54 +95,94 @@
   text-align: center;
 }
 
-.sheetRow i[data-color="red"],
-.points i[data-color="red"] {
+.findings i[data-color="red"] {
   background: var(--red);
 }
 
-.sheetRow i[data-color="blue"],
-.points i[data-color="blue"] {
+.findings i[data-color="blue"] {
   background: var(--blue);
 }
 
-.points {
+.findingOpen {
   display: flex;
   flex-direction: column;
-  gap: 6px;
-  padding: 6px 0 8px 8px;
+  gap: 4px;
+  padding: 6px 8px 8px 38px;
 }
 
-.points button {
-  width: 100%;
-  display: flex;
-  align-items: flex-start;
-  gap: 6px;
-  padding: 4px 6px;
-  border: 1px solid transparent;
-  border-radius: 4px;
-  background: none;
+.findingOpen a {
   color: var(--ink);
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.sources {
+  flex: none;
+  max-height: 50%;
+  overflow-y: auto;
+  border-top: 1px solid var(--line-strong);
+  padding-top: 8px;
+  font-size: 13px;
+}
+
+.sources summary {
+  color: var(--muted);
   font-size: 12px;
-  line-height: 1.4;
-  text-align: left;
   cursor: pointer;
 }
 
-.points button:hover {
-  background: rgb(255 255 255 / 55%);
+.sources h3 {
+  margin: 10px 0 4px;
+  font-size: 12px;
 }
 
-.points button[data-active="true"] {
-  border-color: var(--ink);
+.sources h3 small {
+  color: var(--muted);
+  font-weight: 400;
+}
+
+.floorSelect {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+}
+
+.floorSelect select {
+  flex: 1;
+  padding: 4px 6px;
+  border: 1px solid var(--line-strong);
+  border-radius: 5px;
   background: var(--panel);
+  color: var(--ink);
+  font: inherit;
+  font-size: 13px;
 }
 
-.openCheck {
-  display: block;
-  padding: 2px 6px;
+.empty {
+  margin: 0;
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.add {
+  flex: none;
+  padding: 5px 8px;
+  border: 1px solid var(--line-strong);
+  border-radius: 6px;
+  background: var(--panel);
   color: var(--ink);
   font-size: 12px;
-  font-weight: 700;
+  cursor: pointer;
+}
+
+.rows {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
 }
 
 .rows li {
@@ -213,34 +204,6 @@
 .rows li[data-on="true"] small {
   color: var(--ink);
   font-weight: 700;
-}
-
-.choice {
-  display: grid;
-  grid-template-columns: repeat(3, 1fr);
-  gap: 4px;
-}
-
-.choice button {
-  padding: 4px 2px;
-  border: 1px solid var(--line-strong);
-  border-radius: 5px;
-  background: var(--panel);
-  color: var(--ink);
-  font-size: 12px;
-  white-space: nowrap;
-  cursor: pointer;
-}
-
-.choice button[aria-pressed="true"] {
-  border-color: var(--accent);
-  background: var(--accent);
-  color: #fff;
-}
-
-.choice button:disabled {
-  opacity: 0.45;
-  cursor: default;
 }
 
 .clear {

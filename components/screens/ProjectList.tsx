@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useState } from "react";
 import type { ProjectCard } from "@/lib/buildings";
 import AppFrame from "../AppFrame";
+import Hint from "../Hint";
 import styles from "./screens.module.css";
 
 type Running = {
@@ -56,35 +57,41 @@ export default function ProjectList({
   );
 
   return (
-    <AppFrame crumbs={[{ label: "プロジェクト一覧" }]}>
+    <AppFrame crumbs={[{ label: "現場を選ぶ" }]}>
       <div className={styles.page}>
         <div className={styles.pageHead}>
-          <h1>プロジェクト</h1>
-          <input
-            className={styles.search}
-            type="search"
-            placeholder="名前で検索"
-            aria-label="名前で検索"
-            value={query}
-            onChange={(e) => setQuery(e.target.value)}
-          />
-          <select
-            className={styles.search}
-            aria-label="構造で絞り込む"
-            value={structure}
-            onChange={(e) => setStructure(e.target.value)}
-          >
-            <option value="">すべての構造</option>
-            {structures.map((name) => (
-              <option key={name}>{name}</option>
-            ))}
-          </select>
+          <h1>現場を選ぶ</h1>
+          {/* 現場が少ないうちは探す必要がないので出さない */}
+          {projects.length > 6 && (
+            <>
+              <input
+                className={styles.search}
+                type="search"
+                placeholder="名前で検索"
+                aria-label="名前で検索"
+                value={query}
+                onChange={(e) => setQuery(e.target.value)}
+              />
+              <select
+                className={styles.search}
+                aria-label="構造で絞り込む"
+                value={structure}
+                onChange={(e) => setStructure(e.target.value)}
+              >
+                <option value="">すべての構造</option>
+                {structures.map((name) => (
+                  <option key={name}>{name}</option>
+                ))}
+              </select>
+            </>
+          )}
           {canRegister && (
             <Link className={styles.action} href="/projects/new">
-              ＋ 新しいプロジェクトを登録
+              ＋ 新しい現場をつくる
             </Link>
           )}
         </div>
+        <Hint id="list" text="現場を選ぶと、3Dでどこに問題があるかを見られます。" />
         <ul className={styles.cards}>
           {running.map((project) => (
             <li key={project.slug}>
@@ -115,18 +122,15 @@ export default function ProjectList({
                       project.use,
                       project.structure,
                       project.floors > 0 ? `${project.floors}階建て` : null,
+                      project.updatedAt
+                        ? `更新 ${dateFormat.format(new Date(project.updatedAt))}`
+                        : null,
                     ]
                       .filter(Boolean)
                       .join("・")}
                   </small>
-                  <small>
-                    設計図書 <span className="mono">{project.documents}</span>・施工図{" "}
-                    <span className="mono">{project.sheets}</span>
-                    {project.updatedAt &&
-                      `・更新 ${dateFormat.format(new Date(project.updatedAt))}`}
-                  </small>
                   <div className={styles.openCounts} aria-label="未対応の指摘">
-                    <small>未対応</small>
+                    <small>未対応の指摘</small>
                     <i className="mono" data-color="red">
                       赤 {project.red}
                     </i>
@@ -140,7 +144,7 @@ export default function ProjectList({
           ))}
         </ul>
         {shown.length === 0 && running.length === 0 && (
-          <p className={styles.none}>当てはまるプロジェクトはありません。</p>
+          <p className={styles.none}>当てはまる現場はありません。</p>
         )}
       </div>
     </AppFrame>

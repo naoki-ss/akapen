@@ -45,7 +45,7 @@ export type JobSummary = {
   uploaded_at: string;
   pages: { number: number; title?: string | null }[];
   counts: { design: number; minutes: number; knowledge: number };
-  open: { red: number; blue: number };
+  open: { title: string; red: number; blue: number }[];
   masked: boolean;
   stopped: boolean;
 };

@@ -4,10 +4,18 @@
   min-width: 0;
   display: grid;
   grid-template-columns: 288px minmax(0, 1fr) 372px;
-  grid-template-rows: auto minmax(0, 1fr);
+  grid-template-rows: auto auto auto minmax(0, 1fr);
   grid-template-areas:
     "bar bar bar"
+    "banner banner banner"
+    "hint hint hint"
     "list sheet side";
+}
+
+.screen > [role="note"] {
+  grid-area: hint;
+  margin: 0;
+  border-radius: 0;
 }
 
 .topBar {
@@ -74,15 +82,10 @@
 }
 
 .publicToggle {
-  display: inline-flex;
+  display: flex;
   align-items: center;
   gap: 6px;
-  padding: 5px 10px;
-  border: 1px solid var(--line-strong);
-  border-radius: 6px;
-  font-size: 13px;
   white-space: nowrap;
-  cursor: pointer;
 }
 
 .publicToggle input {
@@ -90,64 +93,108 @@
   accent-color: var(--accent);
 }
 
-/* 塗りつぶしを外しているときは、動画や画面共有で見落とさないように目立たせる */
-.publicToggle[data-public="false"] {
-  border-color: var(--ink);
-  background: var(--ink);
-  color: #fff;
-}
-
-/* 層の切り替え */
-.layerToggles {
+/* 凡例を兼ねた印。押すとその種類の朱書きを消す */
+.legend {
   display: flex;
   align-items: center;
   flex-wrap: wrap;
-  gap: 4px 12px;
-  margin: 0;
-  padding: 0;
-  border: 0;
-  font-size: 13px;
-}
-
-.layerToggles legend {
-  float: left;
-  margin-right: 4px;
-  padding: 0;
-  color: var(--muted);
+  gap: 2px 10px;
   font-size: 12px;
 }
 
-.layerToggles label {
+.legend button {
   display: inline-flex;
   align-items: center;
   gap: 4px;
+  padding: 2px 4px;
+  border: 0;
+  background: none;
+  color: var(--ink);
+  font-size: 12px;
   cursor: pointer;
 }
 
-.layerToggles input {
+.legend button[aria-pressed="false"] {
+  opacity: 0.4;
+  text-decoration: line-through;
+}
+
+.legend i,
+.legendNone i {
+  width: 10px;
+  height: 10px;
+  border: 2px solid var(--legend);
+}
+
+.legend [data-color="red"] {
+  --legend: var(--red);
+}
+
+.legend [data-color="blue"] {
+  --legend: var(--blue);
+}
+
+.legendNone {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  color: var(--muted);
+}
+
+/* 右上のメニュー */
+.menu {
+  position: relative;
+}
+
+.menuBack {
+  position: fixed;
+  z-index: 9;
+  inset: 0;
+  border: 0;
+  background: none;
+}
+
+.menuItems {
+  position: absolute;
+  z-index: 10;
+  top: calc(100% + 4px);
+  right: 0;
+  width: 220px;
+  display: flex;
+  flex-direction: column;
+  padding: 4px;
+  border: 1px solid var(--line-strong);
+  border-radius: 8px;
+  background: var(--panel);
+  box-shadow: 0 4px 16px rgb(0 0 0 / 15%);
+}
+
+.menuItems > button,
+.menuItems > a,
+.menuItems > label {
+  padding: 7px 10px;
+  border: 0;
+  border-radius: 5px;
+  background: none;
+  color: var(--ink);
+  font-size: 13px;
+  text-align: left;
+  text-decoration: none;
+  cursor: pointer;
+}
+
+.menuItems > button:hover,
+.menuItems > a:hover {
+  background: var(--tint);
+}
+
+.internalBanner {
+  grid-area: banner;
   margin: 0;
-}
-
-.layerToggles label[data-color="赤"] {
-  --layer: var(--red);
-}
-
-.layerToggles label[data-color="青"] {
-  --layer: var(--blue);
-}
-
-.layerToggles input {
-  accent-color: var(--layer);
-}
-
-.layerToggles b {
-  color: var(--layer);
-}
-
-.swatch {
-  width: 12px;
-  height: 12px;
-  border: 2px solid var(--layer);
+  padding: 3px 14px;
+  background: var(--ink);
+  color: #fff;
+  font-size: 12px;
 }
 
 /* 指摘の番号。一覧・朱書き・根拠で同じ */
@@ -184,49 +231,11 @@
   background: var(--panel);
 }
 
-.tabs {
-  flex: none;
-  display: flex;
-  border-bottom: 1px solid var(--line);
-}
-
-.tabs button {
-  flex: 1;
-  padding: 8px 4px;
-  border: 0;
-  border-bottom: 2px solid transparent;
-  background: none;
-  color: var(--muted);
-  font-size: 12px;
-  white-space: nowrap;
-  cursor: pointer;
-}
-
-.tabs button[aria-selected="true"] {
-  border-bottom-color: var(--ink);
-  color: var(--ink);
-  font-weight: 700;
-}
-
 .listBody {
   flex: 1;
   min-height: 0;
   overflow-y: auto;
   padding: 10px;
-}
-
-.lead {
-  margin: 0 0 8px;
-  color: var(--muted);
-  font-size: 12px;
-}
-
-.notice {
-  margin: 0 0 8px;
-  padding: 6px 8px;
-  border-radius: 4px;
-  background: var(--tint);
-  font-size: 12px;
 }
 
 .items,
@@ -266,25 +275,37 @@
   opacity: 0.5;
 }
 
-.items button[data-off="true"] b {
-  text-decoration: line-through;
-}
-
 .itemBody {
   min-width: 0;
-  display: flex;
-  flex-direction: column;
   font-size: 13px;
   line-height: 1.4;
 }
 
-.itemBody b {
-  font-weight: 500;
+.items button[data-off="true"] .itemBody {
+  text-decoration: line-through;
 }
 
-.itemBody small {
+.more {
+  flex: none;
+  max-height: 50%;
+  overflow-y: auto;
+  padding: 8px 10px;
+  border-top: 1px solid var(--line);
+  font-size: 12px;
+}
+
+.more summary {
   color: var(--muted);
-  font-size: 11px;
+  cursor: pointer;
+}
+
+.more p {
+  margin: 6px 0;
+}
+
+.more h3 {
+  margin: 10px 0 4px;
+  font-size: 12px;
 }
 
 .rows li {
@@ -297,21 +318,6 @@
 
 .rows small {
   color: var(--muted);
-}
-
-.changes {
-  margin-top: 12px;
-  font-size: 12px;
-}
-
-.changes h3 {
-  margin: 0 0 4px;
-  font-size: 12px;
-}
-
-.changes ul {
-  margin: 0;
-  padding-left: 16px;
 }
 
 /* 中央の朱書き */
@@ -369,9 +375,18 @@
 
 .frame[data-active="true"] {
   z-index: 3;
-  border-width: 3px;
-  background: color-mix(in srgb, var(--ink-frame) 12%, transparent);
-  box-shadow: 0 0 0 3px rgb(255 255 255 / 85%);
+  border-width: 4px;
+  background: color-mix(in srgb, var(--ink-frame) 10%, transparent);
+  box-shadow: 0 0 0 4px rgb(255 255 255 / 90%), 0 0 0 1px var(--ink-frame);
+}
+
+/* 指摘を選んでいる間は、ほかの枠を薄くして注記を隠す */
+.sheetPage[data-focus="true"] .frame[data-active="false"] {
+  opacity: 0.22;
+}
+
+.sheetPage[data-focus="true"] .note[data-active="false"] {
+  display: none;
 }
 
 .frame[data-off="true"] {
@@ -431,72 +446,60 @@
   padding: 12px;
 }
 
+.basisEmpty {
+  margin: 0;
+  color: var(--muted);
+  font-size: 14px;
+}
+
 .basisHead {
   display: flex;
   align-items: flex-start;
   gap: 8px;
-}
-
-.basisHead span {
-  display: flex;
-  flex-direction: column;
-  min-width: 0;
-}
-
-.basisHead small {
-  color: var(--muted);
-  font-size: 11px;
-}
-
-.basisHead b {
-  font-size: 14px;
+  font-size: 13px;
   line-height: 1.4;
 }
 
-.compare {
+.basisHead b {
+  font-weight: 500;
+}
+
+.values {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin: 0;
+}
+
+.values > div {
   display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 1px;
-  margin: 0;
-  overflow: hidden;
-  border: 1px solid var(--line);
-  border-radius: 6px;
-  background: var(--line);
+  grid-template-columns: 92px minmax(0, 1fr);
+  gap: 8px;
+  align-items: baseline;
 }
 
-.compare > div {
-  padding: 8px 10px;
-  background: var(--panel);
-}
-
-.compare dt {
-  margin-bottom: 2px;
+.values dt {
   color: var(--muted);
-  font-size: 11px;
-}
-
-.compare dd {
-  margin: 0;
-  font-size: 13px;
-  font-weight: 700;
-  overflow-wrap: anywhere;
-}
-
-.quote {
-  margin: 0;
-  padding: 6px 10px;
-  border-left: 3px solid var(--line-strong);
-  background: var(--tint);
   font-size: 12px;
 }
 
-.quote p {
+.values dd {
   margin: 0;
+  font-size: 16px;
+  font-weight: 700;
+  line-height: 1.45;
+  overflow-wrap: anywhere;
 }
 
 .reason {
   margin: 0;
-  font-size: 13px;
+  font-size: 15px;
+  line-height: 1.6;
+}
+
+.confirm {
+  color: var(--muted);
+  font-size: 12px;
 }
 
 .basisActions {
@@ -506,26 +509,10 @@
   gap: 8px;
 }
 
-.segment {
-  display: inline-flex;
-  overflow: hidden;
-  border: 1px solid var(--line-strong);
-  border-radius: 6px;
-}
-
-.segment button {
-  padding: 5px 10px;
-  border: 0;
-  background: var(--panel);
-  color: var(--ink);
+.basisActions .ghost {
+  padding: 2px 0;
+  color: var(--muted);
   font-size: 12px;
-  cursor: pointer;
-}
-
-.segment button[aria-pressed="true"] {
-  background: var(--accent);
-  color: #fff;
-  font-weight: 700;
 }
 
 .sources {

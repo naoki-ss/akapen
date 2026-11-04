@@ -207,6 +207,25 @@
   background: var(--accent);
 }
 
+.hint {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin: 0 0 12px;
+  padding: 6px 12px;
+  border-radius: 6px;
+  background: var(--tint);
+  font-size: 13px;
+}
+
+.hint button {
+  border: 0;
+  background: none;
+  color: var(--muted);
+  cursor: pointer;
+}
+
 .none {
   color: var(--muted);
   font-size: 13px;
@@ -249,7 +268,7 @@
 .panelRight {
   top: 12px;
   right: 12px;
-  width: 244px;
+  width: 176px;
   display: flex;
   flex-direction: column;
   gap: 6px;
@@ -275,6 +294,20 @@
   bottom: 40px;
   width: 300px;
   height: 340px;
+}
+
+.sceneToast {
+  position: absolute;
+  z-index: 2;
+  top: 16px;
+  left: calc(50% + 170px);
+  margin: 0;
+  padding: 6px 14px;
+  border-radius: 6px;
+  background: var(--ink);
+  color: #fff;
+  font-size: 13px;
+  transform: translateX(-50%);
 }
 
 .sceneNote {

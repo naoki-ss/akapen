@@ -3,75 +3,26 @@
 import Image from "next/image";
 import { useState } from "react";
 import type { Finding } from "@/lib/check";
-import {
-  colorName,
-  detailOf,
-  reasonOf,
-  sourceLabel,
-} from "@/lib/findings";
+import { colorName, detailOf, reasonOf, sourceLabel } from "@/lib/findings";
 import styles from "./check.module.css";
 
 type Numbered = Finding & { number: number };
 
-// 根拠の資料を文字で並べる。設計図の画像は名前の塗りつぶしの設定がないので出さない
-function sourceText(finding: Finding) {
-  return (finding.sources ?? []).map(
-    (source) => `${source.doc} ${source.page}・${source.where}`,
-  );
-}
-
-function Compare({ finding }: { finding: Numbered }) {
-  if (!finding.sheet_value || !finding.design_value) return null;
-  const first = finding.sources?.[0];
-  const label =
-    finding.source_type === "minutes"
-      ? "議事録"
-      : first
-        ? `${first.doc} ${first.page.replace(/（.*$/, "")}`
-        : "設計図書";
-  return (
-    <dl className={styles.compare}>
-      <div>
-        <dt>施工図</dt>
-        <dd className="mono">{finding.sheet_value}</dd>
-      </div>
-      <div>
-        <dt>{label}</dt>
-        <dd className="mono">{finding.design_value}</dd>
-      </div>
-    </dl>
-  );
-}
-
-function Quotes({ finding }: { finding: Numbered }) {
-  if (finding.minutes_refs?.length) {
-    return (
-      <blockquote className={styles.quote}>
-        {finding.minutes_refs.slice(0, 4).map((ref) => (
-          <p key={ref.id}>
-            <span className="mono">{ref.id}</span> {ref.text}
-          </p>
-        ))}
-        {finding.minutes_refs.length > 4 && (
-          <p>ほか {finding.minutes_refs.length - 4} 項目</p>
-        )}
-      </blockquote>
-    );
+// 「施工図：○○」「設計図書：○○」の行。チェックリストは元の文を出す
+function valueLines(finding: Numbered) {
+  const lines: { label: string; text: string }[] = [];
+  if (finding.sheet_value) {
+    lines.push({ label: "施工図", text: finding.sheet_value });
   }
-  if (finding.source_type === "knowledge" && finding.sources?.[0]) {
-    return (
-      <blockquote className={styles.quote}>
-        <p>
-          <span className="mono">{finding.sources[0].page}</span>{" "}
-          {finding.sources[0].where}
-        </p>
-      </blockquote>
-    );
+  if (finding.design_value) {
+    lines.push({ label: sourceLabel(finding), text: finding.design_value });
+  } else if (finding.source_type === "knowledge" && finding.sources?.[0]) {
+    lines.push({ label: "チェックリスト", text: finding.sources[0].where });
   }
-  return null;
+  return lines;
 }
 
-// 右上の根拠カード。何と何が食い違っているかと、残すか外すかを決める
+// 右上の根拠。何と何が食い違っているかと、理由の一文を大きく出す
 export default function BasisCard({
   finding,
   kept,
@@ -87,42 +38,41 @@ export default function BasisCard({
   if (!finding) {
     return (
       <div className={styles.basis}>
-        <p className={styles.lead}>
-          指摘を選ぶと、何と何が食い違っているかをここに出します。
+        <p className={styles.basisEmpty}>
+          指摘を選ぶと、なぜ問題かをここに出します。
         </p>
       </div>
     );
   }
   const opened = openedFor === finding.id;
-  const sources = sourceText(finding);
   return (
     <div className={styles.basis}>
       <header className={styles.basisHead}>
         <i className={`${styles.number} mono`} data-color={colorName(finding)}>
           {finding.number}
         </i>
-        <span>
-          <small>{sourceLabel(finding)}との照合</small>
-          <b>{finding.title}</b>
-        </span>
+        <b>{finding.title}</b>
       </header>
-      <Compare finding={finding} />
-      <Quotes finding={finding} />
+      {valueLines(finding).length > 0 && (
+        <dl className={styles.values}>
+          {valueLines(finding).map((line) => (
+            <div key={line.label}>
+              <dt>{line.label}</dt>
+              <dd>{line.text}</dd>
+            </div>
+          ))}
+        </dl>
+      )}
       <p className={styles.reason}>{reasonOf(finding)}</p>
       {(finding.needs_confirmation || finding.severity === "要確認") && (
-        <p className={styles.notice}>
-          図面だけでは食い違いと言い切れない点です。人の確認が必要です。
-        </p>
+        <small className={styles.confirm}>
+          図面だけでは言い切れません。人の確認が必要です。
+        </small>
       )}
       <div className={styles.basisActions}>
-        <div className={styles.segment} role="group" aria-label="朱書きの扱い">
-          <button aria-pressed={kept} onClick={() => onKeep(true)}>
-            朱書きに残す
-          </button>
-          <button aria-pressed={!kept} onClick={() => onKeep(false)}>
-            外す
-          </button>
-        </div>
+        <button className={styles.ghost} onClick={() => onKeep(!kept)}>
+          {kept ? "この指摘を朱書きから外す" : "朱書きに戻す"}
+        </button>
         <button
           className={styles.ghost}
           aria-expanded={opened}
@@ -134,12 +84,26 @@ export default function BasisCard({
       {opened && (
         <div className={styles.sources}>
           <p>{detailOf(finding)}</p>
-          {sources.length > 0 && finding.source_type !== "knowledge" && (
+          {finding.minutes_refs?.length ? (
             <ul>
-              {sources.map((text) => (
-                <li key={text}>{text}</li>
+              {finding.minutes_refs.map((ref) => (
+                <li key={ref.id}>
+                  <span className="mono">{ref.id}</span> {ref.text}
+                </li>
               ))}
             </ul>
+          ) : (
+            finding.source_type !== "knowledge" &&
+            finding.sources &&
+            finding.sources.length > 0 && (
+              <ul>
+                {finding.sources.map((source) => (
+                  <li key={`${source.doc}${source.page}${source.where}`}>
+                    {source.doc} {source.page}・{source.where}
+                  </li>
+                ))}
+              </ul>
+            )
           )}
           {finding.evidence.map((ev) => (
             <figure key={ev.image}>

@@ -48,6 +48,8 @@ export function reasonOf(finding: Finding) {
 
 export const detailOf = bodyOf;
 
+export const NOT_IN_MODEL = "この部材は3Dに表示していません";
+
 function floorMembers(finding: Finding, model: BuildingModel) {
   const { floor } = finding.members;
   return floor ? model.members.filter((m) => m.floor === floor) : model.members;
@@ -61,13 +63,17 @@ export function memberKeysOf(finding: Finding, model: BuildingModel) {
   const direct = finding.model_refs.filter((ref) => known.has(ref));
   if (direct.length > 0) return direct;
   const candidates = floorMembers(finding, model);
-  const marks = new Set(finding.members.marks);
+  const baseMark = (mark: string) => mark.replace(/\(.*\)$/, "");
+  const marks = new Set(finding.members.marks.map(baseMark));
   const grids = new Set(finding.members.grids.flatMap(gridNames));
   const touches = (m: Member) =>
     grids.size === 0 || gridNames(m.grid).some((name) => grids.has(name));
-  const byMark = candidates.filter((m) => marks.has(m.mark) && touches(m));
+  const byMark = candidates.filter(
+    (m) => marks.has(baseMark(m.mark)) && touches(m),
+  );
   if (byMark.length > 0) return byMark.map(memberKey);
-  if (grids.size === 0) return [];
+  // 符号があるのに3Dにないとき（片持ち梁など）は、別の部材を光らせない
+  if (marks.size > 0 || grids.size === 0) return [];
   // 通り芯だけのときは、挙がった通りすべてに掛かる部材に絞る
   const byGrid = candidates.filter((m) =>
     gridNames(m.grid).every((name) => grids.has(name)),

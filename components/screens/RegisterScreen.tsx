@@ -15,8 +15,8 @@ export default function RegisterScreen({
   return (
     <AppFrame
       crumbs={[
-        { label: "プロジェクト一覧", href: "/" },
-        { label: "新しいプロジェクトを登録" },
+        { label: "現場を選ぶ", href: "/" },
+        { label: "新しい現場をつくる" },
       ]}
     >
       <RegisterView

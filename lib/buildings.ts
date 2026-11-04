@@ -3,7 +3,7 @@
 import type { CheckResult } from "./check";
 import { listJobs, uploadEnabled } from "./jobs";
 import type { BuildingModel } from "./model";
-import { listProjects, projectDocuments, projectInfo } from "./projects";
+import { listProjects, projectInfo } from "./projects";
 import { thumbnailOf, type Thumbnail } from "./thumbnail";
 import type { SheetIndex } from "./sheets";
 import resultA from "@/demo-data/sample-x/check-result.json";
@@ -98,20 +98,36 @@ export type ProjectCard = {
   structure: string | null;
   floors: number;
   updatedAt: string | null;
-  documents: number;
-  sheets: number;
   red: number;
   blue: number;
   thumbnail: Thumbnail | null;
 };
 
-// ① の1枚分。数は判定ジョブと登録情報から数える
-export function cardOf({ slug, model, check }: Building): ProjectCard {
+// ① の1枚分。未対応の数は、図面ごとの最新の結果だけで数える（同じ図面を何度もチェックしても増えない）
+export function cardOf({ slug, model, check, sheets }: Building): ProjectCard {
   const enabled = uploadEnabled();
   const jobs = enabled ? listJobs(slug) : [];
   const info = enabled ? projectInfo(slug) : null;
-  const saved = check?.findings ?? [];
-  const savedBlue = saved.filter((f) => f.source_type === "knowledge").length;
+  const latest = new Map<string, { at: string; red: number; blue: number }>();
+  const put = (title: string, at: string, red: number, blue: number) => {
+    const known = latest.get(title);
+    if (!known || at >= known.at) latest.set(title, { at, red, blue });
+  };
+  // 固定の結果は、同じ図面の判定があればそちらを優先する（日時を空にして一番古い扱い）
+  for (const sheet of sheets?.sheets ?? []) {
+    const here = (check?.findings ?? []).filter(
+      (f) => f.drawing.sheet === sheet.id,
+    );
+    if (here.length === 0) continue;
+    const blue = here.filter((f) => f.source_type === "knowledge").length;
+    put(sheet.title, "", here.length - blue, blue);
+  }
+  for (const job of jobs) {
+    for (const page of job.open) {
+      put(page.title, job.uploaded_at, page.red, page.blue);
+    }
+  }
+  const counted = [...latest.values()];
   const dates = jobs.map((job) => job.uploaded_at).sort();
   return {
     slug,
@@ -123,15 +139,8 @@ export function cardOf({ slug, model, check }: Building): ProjectCard {
       /^\d+F$/.test(floor),
     ).length,
     updatedAt: dates.at(-1) ?? null,
-    documents: enabled
-      ? projectDocuments(slug).reduce((sum, row) => sum + row.count, 0)
-      : 0,
-    sheets: jobs.length + (check ? 1 : 0),
-    red:
-      jobs.reduce((sum, job) => sum + job.open.red, 0) +
-      saved.length -
-      savedBlue,
-    blue: jobs.reduce((sum, job) => sum + job.open.blue, 0) + savedBlue,
+    red: counted.reduce((sum, row) => sum + row.red, 0),
+    blue: counted.reduce((sum, row) => sum + row.blue, 0),
     thumbnail: thumbnailOf(model),
   };
 }

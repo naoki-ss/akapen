@@ -4,38 +4,31 @@ import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useCallback, useMemo, useState } from "react";
 import type { Building } from "@/lib/buildings";
-import { inkOf, memberKeysOf, numbered } from "@/lib/findings";
+import {
+  colorName,
+  inkOf,
+  memberKeysOf,
+  NOT_IN_MODEL,
+  numbered,
+} from "@/lib/findings";
+import { jobOption } from "@/lib/jobNames";
 import { floorsOf, type Member } from "@/lib/model";
 import type { KnowledgeApp, ProjectDocument } from "@/lib/projects";
 import { ALL_LAYERS, type LayerKey, type SheetTarget } from "@/lib/sheets";
 import { useJobResult } from "@/lib/useJobResult";
-import { sunDirection, sunPosition } from "@/lib/sun";
 import { useUploadJob } from "@/lib/useUploadJob";
 import { Logo } from "../AppFrame";
-import type { Display, ViewName } from "../BuildingScene";
 import BuildingScene from "../BuildingSceneLazy";
+import Hint from "../Hint";
 import MemberCard from "../MemberCard";
-import SceneControls from "../SceneControls";
-import SunBar, { DEFAULT_SUN, type SunState } from "../SunBar";
 import { ChecksList } from "../RegisterView";
 import SheetViewer from "../SheetViewer";
 import UploadPanel from "../UploadPanel";
-import SheetsTab, { rowOfJob, type SheetRow } from "../console/SheetsTab";
 import appStyles from "../App.module.css";
 import panel from "../console/console.module.css";
 import styles from "./screens.module.css";
 
-type Tab = "sheets" | "knowledge" | "documents";
-
-const TOKYO = { lat: 35.69, lon: 139.69, north_deg: 0 };
-
-const DISPLAYS: { key: Display; label: string }[] = [
-  { key: "normal", label: "通常" },
-  { key: "noRoof", label: "屋根を外す" },
-  { key: "xray", label: "透かし" },
-];
-
-// ③ 3Dモデル＋コンソール
+// ③ どこに問題があるかを見る
 export default function ModelConsole({
   slug,
   model,
@@ -58,20 +51,12 @@ export default function ModelConsole({
   const hasModel = model.members.length > 0;
   const floors = floorsOf(model);
 
-  const [tab, setTab] = useState<Tab>("sheets");
   const [adding, setAdding] = useState(params.get("add") === "1");
-  const [view, setView] = useState<ViewName>("oblique");
-  const [display, setDisplay] = useState<Display>(
-    params.get("finding") ? "xray" : "normal",
-  );
+  const [roofOff, setRoofOff] = useState(false);
   const [floorLimit, setFloorLimit] = useState("all");
   const [selected, setSelected] = useState<Member | null>(null);
   const [openSheet, setOpenSheet] = useState<SheetTarget | null>(null);
-  const [showChecks, setShowChecks] = useState(false);
-  const [showArchChecks, setShowArchChecks] = useState(false);
-  const [showRooms, setShowRooms] = useState(false);
-  const [sunOn, setSunOn] = useState(false);
-  const [sun, setSun] = useState<SunState>(DEFAULT_SUN);
+  const [dialog, setDialog] = useState<"summary" | "architecture" | null>(null);
   const [visibleLayers, setVisibleLayers] = useState<ReadonlySet<LayerKey>>(
     () => new Set(ALL_LAYERS),
   );
@@ -90,27 +75,10 @@ export default function ModelConsole({
   );
   const job = useUploadJob(slug, showResult);
 
-  // 施工図の一覧。デモ用に固定した結果は最後に置く
-  const rows = useMemo<SheetRow[]>(() => {
-    const saved: SheetRow[] = check
-      ? [
-          {
-            key: "saved",
-            title: "チェック済みの施工図",
-            detail: "デモ用に固定した結果",
-            red: check.findings.filter((f) => f.source_type !== "knowledge")
-              .length,
-            blue: check.findings.filter((f) => f.source_type === "knowledge")
-              .length,
-          },
-        ]
-      : [];
-    return [...job.history.map(rowOfJob), ...saved];
-  }, [job.history, check]);
-
-  // 開いている施工図。選ばれていなければ一覧の先頭を開く
-  const [chosenRow, setChosenRow] = useState<string | null>(params.get("job"));
-  const rowKey = chosenRow ?? rows[0]?.key ?? null;
+  // 開いている図面。選ばれていなければ先頭の結果を開く
+  const [chosen, setChosen] = useState<string | null>(params.get("job"));
+  const rowKey =
+    chosen ?? job.history[0]?.id ?? (check ? "saved" : null);
   const jobId = rowKey && rowKey !== "saved" ? rowKey : null;
   const { result, missing } = useJobResult(jobId);
   const findings = useMemo(
@@ -127,26 +95,25 @@ export default function ModelConsole({
     [active, model],
   );
 
-  // 指摘を見ている間は、該当部材が隠れないよう全部の階を出す
+  // 指摘を選んでいる間は、該当部材が隠れないよう自動で透かしにして全部の階を出す
   const topFloorIndex =
     floorLimit === "all" || active
       ? floors.length - 1
       : floors.indexOf(floorLimit);
+  const display = active ? "xray" : roofOff ? "noRoof" : "normal";
 
   const selectFinding = (id: string | null) => {
     setActiveId(id);
     setSelected(null);
-    setDisplay(id ? "xray" : "normal");
-    setView("oblique");
   };
 
-  // 建設地がない物件は東京の値で計算する（画面に注記する）
-  const site = model.site ?? TOKYO;
-  const counts = {
-    columns: model.members.filter((m) => m.type === "column").length,
-    beams: model.members.filter((m) => m.type === "beam").length,
-  };
+  const columns = model.members.filter((m) => m.type === "column").length;
+  const beams = model.members.filter((m) => m.type === "beam").length;
+  const storeys = floors.filter((f) => /^\d+F$/.test(f)).length;
   const imported = knowledge.filter((app) => app.imported_at).length;
+  const checksCount =
+    summary?.checks.filter((c) => c.result === "要確認").length ?? 0;
+  const loading = Boolean(jobId && !result && !missing);
 
   return (
     <div className={styles.full}>
@@ -160,16 +127,7 @@ export default function ModelConsole({
             highlightColor={active ? inkOf(active) : undefined}
             onSelect={setSelected}
             display={display}
-            view={view}
-            showRooms={showRooms}
-            sun={
-              sunOn
-                ? sunDirection(
-                    sunPosition(site.lat, site.lon, sun.month, sun.day, sun.hours),
-                    site.north_deg,
-                  )
-                : null
-            }
+            showRooms={Boolean(model.architecture)}
             callout={
               active
                 ? {
@@ -182,9 +140,9 @@ export default function ModelConsole({
           />
         ) : (
           <div className={appStyles.noModel}>
-            この物件は3Dなしで登録しています。
+            この現場は3Dなしで登録しています。
             <br />
-            施工図チェックは使えます。
+            施工図のチェックは使えます。
           </div>
         )}
       </div>
@@ -193,7 +151,7 @@ export default function ModelConsole({
         <Logo />
         <select
           className={panel.select}
-          aria-label="プロジェクト"
+          aria-label="現場"
           value={slug}
           onChange={(e) => router.push(`/projects/${e.target.value}`)}
         >
@@ -203,171 +161,196 @@ export default function ModelConsole({
             </option>
           ))}
         </select>
-        {hasModel ? (
-          <dl className={panel.summary} aria-label="概要">
-            <div>
-              <dt>階</dt>
-              <dd className="mono">{floors.filter((f) => /^\d+F$/.test(f)).length}</dd>
-            </div>
-            <div>
-              <dt>通り</dt>
-              <dd className="mono">
-                {Object.keys(model.grid_x).length}×
-                {Object.keys(model.grid_y).length}
-              </dd>
-            </div>
-            <div>
-              <dt>柱</dt>
-              <dd className="mono">{counts.columns}</dd>
-            </div>
-            <div>
-              <dt>梁</dt>
-              <dd className="mono">{counts.beams}</dd>
-            </div>
-          </dl>
-        ) : (
-          <p className={panel.empty}>3Dなしで登録しています。</p>
-        )}
-        {summary && (
-          <button
-            className={appStyles.secondary}
-            onClick={() => setShowChecks(true)}
-          >
-            要確認{" "}
-            {summary.checks.filter((c) => c.result === "要確認").length} 件を見る
-          </button>
-        )}
-        {hasModel && (
-          <Link className={styles.action} href={`/projects/${slug}/meeting`}>
-            打ち合わせモードで見せる
-          </Link>
-        )}
-        <div className={panel.tabs} role="tablist">
-          {(
-            [
-              ["sheets", "施工図"],
-              ["knowledge", "ナレッジ"],
-              ["documents", "設計図書"],
-            ] as [Tab, string][]
-          ).map(([key, label]) => (
-            <button
-              key={key}
-              role="tab"
-              aria-selected={tab === key}
-              onClick={() => setTab(key)}
-            >
-              {label}
-            </button>
-          ))}
-        </div>
-        <div className={panel.tabBody}>
-          {tab === "sheets" && (
-            <>
-              {canUpload &&
-                (adding ? (
-                  <UploadPanel job={job} />
-                ) : (
-                  <button className={panel.add} onClick={() => setAdding(true)}>
-                    ＋ 施工図を追加
-                  </button>
-                ))}
-              {active && (
-                <button className={panel.clear} onClick={() => selectFinding(null)}>
-                  選択を外す
-                </button>
-              )}
-              <SheetsTab
-                slug={slug}
-                rows={rows}
-                rowKey={rowKey}
-                findings={findings}
-                loading={Boolean(jobId && !result && !missing)}
-                activeId={activeId}
-                onRow={(key) => {
-                  setChosenRow(key);
-                  selectFinding(null);
-                }}
-                onFinding={(finding) =>
-                  selectFinding(finding.id === activeId ? null : finding.id)
-                }
-              />
-            </>
+        <p className={panel.summaryLine}>
+          {hasModel ? (
+            <span className="mono">
+              {storeys}階建て・柱{columns}・梁{beams}
+            </span>
+          ) : (
+            "3Dなし"
           )}
-          {tab === "knowledge" &&
-            (knowledge.length === 0 ? (
-              <p className={panel.empty}>
-                チェックリストがありません。青の指摘は「該当なし」になります。
-              </p>
-            ) : (
-              <>
-                <p className={panel.empty}>
-                  施工図チェックリスト {knowledge.length} アプリ（うち取り込み済み{" "}
-                  {imported}）
-                </p>
-                <ul className={panel.rows}>
-                  {knowledge.map((app) => (
-                    <li key={app.id} data-on={Boolean(app.imported_at)}>
-                      <span>{app.name}</span>
-                      <small>
-                        {app.imported_at
-                          ? `kintoneから取り込み済み（${app.imported_at.slice(5).replace("-", "/")}）・${app.items}項目`
-                          : "未取り込み"}
-                      </small>
-                    </li>
-                  ))}
-                </ul>
-              </>
-            ))}
-          {tab === "documents" &&
-            (documents.length === 0 ? (
+          {hasModel && (
+            <Link href={`/projects/${slug}/meeting`}>打ち合わせで見せる</Link>
+          )}
+        </p>
+        <Hint id="model" text="指摘を選ぶと、3Dで場所を示します。" />
+
+        <div className={panel.drawingRow}>
+          {rowKey ? (
+            <select
+              className={panel.drawing}
+              aria-label="図面"
+              value={rowKey}
+              onChange={(e) => {
+                setChosen(e.target.value);
+                selectFinding(null);
+              }}
+            >
+              {job.history.map((item) => (
+                <option key={item.id} value={item.id}>
+                  {jobOption(item)}
+                </option>
+              ))}
+              {check && <option value="saved">チェック済みの施工図</option>}
+            </select>
+          ) : (
+            <span className={panel.empty}>指摘はまだありません。</span>
+          )}
+          {canUpload && (
+            <button
+              className={panel.add}
+              aria-expanded={adding}
+              onClick={() => setAdding(!adding)}
+            >
+              ＋ 施工図
+            </button>
+          )}
+        </div>
+        {canUpload && adding && <UploadPanel job={job} />}
+
+        <div className={panel.findings}>
+          {loading && <p className={panel.empty}>読み込み中…</p>}
+          <ul>
+            {findings.map((finding) => {
+              const isActive = finding.id === activeId;
+              return (
+                <li key={finding.id}>
+                  <button
+                    data-active={isActive}
+                    onClick={() =>
+                      selectFinding(isActive ? null : finding.id)
+                    }
+                  >
+                    <i className="mono" data-color={colorName(finding)}>
+                      {finding.number}
+                    </i>
+                    <span>{finding.title}</span>
+                  </button>
+                  {isActive && (
+                    <div className={panel.findingOpen}>
+                      {highlighted.size === 0 && (
+                        <p className={panel.empty}>{NOT_IN_MODEL}</p>
+                      )}
+                      <Link
+                        href={`/projects/${slug}/check/${rowKey}?finding=${finding.id}`}
+                      >
+                        なぜ問題かを見る →
+                      </Link>
+                    </div>
+                  )}
+                </li>
+              );
+            })}
+          </ul>
+        </div>
+
+        <details className={panel.sources}>
+          <summary>資料</summary>
+          <div>
+            <h3>設計図書</h3>
+            {documents.length === 0 ? (
               <p className={panel.empty}>登録済みの設計図書はありません。</p>
             ) : (
               <ul className={panel.rows}>
                 {documents.map((document) => (
                   <li key={document.kind} data-on>
                     <span>{document.kind}</span>
-                    <small>{document.count} 件・登録済み</small>
+                    <small>{document.count} 件</small>
                   </li>
                 ))}
               </ul>
-            ))}
-        </div>
+            )}
+            <h3>
+              ナレッジ
+              {knowledge.length > 0 && (
+                <small>
+                  {" "}
+                  {knowledge.length} アプリ中 {imported} 取り込み済み
+                </small>
+              )}
+            </h3>
+            {knowledge.length === 0 ? (
+              <p className={panel.empty}>
+                チェックリストがありません。青の指摘は「該当なし」になります。
+              </p>
+            ) : (
+              <ul className={panel.rows}>
+                {knowledge.map((app) => (
+                  <li key={app.id} data-on={Boolean(app.imported_at)}>
+                    <span>{app.name}</span>
+                    <small>
+                      {app.imported_at
+                        ? `kintoneから取り込み済み（${app.imported_at.slice(5).replace("-", "/")}）・${app.items}項目`
+                        : "未取り込み"}
+                    </small>
+                  </li>
+                ))}
+              </ul>
+            )}
+            {summary && (
+              <button
+                className={panel.clear}
+                onClick={() => setDialog("summary")}
+              >
+                読み取りの要確認 {checksCount} 件
+              </button>
+            )}
+            {model.architecture && (
+              <button
+                className={panel.clear}
+                onClick={() => setDialog("architecture")}
+              >
+                外観の要確認 {model.architecture.checks.length} 件
+              </button>
+            )}
+          </div>
+        </details>
       </aside>
 
       {hasModel && (
-        <SceneControls
-          displays={DISPLAYS}
-          display={display}
-          onDisplay={setDisplay}
-          view={view}
-          onView={setView}
-          floors={floors}
-          floorLimit={floorLimit}
-          onFloorLimit={(key) => {
-            setFloorLimit(key);
-            if (
-              key !== "all" &&
-              selected &&
-              floors.indexOf(selected.floor) > floors.indexOf(key)
-            ) {
-              setSelected(null);
-            }
-          }}
-          sunOn={sunOn}
-          onSun={setSunOn}
-          hasRooms={Boolean(model.architecture)}
-          showRooms={showRooms}
-          onRooms={setShowRooms}
-        >
-          {model.architecture && (
-            <button
-              className={panel.clear}
-              onClick={() => setShowArchChecks(true)}
+        <aside className={`${styles.panel} ${styles.panelRight}`}>
+          <label className={appStyles.typeToggle}>
+            <input
+              type="checkbox"
+              checked={roofOff}
+              disabled={Boolean(active)}
+              onChange={(e) => setRoofOff(e.target.checked)}
+            />
+            屋根を外す
+          </label>
+          <label className={panel.floorSelect}>
+            <span>階</span>
+            <select
+              value={floorLimit}
+              disabled={Boolean(active)}
+              onChange={(e) => {
+                const key = e.target.value;
+                setFloorLimit(key);
+                if (
+                  key !== "all" &&
+                  selected &&
+                  floors.indexOf(selected.floor) > floors.indexOf(key)
+                ) {
+                  setSelected(null);
+                }
+              }}
             >
-              外観の要確認 {model.architecture.checks.length} 件
-            </button>
-          )}
-        </SceneControls>
+              <option value="all">全部</option>
+              {[...floors]
+                .filter((floor) => /^\d+F$/.test(floor))
+                .reverse()
+                .map((floor) => (
+                  <option key={floor} value={floor}>
+                    {floor.replace("F", "階")}まで
+                  </option>
+                ))}
+            </select>
+          </label>
+        </aside>
+      )}
+
+      {hasModel && active && highlighted.size === 0 && (
+        <p className={styles.sceneToast}>{NOT_IN_MODEL}</p>
       )}
 
       {selected && (
@@ -383,62 +366,39 @@ export default function ModelConsole({
         </div>
       )}
 
-      {hasModel && sunOn && (
-        <SunBar
-          lat={site.lat}
-          lon={site.lon}
-          value={sun}
-          note={model.site ? undefined : "建設地が未登録のため東京の値"}
-          onChange={setSun}
-        />
-      )}
-
       {hasModel && (
         <p className={styles.sceneNote}>
           初期検討用のイメージです。寸法の精度は保証しません。
         </p>
       )}
 
-      {showChecks && summary && (
+      {dialog && (
         <div
           className={appStyles.projectChecks}
           role="dialog"
-          aria-label="検算の結果"
-          onClick={() => setShowChecks(false)}
+          aria-label="要確認"
+          onClick={() => setDialog(null)}
         >
           <div onClick={(e) => e.stopPropagation()}>
-            <ChecksList summary={summary} />
+            {dialog === "summary" && summary && (
+              <ChecksList summary={summary} />
+            )}
+            {dialog === "architecture" && model.architecture && (
+              <div className={appStyles.checks}>
+                <h3>外観の要確認 {model.architecture.checks.length} 件</h3>
+                <p className={appStyles.fine}>{model.architecture.source}</p>
+                <ul>
+                  {model.architecture.checks.map((item, index) => (
+                    <li key={index}>
+                      <b>{item.kind}</b> {item.message}
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            )}
             <button
               className={appStyles.secondary}
-              onClick={() => setShowChecks(false)}
-            >
-              閉じる
-            </button>
-          </div>
-        </div>
-      )}
-      {showArchChecks && model.architecture && (
-        <div
-          className={appStyles.projectChecks}
-          role="dialog"
-          aria-label="外観の要確認"
-          onClick={() => setShowArchChecks(false)}
-        >
-          <div onClick={(e) => e.stopPropagation()}>
-            <div className={appStyles.checks}>
-              <h3>外観の要確認 {model.architecture.checks.length} 件</h3>
-              <p className={appStyles.fine}>{model.architecture.source}</p>
-              <ul>
-                {model.architecture.checks.map((check, index) => (
-                  <li key={index}>
-                    <b>{check.kind}</b> {check.message}
-                  </li>
-                ))}
-              </ul>
-            </div>
-            <button
-              className={appStyles.secondary}
-              onClick={() => setShowArchChecks(false)}
+              onClick={() => setDialog(null)}
             >
               閉じる
             </button>

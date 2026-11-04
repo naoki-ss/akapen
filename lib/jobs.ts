@@ -55,8 +55,8 @@ export type JobSummary = {
   uploaded_at: string;
   pages: { number: number; title?: string | null }[];
   counts: { design: number; minutes: number; knowledge: number };
-  // 朱書きから外した指摘を除いた赤と青の数
-  open: { red: number; blue: number };
+  // 図面ごとの、朱書きから外した指摘を除いた赤と青の数
+  open: { title: string; red: number; blue: number }[];
   masked: boolean;
   stopped: boolean;
 };
@@ -81,10 +81,27 @@ export function listJobs(project: string): JobSummary[] {
     const counts = { design: 0, minutes: 0, knowledge: 0 };
     for (const finding of findings) counts[finding.source_type] += 1;
     const excluded = new Set(readDecisions(folder));
-    const kept = findings.filter(
-      (finding) => !excluded.has((finding as { number?: number }).number ?? -1),
-    );
-    const blue = kept.filter((f) => f.source_type === "knowledge").length;
+    const open = (
+      result.pages as { number: number; title?: string }[]
+    ).map((page) => {
+      const kept = (
+        findings as unknown as {
+          number?: number;
+          source_type: string;
+          drawing: { page: number };
+        }[]
+      ).filter(
+        (finding) =>
+          finding.drawing.page === page.number &&
+          !excluded.has(finding.number ?? -1),
+      );
+      const blue = kept.filter((f) => f.source_type === "knowledge").length;
+      return {
+        title: page.title ?? `p.${page.number}`,
+        red: kept.length - blue,
+        blue,
+      };
+    });
     jobs.push({
       id,
       label: meta.label,
@@ -96,7 +113,7 @@ export function listJobs(project: string): JobSummary[] {
         title: page.title,
       })),
       counts,
-      open: { red: kept.length - blue, blue },
+      open,
       masked: Boolean(result.masked),
       stopped: Boolean(result.stopped_pages?.length),
     });

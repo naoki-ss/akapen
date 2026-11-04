@@ -4,13 +4,14 @@ import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { useMemo, useState } from "react";
 import type { Building } from "@/lib/buildings";
-import { inkOf, memberKeysOf, numbered } from "@/lib/findings";
+import { inkOf, memberKeysOf, NOT_IN_MODEL, numbered } from "@/lib/findings";
 import { floorsOf } from "@/lib/model";
 import { ALL_LAYERS, type LayerKey } from "@/lib/sheets";
 import { useDecisions } from "@/lib/useDecisions";
 import { useJobResult } from "@/lib/useJobResult";
 import AppFrame from "../AppFrame";
 import BuildingScene from "../BuildingSceneLazy";
+import Hint from "../Hint";
 import LayerToggles from "../LayerToggles";
 import AnnotatedSheet from "../check/AnnotatedSheet";
 import BasisCard from "../check/BasisCard";
@@ -41,7 +42,8 @@ export default function CheckScreen({
     useSearchParams().get("finding"),
   );
   const [sheetId, setSheetId] = useState<string | null>(null);
-  const [zoomed, setZoomed] = useState(false);
+  const [zoom, setZoom] = useState<"auto" | "full" | "large">("auto");
+  const [menuOpen, setMenuOpen] = useState(false);
   const [visibleLayers, setVisibleLayers] = useState<ReadonlySet<LayerKey>>(
     () => new Set(ALL_LAYERS),
   );
@@ -99,6 +101,7 @@ export default function CheckScreen({
   );
   const select = (finding: (typeof allFindings)[number]) => {
     setActiveId(finding.id);
+    setZoom("auto");
     if (finding.drawing.sheet) setSheetId(finding.drawing.sheet);
   };
 
@@ -110,9 +113,9 @@ export default function CheckScreen({
   };
 
   const crumbs = [
-    { label: "プロジェクト一覧", href: "/" },
+    { label: "現場を選ぶ", href: "/" },
     { label: model.name, href: `/projects/${slug}` },
-    { label: "施工図の朱書きと根拠" },
+    { label: "なぜ問題かを見る" },
   ];
 
   if (!currentSheet) {
@@ -125,6 +128,7 @@ export default function CheckScreen({
     );
   }
 
+  const scaled = zoom === "large" || (zoom === "auto" && Boolean(active));
   const modelHref = `/projects/${slug}?job=${job}${active ? `&finding=${active.id}` : ""}`;
 
   return (
@@ -136,7 +140,10 @@ export default function CheckScreen({
               className={styles.pageSelect}
               aria-label="図面のページ"
               value={currentSheet.id}
-              onChange={(e) => setSheetId(e.target.value)}
+              onChange={(e) => {
+                setSheetId(e.target.value);
+                setActiveId(null);
+              }}
             >
               {pageSheets.map((sheet) => (
                 <option key={sheet.id} value={sheet.id}>
@@ -154,28 +161,6 @@ export default function CheckScreen({
             noKnowledge={!uploaded?.checklist && counts.knowledge === 0}
           />
           <div className={styles.barActions}>
-            <button className={styles.btn} onClick={() => setZoomed(!zoomed)}>
-              {zoomed ? "図面の全体" : "図面を拡大"}
-            </button>
-            {uploaded && (
-              <label
-                className={styles.publicToggle}
-                data-public={publicView}
-                title="製作会社名、出図印、担当者名の欄を塗りつぶします"
-              >
-                <input
-                  type="checkbox"
-                  checked={publicView}
-                  onChange={(e) => setPublicView(e.target.checked)}
-                />
-                {publicView ? "公開・デモ用の表示" : "社内用（名前が見えます）"}
-              </label>
-            )}
-            {uploaded && (
-              <Link className={styles.btn} href={`/projects/${slug}?add=1`}>
-                施工図を追加
-              </Link>
-            )}
             {uploaded && !noMaskedFiles && (
               <a
                 className={styles.btnPrimary}
@@ -185,18 +170,81 @@ export default function CheckScreen({
                 朱書きPDFをダウンロード
               </a>
             )}
+            <div className={styles.menu}>
+              <button
+                className={styles.btn}
+                aria-expanded={menuOpen}
+                aria-label="メニュー"
+                onClick={() => setMenuOpen(!menuOpen)}
+              >
+                ⋯
+              </button>
+              {menuOpen && (
+                <>
+                  <button
+                    className={styles.menuBack}
+                    aria-label="メニューを閉じる"
+                    onClick={() => setMenuOpen(false)}
+                  />
+                  <div className={styles.menuItems} role="menu">
+                    <button
+                      role="menuitem"
+                      onClick={() => {
+                        setZoom(scaled ? "full" : "large");
+                        setMenuOpen(false);
+                      }}
+                    >
+                      {scaled ? "図面の全体を見る" : "図面を拡大"}
+                    </button>
+                    {uploaded && (
+                      <label
+                        className={styles.publicToggle}
+                        data-public={publicView}
+                        title="製作会社名、出図印、担当者名の欄を塗りつぶします"
+                      >
+                        <input
+                          type="checkbox"
+                          checked={publicView}
+                          onChange={(e) => setPublicView(e.target.checked)}
+                        />
+                        {publicView
+                          ? "公開・デモ用の表示"
+                          : "社内用（名前が見えます）"}
+                      </label>
+                    )}
+                    {uploaded && (
+                      <Link
+                        role="menuitem"
+                        href={`/projects/${slug}?add=1`}
+                      >
+                        施工図を追加
+                      </Link>
+                    )}
+                  </div>
+                </>
+              )}
+            </div>
           </div>
         </div>
 
+        {!publicView && (
+          <p className={styles.internalBanner}>
+            社内用の表示です。名前が見えます。
+          </p>
+        )}
+
         {noMaskedFiles ? (
           <p className={styles.noMasked}>
-            このチェック結果には、名前を塗りつぶした図面がありません。物件ごとに塗りつぶす欄の登録が必要です。社内で見るときは「公開・デモ用の表示」を外してください。
+            このチェック結果には、名前を塗りつぶした図面がありません。現場ごとに塗りつぶす欄の登録が必要です。社内で見るときは、右上のメニューで「公開・デモ用の表示」を外してください。
           </p>
         ) : (
           <>
+            <Hint
+              id="check"
+              text="指摘を選ぶと理由が分かります。確認したら朱書きPDFを持ち帰ります。"
+            />
             <FindingList
               findings={shownFindings}
-              total={allFindings.length}
               excluded={excluded}
               activeId={activeId}
               notes={uploaded?.notes}
@@ -214,8 +262,9 @@ export default function CheckScreen({
                 )}
                 excluded={excluded}
                 activeId={activeId}
-                zoomed={zoomed}
+                zoom={zoom}
                 onSelect={select}
+                onClear={() => setActiveId(null)}
               />
             </section>
             <aside className={styles.side}>
@@ -246,13 +295,13 @@ export default function CheckScreen({
                     </Link>
                     {active && highlighted.size === 0 && (
                       <span className={styles.miniNote}>
-                        3D上の位置を特定できませんでした
+                        {NOT_IN_MODEL}
                       </span>
                     )}
                   </>
                 ) : (
                   <p className={styles.noModel}>
-                    この物件は3Dなしで登録しています。
+                    この現場は3Dなしで登録しています。
                   </p>
                 )}
               </div>

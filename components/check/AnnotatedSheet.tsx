@@ -70,6 +70,18 @@ const boxStyle = ([x0, y0, x1, y1]: Box) => ({
   height: `${(y1 - y0) * 100}%`,
 });
 
+const LARGE_SCALE = 2.6;
+const MAX_SCALE = 4;
+
+// 選んだ枠が枠全体の半分くらいになる倍率
+function fitScale(regions: Box[]) {
+  const x0 = Math.min(...regions.map((r) => r[0]));
+  const y0 = Math.min(...regions.map((r) => r[1]));
+  const x1 = Math.max(...regions.map((r) => r[2]));
+  const y1 = Math.max(...regions.map((r) => r[3]));
+  return Math.min(MAX_SCALE, Math.max(1, 0.5 / Math.max(x1 - x0, y1 - y0, 0.01)));
+}
+
 // 朱書きした施工図。枠はクリックで選べる。外した指摘は選択中のときだけ薄く出す
 export default function AnnotatedSheet({
   sheet,
@@ -77,16 +89,19 @@ export default function AnnotatedSheet({
   findings,
   excluded,
   activeId,
-  zoomed,
+  zoom,
   onSelect,
+  onClear,
 }: {
   sheet: Sheet;
   base: string;
   findings: Numbered[];
   excluded: ReadonlySet<number>;
   activeId: string | null;
-  zoomed: boolean;
+  // auto は選んだ指摘まで自動で寄る。full は全体、large は大きく
+  zoom: "auto" | "full" | "large";
   onSelect: (finding: Numbered) => void;
+  onClear: () => void;
 }) {
   const ratio = sheet.width / sheet.height;
   const shown = useMemo(
@@ -102,18 +117,32 @@ export default function AnnotatedSheet({
   );
   const activeBox = useRef<HTMLButtonElement>(null);
 
-  // 拡大しているときは、選んだ枠が見える場所まで動かす
+  const active = findings.find((finding) => finding.id === activeId);
+  const scale =
+    zoom === "large"
+      ? LARGE_SCALE
+      : zoom === "auto" && active
+        ? fitScale(regionsOf(active))
+        : 1;
+
+  // 選んだ枠が見える場所まで動かす
   useEffect(() => {
-    activeBox.current?.scrollIntoView({ block: "center", inline: "center" });
-  }, [activeId, zoomed]);
+    if (!active) return;
+    const frame = requestAnimationFrame(() => {
+      activeBox.current?.scrollIntoView({ block: "center", inline: "center" });
+    });
+    return () => cancelAnimationFrame(frame);
+  }, [active, scale]);
 
   return (
     <div className={styles.sheetScroller}>
       <div
         className={styles.sheetPage}
+        data-focus={Boolean(active)}
         style={{
-          width: zoomed ? "260cqw" : `min(100cqw, calc(100cqh * ${ratio}))`,
+          width: `calc(min(100cqw, calc(100cqh * ${ratio})) * ${scale})`,
         }}
+        onClick={onClear}
       >
         <Image
           src={`${base}/${sheet.base_image ?? sheet.image}`}
@@ -137,7 +166,10 @@ export default function AnnotatedSheet({
               data-active={active}
               data-off={off}
               aria-label={`指摘 ${finding.number}：${finding.title}`}
-              onClick={() => onSelect(finding)}
+              onClick={(event) => {
+                event.stopPropagation();
+                onSelect(finding);
+              }}
             >
               {index === 0 && (
                 <i className={`${styles.frameNumber} mono`}>{finding.number}</i>
@@ -158,7 +190,10 @@ export default function AnnotatedSheet({
               }}
               data-color={colorName(finding)}
               data-active={finding.id === activeId}
-              onClick={() => onSelect(finding)}
+              onClick={(event) => {
+                event.stopPropagation();
+                onSelect(finding);
+              }}
               tabIndex={-1}
             >
               {clip(noteOf(finding))}
