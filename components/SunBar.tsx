@@ -22,12 +22,15 @@ export default function SunBar({
   lon,
   value,
   note,
+  wide,
   onChange,
 }: {
   lat: number;
   lon: number;
   value: SunState;
   note?: string;
+  // 左のパネルがない画面（⑤）では、左端から出す
+  wide?: boolean;
   onChange: (next: SunState) => void;
 }) {
   const sun = sunPosition(lat, lon, value.month, value.day, value.hours);
@@ -42,7 +45,12 @@ export default function SunBar({
   }, [lat, lon, value.month, value.day]);
 
   return (
-    <div className={styles.bar} role="group" aria-label="日当たり">
+    <div
+      className={styles.bar}
+      data-wide={wide}
+      role="group"
+      aria-label="日当たり"
+    >
       <label className={styles.date}>
         <span>日付</span>
         <input

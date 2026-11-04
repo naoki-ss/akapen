@@ -15,6 +15,7 @@ import { Logo } from "../AppFrame";
 import type { Display, ViewName } from "../BuildingScene";
 import BuildingScene from "../BuildingSceneLazy";
 import MemberCard from "../MemberCard";
+import SceneControls from "../SceneControls";
 import SunBar, { DEFAULT_SUN, type SunState } from "../SunBar";
 import { ChecksList } from "../RegisterView";
 import SheetViewer from "../SheetViewer";
@@ -28,48 +29,11 @@ type Tab = "sheets" | "knowledge" | "documents";
 
 const TOKYO = { lat: 35.69, lon: 139.69, north_deg: 0 };
 
-const VIEWS: { key: ViewName; label: string }[] = [
-  { key: "oblique", label: "斜め" },
-  { key: "top", label: "真上" },
-  { key: "east", label: "東" },
-  { key: "west", label: "西" },
-  { key: "south", label: "南" },
-  { key: "north", label: "北" },
-];
 const DISPLAYS: { key: Display; label: string }[] = [
   { key: "normal", label: "通常" },
   { key: "noRoof", label: "屋根を外す" },
   { key: "xray", label: "透かし" },
 ];
-
-function Choice<T extends string>({
-  label,
-  options,
-  value,
-  onChange,
-}: {
-  label: string;
-  options: { key: T; label: string }[];
-  value: T;
-  onChange: (key: T) => void;
-}) {
-  return (
-    <>
-      <h2>{label}</h2>
-      <div className={panel.choice} role="group" aria-label={label}>
-        {options.map((option) => (
-          <button
-            key={option.key}
-            aria-pressed={value === option.key}
-            onClick={() => onChange(option.key)}
-          >
-            {option.label}
-          </button>
-        ))}
-      </div>
-    </>
-  );
-}
 
 // ③ 3Dモデル＋コンソール
 export default function ModelConsole({
@@ -160,11 +124,6 @@ export default function ModelConsole({
     [active, model],
   );
 
-  const floorOptions = [
-    { key: "all", label: "全部" },
-    ...(floors.includes("2F") ? [{ key: "2F", label: "2階まで" }] : []),
-    ...(floors.includes("1F") ? [{ key: "1F", label: "1階まで" }] : []),
-  ];
   // 指摘を見ている間は、該当部材が隠れないよう全部の階を出す
   const topFloorIndex =
     floorLimit === "all" || active
@@ -372,64 +331,39 @@ export default function ModelConsole({
       </aside>
 
       {hasModel && (
-        <aside className={`${styles.panel} ${styles.panelRight}`}>
-          <Choice label="視点" options={VIEWS} value={view} onChange={setView} />
-          <Choice
-            label="表示"
-            options={DISPLAYS}
-            value={display}
-            onChange={setDisplay}
-          />
-          <Choice
-            label="階"
-            options={floorOptions}
-            value={floorLimit}
-            onChange={(key) => {
-              setFloorLimit(key);
-              if (
-                key !== "all" &&
-                selected &&
-                floors.indexOf(selected.floor) > floors.indexOf(key)
-              ) {
-                setSelected(null);
-              }
-            }}
-          />
-          <h2>日当たり</h2>
-          <label className={appStyles.typeToggle}>
-            <input
-              type="checkbox"
-              checked={sunOn}
-              onChange={(e) => setSunOn(e.target.checked)}
-            />
-            太陽と影を表示
-          </label>
+        <SceneControls
+          displays={DISPLAYS}
+          display={display}
+          onDisplay={setDisplay}
+          view={view}
+          onView={setView}
+          floors={floors}
+          floorLimit={floorLimit}
+          onFloorLimit={(key) => {
+            setFloorLimit(key);
+            if (
+              key !== "all" &&
+              selected &&
+              floors.indexOf(selected.floor) > floors.indexOf(key)
+            ) {
+              setSelected(null);
+            }
+          }}
+          sunOn={sunOn}
+          onSun={setSunOn}
+          hasRooms={Boolean(model.architecture)}
+          showRooms={showRooms}
+          onRooms={setShowRooms}
+        >
           {model.architecture && (
-            <>
-              <h2>部屋</h2>
-              <label className={appStyles.typeToggle}>
-                <input
-                  type="checkbox"
-                  checked={showRooms}
-                  onChange={(e) => {
-                    setShowRooms(e.target.checked);
-                    // 部屋は屋根の下にあるので、屋根を外して見せる
-                    if (e.target.checked && display === "normal") {
-                      setDisplay("noRoof");
-                    }
-                  }}
-                />
-                部屋名を表示
-              </label>
-              <button
-                className={panel.clear}
-                onClick={() => setShowArchChecks(true)}
-              >
-                外観の要確認 {model.architecture.checks.length} 件
-              </button>
-            </>
+            <button
+              className={panel.clear}
+              onClick={() => setShowArchChecks(true)}
+            >
+              外観の要確認 {model.architecture.checks.length} 件
+            </button>
           )}
-        </aside>
+        </SceneControls>
       )}
 
       {selected && (

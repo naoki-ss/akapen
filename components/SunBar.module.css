@@ -15,6 +15,10 @@
   font-size: 12px;
 }
 
+.bar[data-wide="true"] {
+  left: 12px;
+}
+
 .date {
   display: flex;
   align-items: center;
