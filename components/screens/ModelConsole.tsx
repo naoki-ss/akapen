@@ -43,10 +43,13 @@ export default function ModelConsole({
   sheets,
   summary,
   projects,
+  canUpload,
   knowledge,
   documents,
 }: Building & {
   projects: { slug: string; name: string }[];
+  // 公開先では施工図を入れられない（APIの費用が掛かるため）
+  canUpload: boolean;
   knowledge: KnowledgeApp[];
   documents: ProjectDocument[];
 }) {
@@ -260,13 +263,14 @@ export default function ModelConsole({
         <div className={panel.tabBody}>
           {tab === "sheets" && (
             <>
-              {adding ? (
-                <UploadPanel job={job} />
-              ) : (
-                <button className={panel.add} onClick={() => setAdding(true)}>
-                  ＋ 施工図を追加
-                </button>
-              )}
+              {canUpload &&
+                (adding ? (
+                  <UploadPanel job={job} />
+                ) : (
+                  <button className={panel.add} onClick={() => setAdding(true)}>
+                    ＋ 施工図を追加
+                  </button>
+                ))}
               {active && (
                 <button className={panel.clear} onClick={() => selectFinding(null)}>
                   選択を外す

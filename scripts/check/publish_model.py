@@ -28,6 +28,11 @@ def expand(key, model):
 def main():
     model = json.loads(SOURCE.read_text())
     model["name"] = NAME
+    # 外観と建設地は architecture_read.py が足す。作り直しても消さない
+    current = json.loads((OUT / "model.json").read_text())
+    for key in ("architecture", "site"):
+        if key in current:
+            model[key] = current[key]
     keys = {f"{m['type']}|{m['floor']}|{m['grid']}" for m in model["members"]}
 
     result_path, sheets_path = OUT / "check-result.json", OUT / "sheets.json"

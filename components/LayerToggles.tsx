@@ -15,8 +15,11 @@ export default function LayerToggles({
   counts,
   visible,
   onToggle,
+  noKnowledge,
 }: {
   counts: Partial<Record<LayerKey, number | null>>;
+  // チェックリストがなく、青の照合をしていない結果
+  noKnowledge?: boolean;
   visible: ReadonlySet<LayerKey>;
   onToggle?: (key: LayerKey) => void;
 }) {
@@ -36,7 +39,9 @@ export default function LayerToggles({
           )}
           <b>{COLOR_NAME[key]}</b>
           {LAYER_LABELS[key]}
-          {typeof counts[key] === "number" && ` ${counts[key]}`}
+          {key === "knowledge" && noKnowledge
+            ? " 該当なし"
+            : typeof counts[key] === "number" && ` ${counts[key]}`}
         </label>
       ))}
     </fieldset>

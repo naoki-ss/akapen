@@ -19,6 +19,7 @@ async function Content({ params }: PageProps<"/projects/[slug]">) {
         slug: b.slug,
         name: b.model.name,
       }))}
+      canUpload={enabled}
       knowledge={enabled ? knowledgeApps() : []}
       documents={enabled ? projectDocuments(slug) : []}
     />

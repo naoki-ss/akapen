@@ -19,6 +19,7 @@ import {
   PROVISIONAL_SIZE as SIZE,
   type ArchFloor,
   type ArchOpening,
+  type ArchRoom,
   type Architecture,
   type BuildingModel,
   type Member,
@@ -495,6 +496,31 @@ function FloorWalls({ floor, ghost }: { floor: ArchFloor; ghost: boolean }) {
   );
 }
 
+// 部屋名が重ならないよう、近いものを上下にずらす（表示の位置だけで、データは変えない）
+function spreadLabels(rooms: ArchRoom[]) {
+  const CHAR = 900;
+  const HEIGHT = 1300;
+  const placed: ArchRoom[] = [];
+  for (const room of [...rooms].sort((a, b) => b.y - a.y)) {
+    const width = (name: string) => name.length * CHAR;
+    let y = room.y;
+    for (let moved = true, tries = 0; moved && tries < 20; tries += 1) {
+      moved = false;
+      for (const other of placed) {
+        const close =
+          Math.abs(other.x - room.x) < (width(other.name) + width(room.name)) / 2 &&
+          Math.abs(other.y - y) < HEIGHT;
+        if (close) {
+          y = other.y - HEIGHT;
+          moved = true;
+        }
+      }
+    }
+    placed.push({ ...room, y });
+  }
+  return placed;
+}
+
 // PHは RF の階に立つ塔屋
 const floorIndexOf = (floors: string[], name: string) =>
   floors.indexOf(name === "PH" ? "RF" : name);
@@ -524,7 +550,7 @@ function Exterior({
       floor.rooms.length > 0 && (!top || floor.z0 > top.z0) ? floor : top,
     null,
   );
-  const labeled = topMain ? [topMain] : [];
+  const labels = topMain ? spreadLabels(topMain.rooms) : [];
   return (
     <group>
       {visible
@@ -549,25 +575,24 @@ function Exterior({
       {showRooms &&
         !roofOn &&
         !ghost &&
-        labeled.flatMap((floor) =>
-          floor.rooms.map((room) => (
-            <Html
-              key={`${floor.floor}-${room.name}`}
-              position={toScene(room.x, room.y, floor.z0 + 300)}
-              center
-              zIndexRange={[1, 0]}
-              pointerEvents="none"
-            >
-              <div className={styles.room} data-status={room.status}>
-                {room.name}
-                {room.area_m2 !== null && (
-                  <small className="mono">{room.area_m2}㎡</small>
-                )}
-                {room.status === "要確認" && <small>要確認</small>}
-              </div>
-            </Html>
-          )),
-        )}
+        topMain &&
+        labels.map((room) => (
+          <Html
+            key={room.name}
+            position={toScene(room.x, room.y, topMain.z0 + 300)}
+            center
+            zIndexRange={[1, 0]}
+            pointerEvents="none"
+          >
+            <div className={styles.room} data-status={room.status}>
+              {room.name}
+              {room.area_m2 !== null && (
+                <small className="mono">{room.area_m2}㎡</small>
+              )}
+              {room.status === "要確認" && <small>要確認</small>}
+            </div>
+          </Html>
+        ))}
     </group>
   );
 }

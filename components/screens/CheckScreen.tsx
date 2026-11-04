@@ -151,6 +151,7 @@ export default function CheckScreen({
             counts={counts}
             visible={visibleLayers}
             onToggle={toggleLayer}
+            noKnowledge={!uploaded?.checklist && counts.knowledge === 0}
           />
           <div className={styles.barActions}>
             <button className={styles.btn} onClick={() => setZoomed(!zoomed)}>
@@ -170,9 +171,11 @@ export default function CheckScreen({
                 {publicView ? "公開・デモ用の表示" : "社内用（名前が見えます）"}
               </label>
             )}
-            <Link className={styles.btn} href={`/projects/${slug}?add=1`}>
-              施工図を追加
-            </Link>
+            {uploaded && (
+              <Link className={styles.btn} href={`/projects/${slug}?add=1`}>
+                施工図を追加
+              </Link>
+            )}
             {uploaded && !noMaskedFiles && (
               <a
                 className={styles.btnPrimary}
