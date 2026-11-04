@@ -55,6 +55,8 @@ export type JobSummary = {
   uploaded_at: string;
   pages: { number: number; title?: string | null }[];
   counts: { design: number; minutes: number; knowledge: number };
+  // 朱書きから外した指摘を除いた赤と青の数
+  open: { red: number; blue: number };
   masked: boolean;
   stopped: boolean;
 };
@@ -78,6 +80,11 @@ export function listJobs(project: string): JobSummary[] {
     }[];
     const counts = { design: 0, minutes: 0, knowledge: 0 };
     for (const finding of findings) counts[finding.source_type] += 1;
+    const excluded = new Set(readDecisions(folder));
+    const kept = findings.filter(
+      (finding) => !excluded.has((finding as { number?: number }).number ?? -1),
+    );
+    const blue = kept.filter((f) => f.source_type === "knowledge").length;
     jobs.push({
       id,
       label: meta.label,
@@ -89,6 +96,7 @@ export function listJobs(project: string): JobSummary[] {
         title: page.title,
       })),
       counts,
+      open: { red: kept.length - blue, blue },
       masked: Boolean(result.masked),
       stopped: Boolean(result.stopped_pages?.length),
     });

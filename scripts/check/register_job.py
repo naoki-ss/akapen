@@ -151,6 +151,10 @@ def project_entry(folder, meta, reg, pages, model, minutes):
     entry = {
         "registered": True,
         "name": meta["name"],
+        "structure": meta["structure"],
+        "use": meta.get("use"),
+        "site": meta.get("site"),
+        "north_deg": meta.get("north_deg", 0),
         "kind": "steel" if meta["structure"] == "S造" else "foundation",
         "design": design,
         "revised": meta["inputs"].get("revised"),

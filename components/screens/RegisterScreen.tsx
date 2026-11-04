@@ -1,6 +1,6 @@
 "use client";
 
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import AppFrame from "../AppFrame";
 import RegisterView from "../RegisterView";
 
@@ -11,6 +11,7 @@ export default function RegisterScreen({
   maskChoices: { slug: string; name: string }[];
 }) {
   const router = useRouter();
+  const watch = useSearchParams().get("watch");
   return (
     <AppFrame
       crumbs={[
@@ -20,6 +21,7 @@ export default function RegisterScreen({
     >
       <RegisterView
         maskChoices={maskChoices}
+        watch={watch}
         onCancel={() => router.push("/")}
         onDone={(slug) => router.push(`/projects/${slug}`)}
       />

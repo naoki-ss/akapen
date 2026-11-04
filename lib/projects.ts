@@ -6,6 +6,7 @@ import {
   existsSync,
   mkdirSync,
   openSync,
+  readdirSync,
   readFileSync,
   rmSync,
   writeFileSync,
@@ -25,7 +26,15 @@ const runFile = promisify(execFile);
 
 type Stored = Record<
   string,
-  { registered?: boolean; name?: string; masks?: number[][] }
+  {
+    registered?: boolean;
+    name?: string;
+    masks?: number[][];
+    structure?: string;
+    use?: string;
+    site?: { label: string; lat: number; lon: number } | null;
+    north_deg?: number;
+  }
 >;
 
 const readProjects = (): Stored =>
@@ -68,6 +77,31 @@ export function listProjects() {
     });
 }
 
+// 物件の登録情報（用途、構造、建設地、向き）。デモの2物件はファイルに手で書く
+export const projectInfo = (slug: string) => readProjects()[slug] ?? null;
+
+// 読み取りの途中の物件。一覧に進み具合を出す
+export function runningProjects() {
+  if (!existsSync(ROOT)) return [];
+  return readdirSync(ROOT)
+    .filter((slug) => SLUG.test(slug) && !readProjects()[slug]?.registered)
+    .flatMap((slug) => {
+      const folder = path.join(ROOT, slug);
+      const status = readJson(path.join(folder, "status.json"));
+      if (status?.state !== "running" || !alive(status.pid)) return [];
+      const meta = readJson(path.join(folder, "meta.json"));
+      return [
+        {
+          slug,
+          name: String(meta?.name ?? ""),
+          message: String(status.message ?? ""),
+          done: Number(status.pages_done ?? 0),
+          total: Number(status.pages_total ?? 0),
+        },
+      ];
+    });
+}
+
 // 塗りつぶす欄を借りられる物件（同じ図面枠のとき）。範囲の値は画面に返さない
 export const maskChoices = () =>
   Object.entries(readProjects())
@@ -77,6 +111,10 @@ export const maskChoices = () =>
 export type ProjectInput = {
   name: string;
   structure: string;
+  use: string;
+  // 都道府県の代表点（日当たりの計算に使う）。住所は持たない
+  site: { label: string; lat: number; lon: number } | null;
+  northDeg: number;
   masksFrom: string;
   design: File;
   revised: File | null;
@@ -104,6 +142,9 @@ export async function createProject(input: ProjectInput) {
   const meta = {
     name: input.name,
     structure: input.structure,
+    use: input.use,
+    site: input.site,
+    north_deg: input.northDeg,
     masks: readProjects()[input.masksFrom]?.masks ?? null,
     inputs: {
       design: await save(folder, "design.pdf", input.design),

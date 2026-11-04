@@ -1,9 +1,10 @@
 // 物件の一覧（サーバー側）。デモの2物件と、画面から登録した物件をまとめて扱う
 
 import type { CheckResult } from "./check";
-import { uploadEnabled } from "./jobs";
+import { listJobs, uploadEnabled } from "./jobs";
 import type { BuildingModel } from "./model";
-import { listProjects } from "./projects";
+import { listProjects, projectDocuments, projectInfo } from "./projects";
+import { thumbnailOf, type Thumbnail } from "./thumbnail";
 import type { SheetIndex } from "./sheets";
 import resultA from "@/demo-data/sample-x/check-result.json";
 import modelA from "@/demo-data/sample-x/model.json";
@@ -73,3 +74,48 @@ export function listBuildings(): Building[] {
 
 export const getBuilding = (slug: string) =>
   listBuildings().find((building) => building.slug === slug) ?? null;
+
+export type ProjectCard = {
+  slug: string;
+  name: string;
+  use: string | null;
+  structure: string | null;
+  floors: number;
+  updatedAt: string | null;
+  documents: number;
+  sheets: number;
+  red: number;
+  blue: number;
+  thumbnail: Thumbnail | null;
+};
+
+// ① の1枚分。数は判定ジョブと登録情報から数える
+export function cardOf({ slug, model, check }: Building): ProjectCard {
+  const enabled = uploadEnabled();
+  const jobs = enabled ? listJobs(slug) : [];
+  const info = enabled ? projectInfo(slug) : null;
+  const saved = check?.findings ?? [];
+  const savedBlue = saved.filter((f) => f.source_type === "knowledge").length;
+  const dates = jobs.map((job) => job.uploaded_at).sort();
+  return {
+    slug,
+    name: model.name,
+    use: info?.use ?? null,
+    structure:
+      info?.structure ?? model.name.match(/(?:RC|SRC|S|W)造/)?.[0] ?? null,
+    floors: (model.floors ?? Object.keys(model.levels)).filter((floor) =>
+      /^\d+F$/.test(floor),
+    ).length,
+    updatedAt: dates.at(-1) ?? null,
+    documents: enabled
+      ? projectDocuments(slug).reduce((sum, row) => sum + row.count, 0)
+      : 0,
+    sheets: jobs.length + (check ? 1 : 0),
+    red:
+      jobs.reduce((sum, job) => sum + job.open.red, 0) +
+      saved.length -
+      savedBlue,
+    blue: jobs.reduce((sum, job) => sum + job.open.blue, 0) + savedBlue,
+    thumbnail: thumbnailOf(model),
+  };
+}

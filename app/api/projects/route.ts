@@ -1,5 +1,6 @@
 import type { NextRequest } from "next/server";
 import { crossSite, MAX_UPLOAD_BYTES, uploadEnabled } from "@/lib/jobs";
+import { PREFECTURES } from "@/lib/prefectures";
 import { createProject, listProjects, maskChoices } from "@/lib/projects";
 
 const error = (message: string, status: number) =>
@@ -17,6 +18,11 @@ export async function GET() {
     { projects: listProjects(), maskChoices: maskChoices(), enabled: true },
     { headers },
   );
+}
+
+function siteOf(label: string) {
+  const found = PREFECTURES.find((prefecture) => prefecture.label === label);
+  return found ? { label: found.label, lat: found.lat, lon: found.lon } : null;
 }
 
 const isPdf = async (file: File) =>
@@ -60,6 +66,9 @@ export async function POST(request: NextRequest) {
       await createProject({
         name,
         structure: form.get("structure") === "RC造" ? "RC造" : "S造",
+        use: String(form.get("use") ?? "").slice(0, 40),
+        site: siteOf(String(form.get("site") ?? "")),
+        northDeg: Number(form.get("north_deg")) || 0,
         masksFrom: String(form.get("masks_from") ?? ""),
         design,
         revised: revised instanceof File && revised.size > 0 ? revised : null,
