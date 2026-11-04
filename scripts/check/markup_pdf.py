@@ -177,17 +177,30 @@ def place_comment(page, frame, size, ink, taken, frames):
     return best
 
 
-def draw_tag(canvas, frame, number, color, scale, font, x=None):
+def tag_spots(page, frame, width, height):
+    """番号を置く候補。枠の上の辺、下の辺、左の辺、右の辺に沿って順に並べる"""
+    W, H = page.rect.width, page.rect.height
+    xs = [frame.x0 + step * (width + 1) for step in range(int(max(frame.width, width) / (width + 1)))] or [frame.x0]
+    ys = [frame.y0 + step * (height + 1) for step in range(int(max(frame.height, height) / (height + 1)))] or [frame.y0]
+    spots = [(x, frame.y0 - height) for x in xs] + [(x, frame.y1) for x in xs]
+    spots += [(frame.x0 - width, y) for y in ys] + [(frame.x1, y) for y in ys]
+    spots.append((frame.x0, frame.y0))
+    return [pymupdf.Rect(x, y, x + width, y + height) for x, y in spots if x >= 0 and y >= 0 and x + width <= W and y + height <= H]
+
+
+def place_tag(page, frame, number, scale, font, taken):
+    """枠の番号の場所。ほかの番号やコメントに隠れない場所を、枠の辺に沿って探す"""
     size = 8.5 * scale
     label = str(number)
     width = font.text_length(label, fontsize=size) + 5 * scale
     height = size + 3 * scale
-    y0 = frame.y0 - height if frame.y0 - height > 0 else frame.y0
-    x0 = frame.x0 if x is None else x
-    tag = pymupdf.Rect(x0, y0, x0 + width, y0 + height)
+    spots = tag_spots(page, frame, width, height) or [pymupdf.Rect(frame.x0, frame.y0, frame.x0 + width, frame.y0 + height)]
+    return min(spots, key=lambda spot: sum(overlap(spot, other) for other in taken) > 0)
+
+
+def draw_tag(canvas, tag, number, color, scale):
     canvas.rect(tag, color=color, fill=color)
-    canvas.text((tag.x0 + 2.5 * scale, tag.y1 - 2.2 * scale), label, size, (1, 1, 1))
-    return tag
+    canvas.text((tag.x0 + 2.5 * scale, tag.y1 - 2.2 * scale), str(number), 8.5 * scale, (1, 1, 1))
 
 
 def draw_legend(page, layer, font):
@@ -216,6 +229,7 @@ def mark_page(doc, page, items, layers, font, font_buffer, legend_layer):
     frames = [to_rect(page, box) for item in items for box in item["regions"]]
     taken = [pymupdf.Rect(0, 0, 255 * scale, 55 * scale)]
     drawn = set()
+    tags = []
     for item in items:
         if item["number"] in drawn:
             continue
@@ -223,24 +237,29 @@ def mark_page(doc, page, items, layers, font, font_buffer, legend_layer):
         numbers = item.get("merged_numbers", [item["number"]])
         group = sorted((other for other in items if other["number"] in numbers), key=lambda other: other["source_type"] == "knowledge")
         drawn.update(numbers)
-        draw_group(page, group, layers, font, scale, ink, taken, frames)
+        draw_group(page, group, layers, font, scale, ink, taken, frames, tags)
+    # 番号は最後に描く。あとから描く枠の線が数字にかからないようにする
+    for tag, number, source_type in tags:
+        canvas = Canvas(page, layers[source_type])
+        draw_tag(canvas, tag, number, SOURCE_TYPES[source_type]["color"], scale)
+        canvas.commit()
     draw_legend(page, legend_layer, font)
 
 
-def draw_group(page, group, layers, font, scale, ink, taken, frames):
+def draw_group(page, group, layers, font, scale, ink, taken, frames, tags):
     """1つの枠と1つのコメントを描く。色ごとに自分の層に描くので、層を消すとその色の枠と番号と文だけが消える"""
     canvases = [Canvas(page, layers[item["source_type"]]) for item in group]
     colors = [SOURCE_TYPES[item["source_type"]]["color"] for item in group]
     rects = [to_rect(page, box) for box in group[0]["regions"]]
+    outer = 2.2 * scale * (len(group) - 1)
     for rect in rects:
-        next_tag = None
         for index, (item, canvas, color) in enumerate(zip(group, canvases, colors)):
             # 2色の枠は、内側に赤、外側に青を沿わせて1つの枠に見せる
             outset = index * 2.2 * scale
             canvas.rect(rect + (-outset, -outset, outset, outset), color=color, width=1.6 * scale)
-            tag = draw_tag(canvas, rect + (-2.2 * scale * (len(group) - 1), -2.2 * scale * (len(group) - 1), 0, 0), item["number"], color, scale, font, next_tag)
-            next_tag = tag.x1 + 1
+            tag = place_tag(page, rect + (-outer, -outer, outer, outer), item["number"], scale, font, taken)
             taken.append(tag)
+            tags.append((tag, item["number"], item["source_type"]))
     size = COMMENT_SIZE * scale
     blocks = []
     for item in group:
