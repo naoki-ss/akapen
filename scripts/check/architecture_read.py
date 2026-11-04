@@ -28,6 +28,8 @@ RAW = FOLDER / "architecture"
 PUBLIC_MODEL = REPO / "demo-data" / "sample-b" / "model.json"
 PLANS = {12: "1F", 13: "2F", 14: "3F", 15: "PH"}
 ELEVATIONS = [16, 17, 18]
+MATERIAL_RAW = FOLDER / "materials"
+FINISH_PAGE = 11
 SIDES = ["north", "south", "east", "west"]
 
 COMMON = """あなたは建物の意匠図を読む担当です。図面の1ページの画像（1枚目が全体、残りは文字を読むための拡大）を渡します。
@@ -129,6 +131,146 @@ def plan_mapper(words, model):
     to_x = fit(min(xs), max(xs))
     to_y = fit(min(ys), max(ys))
     return lambda px, py: (round(to_x(px)), round(to_y(py)))
+
+
+# 仕上げの文から素材の種類を決める。上から順に見る。色と質感は lib/materials.ts の対応表で決まる
+MATERIAL_RULES = [
+    (r"カーテンウォール|サッシ", "aluminum_curtain_wall"),
+    (r"グレーチング", "steel_grating"),
+    (r"パンチング|溶融亜鉛メッキ鋼板|ルーバー", "metal_louver"),
+    (r"折版|ガルバリウム", "metal_roof"),
+    (r"笠木", "aluminum_cap"),
+    (r"アルミパネル|アルミ", "aluminum_panel"),
+    # タイル貼の下地にセメント板が書かれることがあるので、タイルを先に見る
+    (r"吹付|吹き付け", "spray_tile"),
+    (r"タイル", "tile"),
+    (r"押出|セメント板", "extruded_cement"),
+    (r"ALC|アスロック", "alc"),
+    (r"コンクリート", "concrete"),
+    (r"防水|ルーフィング", "roof_membrane"),
+]
+STANDARD_WALL = "standard_wall"
+STANDARD_GLASS = "aluminum_curtain_wall"
+STANDARD_ROOF = "roof_membrane"
+# 平面図に描かれた庇は、その階の床の高さにある。高さの書かれた図がないときの決まり
+PROJECTION_THICKNESS = {"庇": 150, "キャノピー": 450, "手すり": 1100}
+
+
+def material_of(text):
+    for pattern, key in MATERIAL_RULES:
+        if re.search(pattern, text):
+            return key
+    return None
+
+
+def build_materials(model, floors_out, doc, checks):
+    """読んだ外装の仕上げを、建物の座標の素材の範囲にする。読めなかったところは標準の素材にして記録する"""
+    grid_x, grid_y = model["grid_x"], model["grid_y"]
+    grids = {**grid_x, **grid_y}
+
+    def standard(message):
+        checks.append({"kind": "素材", "result": "要確認", "message": f"{message}：標準の素材を使用"})
+
+    if not MATERIAL_RAW.exists():
+        standard("素材を読んでいません")
+        return {"wall_zones": [], "glass": {}, "roofs": {}, "cap": None, "projections": []}
+    plans = {12: "1F", 13: "2F", 14: "3F", 15: "PH"}
+    finishes, zones, glass, base = {}, [], {}, None
+    for number in ELEVATIONS:
+        reply = json.loads((MATERIAL_RAW / f"p{number}-result.json").read_text())
+        finishes.update({row["code"]: row["text"] for row in reply["finishes"]})
+    # 高さの記入は設計GLから。建物の高さの基準（1FL）との差を引く
+    first_floor = 150
+    for number in ELEVATIONS:
+        reply = json.loads((MATERIAL_RAW / f"p{number}-result.json").read_text())
+        for view in reply["views"]:
+            if view["glass_finish_code"] in finishes:
+                glass[view["side"]] = material_of(finishes[view["glass_finish_code"]]) or STANDARD_GLASS
+            for zone in view["zones"]:
+                text = finishes.get(zone["finish_code"])
+                a, b = grids.get(zone["from_grid"]), grids.get(zone["to_grid"])
+                if text is None or a is None or b is None:
+                    standard(f"{view['side']} の {zone['finish_code']} の範囲を読めませんでした")
+                    continue
+                bottom = -10**6 if zone["bottom_mm"] is None else zone["bottom_mm"] - first_floor
+                top = 10**6 if zone["top_mm"] is None else zone["top_mm"] - first_floor
+                # 基礎の立上りのような低い帯は、壁の材料にしない
+                if top - bottom < 500:
+                    continue
+                key = material_of(text)
+                if key is None:
+                    standard(f"「{text[:20]}」の素材の種類が分かりません")
+                    key = STANDARD_WALL
+                zones.append({"side": view["side"], "from": min(a, b), "to": max(a, b), "z0": bottom, "z1": top, "material": key})
+
+    def zone_for(side, along, z):
+        hits = [zone for zone in zones if zone["side"] == side and zone["from"] <= along <= zone["to"] and zone["z0"] <= z <= zone["z1"]]
+        return min(hits, key=lambda zone: (zone["to"] - zone["from"]) * (zone["z1"] - zone["z0"]), default=None)
+
+    # 壁のうち、どの範囲にも当たらないところを記録する（描くときは標準の素材になる）
+    uncovered = set()
+    for floor in floors_out:
+        points = floor["outline"]
+        for index, (p, q) in enumerate(zip(points, points[1:] + points[:1])):
+            along_x = p[1] == q[1]
+            if not along_x and p[0] != q[0]:
+                continue
+            xs = [pt[0] for pt in points]
+            ys = [pt[1] for pt in points]
+            fixed = p[1] if along_x else p[0]
+            side = ("south" if fixed <= (min(ys) + max(ys)) / 2 else "north") if along_x else ("west" if fixed <= (min(xs) + max(xs)) / 2 else "east")
+            a, b = sorted((p[0], q[0]) if along_x else (p[1], q[1]))
+            for along in range(int(a) + 500, int(b), 1000):
+                opened = any(o["side"] == side and o["from"] <= along <= o["to"] for o in floor["openings"])
+                if not opened and not zone_for(side, along, (floor["z0"] + floor["z1"]) / 2):
+                    uncovered.add((floor["floor"], side))
+    for floor, side in sorted(uncovered):
+        standard(f"{floor} の {side} 面の壁の一部は仕上げを読めませんでした")
+
+    # 屋根：読めた仕上げの文から。主屋根は仕上表の文字（AIなし）から探す
+    table = doc[FINISH_PAGE - 1].get_text() + doc[FINISH_PAGE - 2].get_text()
+    general = re.search(r"屋根（一般）[：:]\s*([^\n]+)", table)
+    ph = next((text for text in finishes.values() if text.startswith("PH階屋根")), None)
+    roofs = {"main": material_of(general.group(1)) if general else None, "PH": material_of(ph) if ph else None}
+    for name, label in (("main", "主屋根"), ("PH", "塔屋の屋根")):
+        if roofs[name] is None:
+            standard(f"{label}の仕上げを読めませんでした")
+            roofs[name] = STANDARD_ROOF
+    cap_text = next((text for text in finishes.values() if text.startswith("笠木")), None)
+    if cap_text is None:
+        standard("笠木の仕上げを読めませんでした")
+    entrance = next((text for text in finishes.values() if "エントランス" in text), None)
+
+    projections, railing = [], False
+    for number, floor in plans.items():
+        reply = json.loads((MATERIAL_RAW / f"p{number}-result.json").read_text())
+        here = next((f for f in floors_out if f["floor"] == floor and f["rooms"]), None) or next((f for f in floors_out if f["floor"] == floor), None)
+        if here is None:
+            continue
+        for row in reply["projections"]:
+            a, b = grids.get(row["from_grid"]), grids.get(row["to_grid"])
+            if a is None or b is None:
+                standard(f"{floor} の {row['text']} の位置を読めませんでした")
+                continue
+            if row["kind"] == "手すり":
+                railing = True
+            a, b = sorted((a + row["from_offset_mm"], b + row["to_offset_mm"]))
+            depth = row["depth_mm"]
+            if depth is None:
+                depth = 1000
+                checks.append({"kind": "素材", "result": "要確認", "message": f"{floor} の {row['text']} の出が読めないので、仮に 1,000 にしました"})
+            # 名前で素材が分からないときは、凡例の中でその名前を含む仕上げを使う
+            named = next((text for text in finishes.values() if row["text"] in text), None)
+            key = material_of(row["text"]) or (material_of(named) if named else None) or (material_of(entrance) if entrance and row["kind"] == "キャノピー" else None)
+            if key is None:
+                standard(f"{floor} の {row['text']} の素材を読めませんでした")
+                key = "aluminum_panel"
+            projections.append({"floor": floor, "kind": row["kind"], "side": row["side"], "from": a, "to": b, "depth": depth,
+                                "z": here["z0"], "thickness": PROJECTION_THICKNESS[row["kind"]], "material": key})
+    if not railing:
+        checks.append({"kind": "素材", "result": "要確認", "message": "屋上や庇の手すりは図面から読めなかったので、描いていません"})
+    return {"wall_zones": zones, "glass": glass, "roofs": roofs, "cap": material_of(cap_text) if cap_text else "aluminum_cap",
+            "projections": projections}
 
 
 def build():
@@ -286,6 +428,7 @@ def build():
             roofs.append({"floor": "PH", "z": item["z1"] - ph_rise, "outline": item["outline"]})
     architecture = {"floors": floors_out, "roofs": roofs, "checks": checks,
                     "source": "意匠図を読んで組み立てた外観（初期検討用）"}
+    architecture["materials"] = build_materials(model, floors_out, doc, checks)
     model["architecture"] = architecture
     # 建物の向き：図面の上が真北から時計回りに何度か（方位記号の読みから）。建設地は県の代表点
     drawn = sorted(north)[len(north) // 2] if north else 0

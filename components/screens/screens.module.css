@@ -330,3 +330,19 @@
   gap: 16px;
   font-size: 14px;
 }
+
+/* ⑤ は操作が多いので広くする */
+.panelWide {
+  width: 244px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  font-size: 13px;
+}
+
+.panelWide h2 {
+  margin: 4px 0 0;
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 700;
+}

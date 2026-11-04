@@ -82,7 +82,7 @@ export default function SceneControls({
     ...(floors.includes("1F") ? [{ key: "1F", label: "1階まで" }] : []),
   ];
   return (
-    <aside className={`${styles.panel} ${styles.panelRight}`}>
+    <aside className={`${styles.panel} ${styles.panelRight} ${styles.panelWide}`}>
       <Choice label="視点" options={VIEWS} value={view} onChange={onView} />
       <Choice
         label="表示"

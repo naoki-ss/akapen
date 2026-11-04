@@ -4291,9 +4291,250 @@
         "kind": "平面",
         "result": "要確認",
         "message": "外部階段の囲いは立面を見て足しました（X1〜X2 / Y3〜Y4）"
+      },
+      {
+        "kind": "素材",
+        "result": "要確認",
+        "message": "1F の west 面の壁の一部は仕上げを読めませんでした：標準の素材を使用"
+      },
+      {
+        "kind": "素材",
+        "result": "要確認",
+        "message": "PH の north 面の壁の一部は仕上げを読めませんでした：標準の素材を使用"
+      },
+      {
+        "kind": "素材",
+        "result": "要確認",
+        "message": "屋上や庇の手すりは図面から読めなかったので、描いていません"
       }
     ],
-    "source": "意匠図を読んで組み立てた外観（初期検討用）"
+    "source": "意匠図を読んで組み立てた外観（初期検討用）",
+    "materials": {
+      "wall_zones": [
+        {
+          "side": "south",
+          "from": 0,
+          "to": 3150,
+          "z0": -150,
+          "z1": 15650,
+          "material": "metal_louver"
+        },
+        {
+          "side": "south",
+          "from": 3150,
+          "to": 9150,
+          "z0": 12850,
+          "z1": 15650,
+          "material": "metal_louver"
+        },
+        {
+          "side": "south",
+          "from": 9150,
+          "to": 21150,
+          "z0": 0,
+          "z1": 1000000,
+          "material": "aluminum_panel"
+        },
+        {
+          "side": "south",
+          "from": 9150,
+          "to": 21150,
+          "z0": -1000000,
+          "z1": 4070,
+          "material": "aluminum_panel"
+        },
+        {
+          "side": "north",
+          "from": 3150,
+          "to": 27150,
+          "z0": 0,
+          "z1": 4070,
+          "material": "tile"
+        },
+        {
+          "side": "north",
+          "from": 3150,
+          "to": 27150,
+          "z0": 4070,
+          "z1": 12850,
+          "material": "extruded_cement"
+        },
+        {
+          "side": "north",
+          "from": 0,
+          "to": 3150,
+          "z0": -150,
+          "z1": 15467,
+          "material": "metal_louver"
+        },
+        {
+          "side": "west",
+          "from": 12000,
+          "to": 18000,
+          "z0": -1000000,
+          "z1": 1000000,
+          "material": "metal_louver"
+        },
+        {
+          "side": "east",
+          "from": 12000,
+          "to": 18000,
+          "z0": 0,
+          "z1": 4200,
+          "material": "tile"
+        },
+        {
+          "side": "east",
+          "from": 12000,
+          "to": 18000,
+          "z0": 4200,
+          "z1": 12850,
+          "material": "extruded_cement"
+        },
+        {
+          "side": "east",
+          "from": 12000,
+          "to": 18000,
+          "z0": 12850,
+          "z1": 15467,
+          "material": "metal_louver"
+        }
+      ],
+      "glass": {
+        "south": "aluminum_curtain_wall",
+        "north": "aluminum_curtain_wall",
+        "west": "aluminum_curtain_wall",
+        "east": "aluminum_curtain_wall"
+      },
+      "roofs": {
+        "main": "roof_membrane",
+        "PH": "metal_roof"
+      },
+      "cap": "aluminum_cap",
+      "projections": [
+        {
+          "floor": "2F",
+          "kind": "庇",
+          "side": "north",
+          "from": 10950,
+          "to": 15750,
+          "depth": 1500,
+          "z": 4200,
+          "thickness": 150,
+          "material": "aluminum_panel"
+        },
+        {
+          "floor": "2F",
+          "kind": "庇",
+          "side": "west",
+          "from": 0,
+          "to": 12000,
+          "depth": 1250,
+          "z": 4200,
+          "thickness": 150,
+          "material": "steel_grating"
+        },
+        {
+          "floor": "2F",
+          "kind": "庇",
+          "side": "east",
+          "from": 0,
+          "to": 12000,
+          "depth": 1250,
+          "z": 4200,
+          "thickness": 150,
+          "material": "steel_grating"
+        },
+        {
+          "floor": "2F",
+          "kind": "庇",
+          "side": "south",
+          "from": 1900,
+          "to": 28400,
+          "depth": 1250,
+          "z": 4200,
+          "thickness": 150,
+          "material": "steel_grating"
+        },
+        {
+          "floor": "2F",
+          "kind": "キャノピー",
+          "side": "south",
+          "from": 11550,
+          "to": 18750,
+          "depth": 3000,
+          "z": 4200,
+          "thickness": 450,
+          "material": "aluminum_panel"
+        },
+        {
+          "floor": "3F",
+          "kind": "庇",
+          "side": "south",
+          "from": 1900,
+          "to": 28400,
+          "depth": 1250,
+          "z": 8100,
+          "thickness": 150,
+          "material": "steel_grating"
+        },
+        {
+          "floor": "3F",
+          "kind": "庇",
+          "side": "west",
+          "from": 0,
+          "to": 12000,
+          "depth": 1250,
+          "z": 8100,
+          "thickness": 150,
+          "material": "steel_grating"
+        },
+        {
+          "floor": "3F",
+          "kind": "庇",
+          "side": "east",
+          "from": 0,
+          "to": 12000,
+          "depth": 1250,
+          "z": 8100,
+          "thickness": 150,
+          "material": "steel_grating"
+        },
+        {
+          "floor": "PH",
+          "kind": "庇",
+          "side": "west",
+          "from": 0,
+          "to": 12000,
+          "depth": 1250,
+          "z": 12000,
+          "thickness": 150,
+          "material": "steel_grating"
+        },
+        {
+          "floor": "PH",
+          "kind": "庇",
+          "side": "south",
+          "from": 1900,
+          "to": 28400,
+          "depth": 1250,
+          "z": 12000,
+          "thickness": 150,
+          "material": "steel_grating"
+        },
+        {
+          "floor": "PH",
+          "kind": "庇",
+          "side": "east",
+          "from": 0,
+          "to": 12100,
+          "depth": 1250,
+          "z": 12000,
+          "thickness": 150,
+          "material": "steel_grating"
+        }
+      ]
+    }
   },
   "site": {
     "lat": 38.24,
