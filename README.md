@@ -71,7 +71,7 @@ http://localhost:3000 を開きます。デモの2物件の3Dと判定済みの�
 
 - `.env.local` の `ANTHROPIC_API_KEY`
 - `~/sekozu-data/projects.json`：物件ごとの設計図書の登録（書き方は `scripts/check/projects.example.json`）
-- `~/sekozu-data/knowledge/` のチェックリスト（JSON。`sekozu-checklist-knowledge.json` に `{"apps": [{"name": ..., "items": [...]}]}` の形でまとめて置ける）。社内ノウハウなのでリポジトリに入れません
+- `~/sekozu-data/knowledge/` のチェックリスト（JSON。`sekozu-checklist-knowledge.json` に `[{"name": ..., "items": [{"no", "section", "item", "checks", "criteria"}]}]` の形でまとめて置ける）。社内ノウハウなのでリポジトリに入れません
 - 日本語フォント（Noto Sans CJK。別の場所にあるときは `SEKOZU_FONT` で指定）
 
 **図面はClaude APIで処理されます。** 入れた施工図と照合に使う設計図書は、判定のためにAnthropicのAPIへ送られます。送ってよい図面かを確かめてから使ってください。入れた図面と結果はリポジトリの外（`~/sekozu-data/`）に保存します。

@@ -76,8 +76,10 @@ def checklist_texts(value, inside=False):
             yield from checklist_texts(child, True)
 
 
-for source in sorted(knowledge.glob("*.json")) if knowledge.exists() else []:
+for source in sorted(knowledge.iterdir()) if knowledge.exists() else []:
     checklist_hashes.add(hashlib.sha256(source.read_bytes()).hexdigest())
+    if source.suffix != ".json":
+        continue
     for text in checklist_texts(json.loads(source.read_text())):
         phrase = SPACES.sub("", text)
         if len(phrase) >= CHECKLIST_MIN_CHARS:

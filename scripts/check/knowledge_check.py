@@ -79,42 +79,50 @@ KINDS = [
 STEEL_WORDS = ["梁伏", "軸組", "鉄骨", "継手", "ブレース", "部材リスト", "仕口", "階段"]
 
 
+def item_type(checks):
+    """確認の文がすべて設計図との照合なら、赤の担当なのでAIに渡さない。一部なら設計図を除いた観点を見る"""
+    design = [text for text in checks if "設計図" in text]
+    if checks and len(design) == len(checks):
+        return "design"
+    return "both" if design else "knowledge"
+
+
 def normalize_app(name, items):
-    """項目に足りない欄を埋める。ID がなければ順番で付ける"""
+    """まとめたファイルの項目を、判定で使う形にする。図面だけで判定できるかの印はないので、AIの回答に任せる"""
     done = []
-    for index, item in enumerate(items, 1):
+    for entry in items:
+        checks, criteria = entry.get("checks", []), entry.get("criteria", [])
+        lines = list(checks) + [f"基準：{text}" for text in criteria]
         done.append({
-            "id": str(item.get("id") or f"{name}-{index}"),
-            "section": item.get("section") or "",
-            "item": item.get("item") or "",
-            "content": item.get("content") or "",
-            "note": item.get("note") or "",
-            "type": item.get("type") or "knowledge",
-            "drawing_checkable": item.get("drawing_checkable", True),
+            "id": f"{name}-{entry['no']}",
+            "section": entry.get("section") or "",
+            "item": entry.get("item") or "",
+            "content": "／".join(lines),
+            "note": entry.get("itemNote") or entry.get("sectionNote") or "",
+            "type": item_type(list(checks) + list(criteria)),
+            "drawing_checkable": True,
         })
     return done
 
 
 def short_name(name):
-    """「鉄骨図　チェックリスト」→「鉄骨図」"""
-    return re.sub(r"\s*チェックリスト\s*$", "", name).strip()
+    """アプリ名から「チェックリスト」と工法などの補足を除く。KINDS の名前と同じになる"""
+    name = re.sub(r"\s*チェックリスト\s*$", "", name).strip()
+    return re.sub(r"（.*$", "", name)
 
 
 def load_library():
     """{チェックリストの名前: 項目のリスト}。社内ノウハウなのでリポジトリの外から読む。ないものは入らない"""
     library = {}
     if BUNDLE.exists():
-        bundle = json.loads(BUNDLE.read_text())
-        apps = bundle if isinstance(bundle, list) else bundle.get("apps") or bundle.get("checklists") or []
-        for app in apps:
-            name = short_name(str(app.get("name") or app.get("title") or ""))
-            if name and app.get("items"):
-                library[name] = normalize_app(name, app["items"])
-    # 1つだけのファイルは鉄骨図（name がなければ）。これまでの結果と同じ項目IDを使うので、まとめたファイルより優先する
+        for app in json.loads(BUNDLE.read_text()):
+            name = short_name(app["name"])
+            library[name] = normalize_app(name, app["items"])
+    # 1つだけのファイルは鉄骨図。項目の種類を手で付けてあり、これまでの結果と同じIDなので、まとめたファイルより優先する
     for source in sorted(KNOWLEDGE.glob("*.json")) if KNOWLEDGE.exists() else []:
         single = json.loads(source.read_text())
         if source != BUNDLE and isinstance(single, dict) and single.get("items"):
-            library[short_name(single.get("name") or STEEL)] = single["items"]
+            library[STEEL] = single["items"]
     return library
 
 

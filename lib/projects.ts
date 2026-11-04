@@ -248,22 +248,31 @@ export type KnowledgeApp = {
   items?: number;
 };
 
-const shortName = (name: string) => name.replace(/\s*チェックリスト\s*$/, "").trim();
+const shortName = (name: string) =>
+  name
+    .replace(/\s*チェックリスト\s*$/, "")
+    .replace(/（.*$/, "")
+    .trim();
 
 // 取り込み済みのチェックリスト（名前と項目の数）。中身は返さない
 function importedCounts() {
   const counts = new Map<string, { items: number; at: string }>();
+  if (!existsSync(KNOWLEDGE)) return counts;
+  const dateOf = (file: string) =>
+    statSync(file).mtime.toISOString().slice(0, 10);
   if (existsSync(KNOWLEDGE_BUNDLE)) {
-    const bundle = readJson(KNOWLEDGE_BUNDLE);
-    const apps = Array.isArray(bundle)
-      ? bundle
-      : (bundle.apps ?? bundle.checklists ?? []);
-    const at = statSync(KNOWLEDGE_BUNDLE).mtime.toISOString().slice(0, 10);
-    for (const app of apps) {
-      const name = shortName(String(app.name ?? app.title ?? ""));
-      if (name && app.items?.length) {
-        counts.set(name, { items: app.items.length, at });
-      }
+    const at = dateOf(KNOWLEDGE_BUNDLE);
+    for (const app of readJson(KNOWLEDGE_BUNDLE)) {
+      counts.set(shortName(app.name), { items: app.items.length, at });
+    }
+  }
+  // 鉄骨図は1つだけのファイルを優先して判定に使う（knowledge_check.py と同じ）
+  for (const name of readdirSync(KNOWLEDGE)) {
+    const file = path.join(KNOWLEDGE, name);
+    if (!name.endsWith(".json") || file === KNOWLEDGE_BUNDLE) continue;
+    const single = readJson(file);
+    if (single?.items?.length) {
+      counts.set("鉄骨図", { items: single.items.length, at: dateOf(file) });
     }
   }
   return counts;
@@ -274,7 +283,7 @@ export function knowledgeApps(): KnowledgeApp[] {
   const counts = importedCounts();
   const apps: KnowledgeApp[] = readJson(KNOWLEDGE_APPS)?.apps ?? [];
   return apps.map((app) => {
-    const found = counts.get(app.name);
+    const found = counts.get(shortName(app.name));
     return found
       ? { ...app, imported_at: found.at, items: found.items }
       : app;
