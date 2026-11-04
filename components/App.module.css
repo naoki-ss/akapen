@@ -634,3 +634,37 @@
     border-left: 0;
   }
 }
+
+.publicToggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 10px;
+  border: 1px solid var(--accent);
+  border-radius: 4px;
+  color: var(--accent);
+  font-size: 13px;
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.publicToggle input {
+  margin: 0;
+  accent-color: var(--accent);
+}
+
+/* 塗りつぶしを外しているときは、動画や画面共有で見落とさないように目立たせる */
+.publicToggle[data-public="false"] {
+  border-color: var(--ink);
+  background: var(--ink);
+  color: #fff;
+}
+
+.noMasked {
+  grid-column: 1 / -1;
+  grid-row: 2 / -1;
+  margin: 0;
+  padding: 40px;
+  font-size: 15px;
+  line-height: 1.8;
+}

@@ -9,7 +9,9 @@ const TYPES: Record<string, string> = {
   ".json": "application/json",
 };
 
-function downloadName(folder: string) {
+function downloadName(folder: string, relative: string) {
+  // 公開用のPDFの名前に、元のファイル名（会社名が入ることがある）を使わない
+  if (relative.startsWith("masked/")) return encodeURIComponent("朱書き_公開用.pdf");
   const job = JSON.parse(readFileSync(path.join(folder, "job.json"), "utf8"));
   const base = path.basename(String(job.original_name)).replace(/\.pdf$/i, "");
   return encodeURIComponent(`朱書き_${base}.pdf`);
@@ -21,7 +23,8 @@ export async function GET(
 ) {
   const { id, path: parts } = await ctx.params;
   const folder = uploadEnabled() ? jobFolder(id) : null;
-  const file = folder && publicFile(folder, parts.join("/"));
+  const relative = parts.join("/");
+  const file = folder && publicFile(folder, relative);
   if (!folder || !file || !existsSync(file)) {
     return new Response("見つかりません", { status: 404 });
   }
@@ -31,7 +34,7 @@ export async function GET(
     "Cache-Control": "no-store",
   };
   if (extension === ".pdf") {
-    headers["Content-Disposition"] = `attachment; filename*=UTF-8''${downloadName(folder)}`;
+    headers["Content-Disposition"] = `attachment; filename*=UTF-8''${downloadName(folder, relative)}`;
   }
   return new Response(readFileSync(file), { headers });
 }

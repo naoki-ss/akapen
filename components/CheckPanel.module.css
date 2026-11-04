@@ -186,6 +186,11 @@
   color: #fff;
 }
 
+.minutes {
+  background: var(--red);
+  color: #fff;
+}
+
 .rows {
   margin: 0;
   padding: 0;
@@ -220,6 +225,18 @@
 .detail h4 {
   margin: 12px 0 6px;
   font-size: 12px;
+}
+
+.minutesRefs {
+  margin: 0 0 8px;
+  padding: 0;
+  font-size: 12px;
+  list-style: none;
+}
+
+.minutesRefs li {
+  padding: 3px 0;
+  border-top: 1px solid var(--line);
 }
 
 .notice {

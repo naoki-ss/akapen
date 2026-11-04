@@ -40,6 +40,9 @@ BASE_WIDTH = 1191
 COMMENT_SIZE = 8.5
 COMMENT_WIDTH = 165
 MAX_COMMENT_CHARS = 60
+# 公開用の図面の細かさと、名前の欄を塗る色
+MASK_DPI = 220
+MASK_COLOR = (225, 225, 225)
 
 
 def build_font(text):
@@ -369,6 +372,26 @@ def collect_text(findings, title, notes, tables=()):
         for row in rows:
             text += [str(cell) for cell in result_cells(row)]
     return "".join(text)
+
+
+def mask_pdf(source_path, out_path, masks):
+    """名前の欄を塗りつぶした公開用のPDFを作る。masks はページに対する 0〜1 の範囲のリスト。
+
+    図面を画像にしてから塗る。上に四角を重ねるだけでは、塗った下の線や文字、PDFの作成者などの情報がファイルに残る。
+    """
+    source = pymupdf.open(source_path)
+    out = pymupdf.open()
+    zoom = MASK_DPI / 72
+    for page in source:
+        pix = page.get_pixmap(matrix=pymupdf.Matrix(zoom, zoom), colorspace=pymupdf.csRGB, alpha=False)
+        for box in masks:
+            pix.set_rect(pymupdf.IRect(int(box[0] * pix.width), int(box[1] * pix.height),
+                                       int(box[2] * pix.width) + 1, int(box[3] * pix.height) + 1), MASK_COLOR)
+        sheet = out.new_page(width=page.rect.width, height=page.rect.height)
+        sheet.insert_image(sheet.rect, pixmap=pix)
+    out.save(out_path, garbage=3, deflate=True)
+    out.close()
+    source.close()
 
 
 def make_marked_pdf(source_path, findings, out_path, title="施工図の朱書き", notes=(), tables=()):

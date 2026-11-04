@@ -156,8 +156,7 @@ export default function BuildingViewer({
   buildings: Building[];
 }) {
   const [name, setName] = useState(buildings[0].model.name);
-  const building =
-    buildings.find((b) => b.model.name === name) ?? buildings[0];
+  const building = buildings.find((b) => b.model.name === name) ?? buildings[0];
 
   const picker = (
     <select
@@ -221,15 +220,25 @@ function BuildingView({
     });
   }, []);
 
+  // 公開・デモ用の表示。読み込み直すと必ず塗りつぶしありに戻す
+  const [publicView, setPublicView] = useState(true);
+
   const uploaded = screen === "upload" ? job.result : null;
   const saved = screen === "saved" ? check : undefined;
   const allFindings = uploaded?.findings ?? saved?.result.findings ?? [];
-  const resultBase = uploaded ? job.base : savedBase;
+  const noMaskedFiles = Boolean(uploaded && publicView && !uploaded.masked);
+  const resultBase = uploaded
+    ? publicView
+      ? `${job.base}/masked`
+      : job.base
+    : savedBase;
   const pageSheets = useMemo(() => {
     if (uploaded) {
       // 入れた施工図は、読み取った図面名で出す
       return uploaded.sheets.map((sheet) => {
-        const title = uploaded.pages?.find((p) => p.number === sheet.page)?.title;
+        const title = uploaded.pages?.find(
+          (p) => p.number === sheet.page,
+        )?.title;
         return title ? { ...sheet, title } : sheet;
       });
     }
@@ -245,12 +254,15 @@ function BuildingView({
 
   const hasLayers = pageSheets.some((sheet) => sheet.layers);
   const counts = {
-    design: allFindings.filter((f) => (f.source_type ?? "design") === "design").length,
+    design: allFindings.filter((f) => (f.source_type ?? "design") === "design")
+      .length,
     minutes: allFindings.filter((f) => f.source_type === "minutes").length,
     knowledge: allFindings.filter((f) => f.source_type === "knowledge").length,
   };
   const shownFindings = hasLayers
-    ? allFindings.filter((f) => !f.source_type || visibleLayers.has(f.source_type))
+    ? allFindings.filter(
+        (f) => !f.source_type || visibleLayers.has(f.source_type),
+      )
     : allFindings;
 
   const highlighted = useMemo(
@@ -425,9 +437,25 @@ function BuildingView({
                 {zoomed ? "図面の全体" : "図面を拡大"}
               </button>
               {uploaded && (
+                <label
+                  className={styles.publicToggle}
+                  data-public={publicView}
+                  title="製作会社名、出図印、担当者名の欄を塗りつぶします"
+                >
+                  <input
+                    type="checkbox"
+                    checked={publicView}
+                    onChange={(e) => setPublicView(e.target.checked)}
+                  />
+                  {publicView
+                    ? "公開・デモ用の表示"
+                    : "社内用（名前が見えます）"}
+                </label>
+              )}
+              {uploaded && !noMaskedFiles && (
                 <a
                   className={styles.primarySmall}
-                  href={`${job.base}/marked.pdf`}
+                  href={`${resultBase}/marked.pdf`}
                   download
                 >
                   朱書きPDFを保存
@@ -436,121 +464,133 @@ function BuildingView({
             </div>
           </div>
 
-          <section className={styles.drawingPane} aria-label="朱書きの図面">
-            {focus === "model" && (
-              <button
-                className={styles.swap}
-                onClick={() => setFocus("drawing")}
-              >
-                図面を大きく
-              </button>
-            )}
-            <SheetCanvas
-              sheet={currentSheet}
-              base={resultBase}
-              bbox={shownBox}
-              marks={
-                hasLayers
-                  ? undefined
-                  : allFindings
-                      .filter((f) => f.drawing.sheet === currentSheet.id)
-                      .map((f) => f.drawing.bbox)
-              }
-              zoomed={zoomed && focus === "drawing"}
-              visibleLayers={hasLayers ? visibleLayers : new Set(ALL_LAYERS)}
-            />
-          </section>
-
-          <section className={styles.listPane} aria-label="指摘の一覧">
-            <CheckPanel
-              key={screen}
-              findings={shownFindings}
-              totalFindings={allFindings.length}
-              lead={saved?.result.mode}
-              notes={uploaded?.notes}
-              report={saved?.report}
-              stats={saved?.stats}
-              changes={saved?.result.changes}
-              humanItems={saved?.humanItems}
-              humanLead={saved?.humanLead}
-              minutes={uploaded?.minutes}
-              checklist={uploaded?.checklist}
-              activeId={activeFinding?.id ?? null}
-              onActivate={activateFinding}
-              base={resultBase}
-              sheets={pageSheets}
-              onOpenSheet={(sheet, bbox, label) => showSheet(sheet, bbox, label)}
-            />
-          </section>
-
-          <section className={styles.modelPane} aria-label="3Dモデル">
-            <div className={styles.modelBar}>
-              <b>3Dモデル</b>
-              <label className={styles.floor}>
-                {floors[topFloorIndex]}
-                <input
-                  type="range"
-                  aria-label="表示する階"
-                  min={0}
-                  max={floors.length - 1}
-                  value={topFloorIndex}
-                  onChange={(e) => changeTopFloor(Number(e.target.value))}
-                />
-              </label>
-              {TOGGLEABLE.filter((type) =>
-                model.members.some((m) => m.type === type),
-              ).map((type) => (
-                <label key={type} className={styles.typeToggle}>
-                  <input
-                    type="checkbox"
-                    checked={!hiddenTypes.has(type)}
-                    onChange={(e) => toggleType(type, e.target.checked)}
-                  />
-                  {TYPE_LABELS[type]}
-                </label>
-              ))}
-              {focus === "drawing" && (
-                <button
-                  className={styles.secondary}
-                  onClick={() => setFocus("model")}
-                >
-                  3Dを大きく
-                </button>
-              )}
-            </div>
-            <div className={styles.modelView}>
-              <BuildingScene
-                model={model}
-                topFloorIndex={topFloorIndex}
-                hiddenTypes={hiddenTypes}
-                selected={selected}
-                highlighted={highlighted}
-                onSelect={setSelected}
-              />
-              {selected ? (
-                <div className={styles.memberCard}>
+          {noMaskedFiles ? (
+            <p className={styles.noMasked}>
+              このチェック結果には、名前を塗りつぶした図面がありません。物件ごとに塗りつぶす欄の登録が必要です。社内で見るときは「公開・デモ用の表示」を外してください。
+            </p>
+          ) : (
+            <>
+              <section className={styles.drawingPane} aria-label="朱書きの図面">
+                {focus === "model" && (
                   <button
-                    className={styles.closeMember}
-                    aria-label="部材の情報を閉じる"
-                    onClick={() => setSelected(null)}
+                    className={styles.swap}
+                    onClick={() => setFocus("drawing")}
                   >
-                    ×
+                    図面を大きく
                   </button>
-                  <MemberInfo member={selected} />
-                  <MemberSheets
-                    member={selected}
-                    index={sheets}
-                    onOpen={showSheet}
+                )}
+                <SheetCanvas
+                  sheet={currentSheet}
+                  base={resultBase}
+                  bbox={shownBox}
+                  marks={
+                    hasLayers
+                      ? undefined
+                      : allFindings
+                          .filter((f) => f.drawing.sheet === currentSheet.id)
+                          .map((f) => f.drawing.bbox)
+                  }
+                  zoomed={zoomed && focus === "drawing"}
+                  visibleLayers={
+                    hasLayers ? visibleLayers : new Set(ALL_LAYERS)
+                  }
+                />
+              </section>
+
+              <section className={styles.listPane} aria-label="指摘の一覧">
+                <CheckPanel
+                  key={screen}
+                  findings={shownFindings}
+                  totalFindings={allFindings.length}
+                  lead={saved?.result.mode}
+                  notes={uploaded?.notes}
+                  report={saved?.report}
+                  stats={saved?.stats}
+                  changes={saved?.result.changes}
+                  humanItems={saved?.humanItems}
+                  humanLead={saved?.humanLead}
+                  minutes={uploaded?.minutes}
+                  checklist={uploaded?.checklist}
+                  activeId={activeFinding?.id ?? null}
+                  onActivate={activateFinding}
+                  base={resultBase}
+                  sheets={pageSheets}
+                  onOpenSheet={(sheet, bbox, label) =>
+                    showSheet(sheet, bbox, label)
+                  }
+                />
+              </section>
+
+              <section className={styles.modelPane} aria-label="3Dモデル">
+                <div className={styles.modelBar}>
+                  <b>3Dモデル</b>
+                  <label className={styles.floor}>
+                    {floors[topFloorIndex]}
+                    <input
+                      type="range"
+                      aria-label="表示する階"
+                      min={0}
+                      max={floors.length - 1}
+                      value={topFloorIndex}
+                      onChange={(e) => changeTopFloor(Number(e.target.value))}
+                    />
+                  </label>
+                  {TOGGLEABLE.filter((type) =>
+                    model.members.some((m) => m.type === type),
+                  ).map((type) => (
+                    <label key={type} className={styles.typeToggle}>
+                      <input
+                        type="checkbox"
+                        checked={!hiddenTypes.has(type)}
+                        onChange={(e) => toggleType(type, e.target.checked)}
+                      />
+                      {TYPE_LABELS[type]}
+                    </label>
+                  ))}
+                  {focus === "drawing" && (
+                    <button
+                      className={styles.secondary}
+                      onClick={() => setFocus("model")}
+                    >
+                      3Dを大きく
+                    </button>
+                  )}
+                </div>
+                <div className={styles.modelView}>
+                  <BuildingScene
+                    model={model}
+                    topFloorIndex={topFloorIndex}
+                    hiddenTypes={hiddenTypes}
+                    selected={selected}
+                    highlighted={highlighted}
+                    onSelect={setSelected}
                   />
+                  {selected ? (
+                    <div className={styles.memberCard}>
+                      <button
+                        className={styles.closeMember}
+                        aria-label="部材の情報を閉じる"
+                        onClick={() => setSelected(null)}
+                      >
+                        ×
+                      </button>
+                      <MemberInfo member={selected} />
+                      <MemberSheets
+                        member={selected}
+                        index={sheets}
+                        onOpen={showSheet}
+                      />
+                    </div>
+                  ) : (
+                    <div className={styles.hint}>
+                      ドラッグで回転・ホイールで拡大・部材をクリック
+                    </div>
+                  )}
                 </div>
-              ) : (
-                <div className={styles.hint}>
-                  ドラッグで回転・ホイールで拡大・部材をクリック
-                </div>
-              )}
-            </div>
-            <p className={styles.modelSource}>{model.source}</p>
-          </section>
+                <p className={styles.modelSource}>{model.source}</p>
+              </section>
+            </>
+          )}
         </main>
       )}
       {openSheet && (

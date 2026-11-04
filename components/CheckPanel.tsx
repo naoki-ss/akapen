@@ -85,6 +85,18 @@ function FindingDetail({
         <dt>確認の方法</dt>
         <dd>{SOURCE_LABELS[finding.source]}</dd>
       </dl>
+      {finding.minutes_refs && (
+        <>
+          <h4>議事録の該当箇所</h4>
+          <ul className={styles.minutesRefs}>
+            {finding.minutes_refs.map((ref) => (
+              <li key={ref.id}>
+                <b>{ref.id}</b> {ref.text}
+              </li>
+            ))}
+          </ul>
+        </>
+      )}
       {finding.human_view ? (
         <>
           <h4>同じ箇所の比較</h4>
@@ -342,6 +354,11 @@ export function FindingCards({
                 {finding.severity}
               </span>
               <span className={styles.title}>{finding.title}</span>
+              {finding.source_type === "minutes" && (
+                <span className={`${styles.badge} ${styles.minutes}`}>
+                  議事録
+                </span>
+              )}
               {finding.source_type === "knowledge" && (
                 <span className={`${styles.badge} ${styles.knowledge}`}>
                   ナレッジ

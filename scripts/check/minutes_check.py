@@ -40,6 +40,7 @@ SYSTEM = """あなたは建設会社の施工図チェック担当です。施�
 - 「〜と〜が食い違っています」「〜の可能性があります。ご確認ください」と書きます。
 - sheet_value に図面で読めた値を、decided_value に議事録で決まった値を書きます。
 - 位置は通り芯で書きます。regions に、指摘の場所ごとの全体図に対する 0〜1 の範囲 [x0, y0, x1, y1] を入れます。複数の場所を指すときは、場所ごとに分けて全部入れます。
+- title は何が食い違っているかが分かる短い文にします。25文字以内で、議事録の番号は書きません。
 - comment は図面に書き込む短いコメントです。30文字以内で、何を確認するのかが分かるように書きます。
 - needs_confirmation は、図面だけでは言い切れず、人の確認が必要なときに true にします。"""
 
@@ -143,10 +144,6 @@ def build_schema(ids):
     }
 
 
-def id_label(ids):
-    return "、".join(ids)
-
-
 def to_findings(reply, items, page_number, floor_level):
     """(朱書きの指摘, 番号のない指摘で捨てた数)。根拠は議事録の行から取る。関係しない項目の指摘も消さずに印を付ける"""
     results = {entry["id"]: entry["result"] for entry in reply["item_results"]}
@@ -163,7 +160,7 @@ def to_findings(reply, items, page_number, floor_level):
             "page": page_number,
             "floor_level": floor_level,
             "category": "議事録",
-            "title": f"[議事録 {id_label(ids)}] {found['title']}",
+            # 題名は短く保つ。議事録の番号は根拠（evidence）に残し、詳細に出す
             "comment": f"議事録{ids[0]}{'他' if len(ids) > 1 else ''} {found['comment'] or found['title']}",
             "evidence": evidence,
             "minutes_ids": ids,

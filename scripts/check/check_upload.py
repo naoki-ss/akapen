@@ -4,6 +4,7 @@
 
 ジョブのフォルダは ~/sekozu-data/uploads/<id>/（リポジトリの外）。input.pdf と job.json を置いて起動する。
 進み具合は status.json に書く（画面はこれを読む）。結果は result.json、marked.pdf、pages/、findings/。
+物件に masks（名前の入る欄）が登録してあれば、masked/ に塗りつぶした同じ組（marked.pdf、pages/、findings/）も作る。
 
 物件ごとの設計図書は ~/sekozu-data/projects.json に登録する（図面の場所を含むのでコミットしない）。
 
@@ -31,7 +32,7 @@ from index_steel_sheets import SCHEMA as INDEX_SCHEMA, SYSTEM as INDEX_SYSTEM
 import knowledge_check
 import merge_findings
 import minutes_check
-from markup_pdf import SOURCE_TYPES, layer_overlay, make_marked_pdf, set_visible_layers, to_rect, valid_regions
+from markup_pdf import SOURCE_TYPES, layer_overlay, make_marked_pdf, mask_pdf, set_visible_layers, to_rect, valid_regions
 from repeat_runs import PRICE_INPUT, PRICE_OUTPUT
 from review_steel_sheet import SYSTEM as STEEL_SYSTEM, red_pixels, render
 from steel_experiment import REVISED_NOTE, ROOT as EXPERIMENTS, build_inputs, image_block, record_cost, schema_for, tiles
@@ -180,11 +181,13 @@ def run_design_check(context):
     reply = call_claude(context["client"], system, content, schema, raw_dir, "review")
     write_json(raw_dir / "review-result.json", reply)
     tokens = message_cost(raw_dir / "review.json")
-    findings = []
-    for item in reply["findings"]:
-        findings.append({**item, "source_type": "design", "page": context["number"],
-                         "regions": valid_regions(item.get("regions")), "floor_level": level})
+    findings = design_findings(reply, context["number"], level)
     return findings, tokens[2], {"unreadable": reply.get("unreadable", []), "input_tokens": tokens[0], "output_tokens": tokens[1]}
+
+
+def design_findings(reply, number, level):
+    return [{**item, "source_type": "design", "page": number, "regions": valid_regions(item.get("regions")), "floor_level": level}
+            for item in reply["findings"]]
 
 
 def run_knowledge_check(context):
@@ -323,29 +326,29 @@ def member_refs(item, classified, slug):
     return refs, floor
 
 
-def render_outputs(job, marked_path, findings, page_count):
+def render_outputs(folder, marked_path, findings, page_count):
     """画面に出すページの画像と、指摘ごとの切り抜きを、朱書きを重ねたPDFから作る"""
     doc = pymupdf.open(marked_path)
     sheets = []
-    (job.folder / "pages").mkdir(exist_ok=True)
-    (job.folder / "findings").mkdir(exist_ok=True)
+    (folder / "pages").mkdir(exist_ok=True)
+    (folder / "findings").mkdir(exist_ok=True)
     zoom = PAGE_DPI / 72
     matrix = pymupdf.Matrix(zoom, zoom)
     for number in range(1, page_count + 1):
         set_visible_layers(doc, SOURCE_TYPES)
         pix = doc[number - 1].get_pixmap(matrix=matrix, alpha=False)
-        pix.save(job.folder / f"pages/p{number}.png")
+        pix.save(folder / f"pages/p{number}.png")
         # 画面で種類ごとに表示を切り替えるので、朱書きのない図面と、種類ごとの透明な画像も作る
         set_visible_layers(doc, [])
         base = doc[number - 1].get_pixmap(matrix=matrix, alpha=False)
-        base.save(job.folder / f"pages/p{number}-base.png")
+        base.save(folder / f"pages/p{number}-base.png")
         layers = []
         for key in SOURCE_TYPES:
             if not any(item["page"] == number and item["source_type"] == key for item in findings):
                 continue
             set_visible_layers(doc, [key])
             overlay = layer_overlay(base, doc[number - 1].get_pixmap(matrix=matrix, alpha=False))
-            overlay.save(job.folder / f"pages/p{number}-{key}.png")
+            overlay.save(folder / f"pages/p{number}-{key}.png")
             layers.append({"key": key, "image": f"pages/p{number}-{key}.png"})
         sheets.append({"id": f"p{number}", "doc": "アップロードした施工図", "page": number, "title": f"{number} ページ目（朱書き）",
                        "image": f"pages/p{number}.png", "base_image": f"pages/p{number}-base.png", "layers": layers,
@@ -362,7 +365,7 @@ def render_outputs(job, marked_path, findings, page_count):
                 whole |= rect
             clip = (whole + (-CROP_MARGIN, -CROP_MARGIN, CROP_MARGIN, CROP_MARGIN)) & page.rect
         zoom = CROP_DPI / 72
-        page.get_pixmap(matrix=pymupdf.Matrix(zoom, zoom), clip=clip, alpha=False).save(job.folder / f"findings/{item['number']}.png")
+        page.get_pixmap(matrix=pymupdf.Matrix(zoom, zoom), clip=clip, alpha=False).save(folder / f"findings/{item['number']}.png")
     return sheets
 
 
@@ -372,6 +375,10 @@ def to_view(item, slug, classified):
     sources = "、".join(f"{e['drawing']} {e['page']}" for e in item.get("evidence", []))
     if item.get("checklist"):
         sources = f"チェックリスト {item['checklist']['id']} {item['checklist']['basis']}"
+    # 議事録の番号と本文は、詳細の「議事録の該当箇所」に出す
+    minutes_refs = [{"id": e["page"], "text": e["where"]} for e in item.get("evidence", [])] if item["source_type"] == "minutes" else None
+    if minutes_refs:
+        sources = ""
     label = SOURCE_TYPES[item["source_type"]]["label"]
     return {
         "id": str(item["number"]),
@@ -392,6 +399,7 @@ def to_view(item, slug, classified):
         "source_label": label,
         "needs_confirmation": item["needs_confirmation"],
         "checklist_id": item.get("checklist", {}).get("id"),
+        "minutes_refs": minutes_refs,
         "merged_numbers": item.get("merged_numbers"),
     }
 
@@ -402,6 +410,10 @@ def merge_same(client, findings, raw_dir):
     if not pairs:
         return 0.0, None
     ids = [merge_findings.pair_id(red, blue) for red, blue in pairs]
+    if (raw_dir / "merge-result.json").exists():  # 作り直すときは、前の判定を使う（費用を掛けない）
+        same = {entry["pair"] for entry in json.loads((raw_dir / "merge-result.json").read_text())["pairs"] if entry["same"]}
+        merge_findings.apply_merges(findings, [(red, blue) for red, blue in pairs if merge_findings.pair_id(red, blue) in same])
+        return 0.0, None
     content = [{"type": "text", "text": merge_findings.prompt_text(pairs)}]
     usd = 0.0
     try:
@@ -418,7 +430,24 @@ def merge_same(client, findings, raw_dir):
     return usd, None
 
 
-def finish_job(job, folder, slug, pages, checklist, use_knowledge, client, input_path, page_count, minutes=()):
+def write_masked(folder, input_path, masks, findings, page_count, **marks):
+    """塗りつぶした同じ組を masked/ に作る。朱書きは塗ったあとの図面に重ねる。作れたら True"""
+    out = folder / "masked"
+    out.mkdir(exist_ok=True)
+    masked_input = out / "input.pdf"
+    try:
+        mask_pdf(input_path, masked_input, masks)
+        make_marked_pdf(masked_input, findings, out / "marked.pdf", **marks)
+        render_outputs(out, out / "marked.pdf", findings, page_count)
+        return True
+    except Exception:
+        (folder / "error-masked.txt").write_text(traceback.format_exc())
+        return False
+    finally:
+        masked_input.unlink(missing_ok=True)
+
+
+def finish_job(job, folder, slug, pages, checklist, use_knowledge, client, input_path, page_count, minutes=(), masks=None):
     """ページごとの結果から、朱書きPDFと result.json を作る"""
     job.update(stage="朱書き", message="朱書きPDFを作成中です", active_pages=[])
     findings = []
@@ -464,8 +493,10 @@ def finish_job(job, folder, slug, pages, checklist, use_knowledge, client, input
     if checklist_rows:
         tables.append(("チェックリストの確認結果", checklist_rows))
     marked = folder / "marked.pdf"
-    summary = make_marked_pdf(input_path, findings, marked, title="施工図の朱書き", notes=notes, tables=tables)
-    sheets = render_outputs(job, marked, findings, page_count)
+    marks = {"title": "施工図の朱書き", "notes": notes, "tables": tables}
+    summary = make_marked_pdf(input_path, findings, marked, **marks)
+    sheets = render_outputs(folder, marked, findings, page_count)
+    masked = bool(masks) and write_masked(folder, input_path, masks, findings, page_count, **marks)
     by_page = {page["number"]: page for page in pages}
     views = [to_view(item, slug, by_page[item["page"]].get("classified")) for item in findings]
     usd = round(sum(page["usd"] for page in pages) + merge_usd, 3)
@@ -475,6 +506,7 @@ def finish_job(job, folder, slug, pages, checklist, use_knowledge, client, input
         "findings": views,
         "changes": [],
         "sheets": sheets,
+        "masked": masked,
         "failed_pages": failed,
         "notes": notes,
         "summary": summary,
@@ -518,7 +550,7 @@ def main():
         with ThreadPoolExecutor(WORKERS) as pool:
             pages = list(pool.map(lambda n: check_page(job, client, project, checklist, minutes, input_path, n, folder.name), range(1, page_count + 1)))
 
-        finish_job(job, folder, slug, pages, checklist, use_knowledge, client, input_path, page_count, minutes)
+        finish_job(job, folder, slug, pages, checklist, use_knowledge, client, input_path, page_count, minutes, project.get("masks"))
     except (Exception, SystemExit) as error:
         (folder / "error.txt").write_text(traceback.format_exc())
         # 画面には詳細を出さない（図面の場所などが混ざるため）

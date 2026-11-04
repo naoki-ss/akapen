@@ -25,6 +25,8 @@ export type ResultRow = {
 
 export type JobResult = CheckResult & {
   sheets: Sheet[];
+  // 塗りつぶした図面（masked/）があるか
+  masked?: boolean;
   notes: string[];
   checklist?: ResultRow[] | null;
   minutes?: ResultRow[] | null;

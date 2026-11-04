@@ -42,6 +42,8 @@ export type Finding = {
   needs_confirmation?: boolean;
   // ナレッジの指摘の根拠になったチェックリストの項目
   checklist_id?: string | null;
+  // 議事録の指摘の根拠になった項目（番号と本文）
+  minutes_refs?: { id: string; text: string }[] | null;
 };
 
 export type OrderChange = {
