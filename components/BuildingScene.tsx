@@ -1,7 +1,13 @@
 "use client";
 
 import { Line, OrbitControls } from "@react-three/drei";
-import { Canvas, useFrame, useThree, type ThreeEvent } from "@react-three/fiber";
+import {
+  Canvas,
+  invalidate,
+  useFrame,
+  useThree,
+  type ThreeEvent,
+} from "@react-three/fiber";
 import {
   useEffect,
   useMemo,
@@ -10,14 +16,20 @@ import {
   type RefObject,
 } from "react";
 import {
+  ACESFilmicToneMapping,
+  type BufferGeometry,
   CanvasTexture,
+  CylinderGeometry,
   type DirectionalLight,
   ExtrudeGeometry,
+  PCFShadowMap,
   Shape as OutlineShape,
   Vector2,
   Vector3,
 } from "three";
+import { mergeGeometries } from "three/examples/jsm/utils/BufferGeometryUtils.js";
 import type { OrbitControls as OrbitControlsImpl } from "three-stdlib";
+import { GROUND_COLOR, memberMaterial } from "@/lib/materials";
 import {
   floorsOf,
   memberCenter,
@@ -29,35 +41,20 @@ import {
   type Architecture,
   type BuildingModel,
   type Member,
-  type MemberType,
 } from "@/lib/model";
 import styles from "./BuildingScene.module.css";
+import { glassFor, HORIZON, makeSky, materialFor, meterBox } from "./sceneLook";
 
 const MM = 0.001;
 const RED = "#C62D23";
 const INK = "#1B2430";
 const GRID_COLOR = "#5B6470";
-// 霧がかった緑の地面
-const GROUND = "#A9B79C";
-const FOG = "#DDE3D6";
-const WALL = "#D8D4CA";
-const GLASS = "#8FA6B2";
-const ROOF = "#B7B4AB";
 const WALL_THICKNESS = 200;
-const GLASS_THICKNESS = 40;
-
-const COLORS: Record<MemberType, string> = {
-  column: "#8a8a84",
-  beam: "#a9a59a",
-  wall: "#d8d3c4",
-  slab: "#c9d3d6",
-  pile: "#7d6a55",
-};
-
-const OPACITY: Partial<Record<MemberType, number>> = {
-  slab: 0.35,
-  wall: 0.6,
-};
+const GLASS_THICKNESS = 30;
+const MULLION_SPACING = 1200;
+const NO_RAYCAST = () => null;
+const WORLD_UP = new Vector3(0, 1, 0);
+const MIN_EYE = 0.5;
 
 type Vec3 = [number, number, number];
 
@@ -159,14 +156,24 @@ function shapeOf(m: Member): Shape {
   }
 }
 
+// 部材の形。模様が伸びないようにメートルでUVを付ける
+function memberGeometry(shape: Shape): BufferGeometry {
+  if (shape.cylinder) {
+    return new CylinderGeometry(shape.size[0], shape.size[0], shape.size[1], 20);
+  }
+  return meterBox(shape.size);
+}
+
 function MemberMesh({
   member,
+  materialKey,
   selected,
   glow,
   ghost,
   onSelect,
 }: {
   member: Member;
+  materialKey: string;
   selected: boolean;
   // 指摘の該当部材を光らせる色
   glow?: string;
@@ -175,8 +182,8 @@ function MemberMesh({
   onSelect: (member: Member) => void;
 }) {
   const shape = useMemo(() => shapeOf(member), [member]);
-  const baseOpacity = OPACITY[member.type];
-  const opacity = ghost ? Math.min(baseOpacity ?? 1, 0.16) : baseOpacity;
+  const geometry = useMemo(() => memberGeometry(shape), [shape]);
+  useEffect(() => () => geometry.dispose(), [geometry]);
 
   const handleClick = (e: ThreeEvent<MouseEvent>) => {
     // 手前の部材だけを選ぶ。ドラッグで回転した直後のクリックは無視する
@@ -187,34 +194,20 @@ function MemberMesh({
   const accent = selected ? INK : glow;
   return (
     <mesh
+      geometry={geometry}
+      material={accent ? undefined : materialFor(materialKey, ghost)}
       position={shape.position}
       rotation={shape.rotation}
       onClick={handleClick}
       castShadow={!ghost}
       receiveShadow={!ghost}
     >
-      {shape.cylinder ? (
-        <cylinderGeometry
-          args={[shape.size[0], shape.size[0], shape.size[1], 20]}
-        />
-      ) : (
-        <boxGeometry args={shape.size} />
-      )}
-      {accent ? (
+      {accent && (
         <meshStandardMaterial
           key={accent}
           color={accent}
           emissive={accent}
           emissiveIntensity={selected ? 0.2 : 0.75}
-        />
-      ) : (
-        // 透明と不透明の切り替えを確実に反映するため、key で作り直す
-        <meshStandardMaterial
-          key={opacity ?? "solid"}
-          color={COLORS[member.type]}
-          transparent={opacity !== undefined}
-          opacity={opacity ?? 1}
-          depthWrite={!ghost}
         />
       )}
     </mesh>
@@ -246,7 +239,7 @@ function GridLabel({ name, position }: { name: string; position: Vec3 }) {
 
   return (
     <sprite position={position} scale={[1.6, 1.6, 1]}>
-      <spriteMaterial map={texture} />
+      <spriteMaterial map={texture} toneMapped={false} />
     </sprite>
   );
 }
@@ -289,10 +282,77 @@ export type ViewName = "oblique" | "top" | "east" | "west" | "south" | "north";
 export type Display = "normal" | "noRoof" | "xray";
 export type Callout = { number: number; title: string; color: string };
 
-type Frame = { center: Vec3; size: number };
+// 建物の大きさと、正面の向き。視点はここから自動で決める
+type Frame = {
+  center: Vec3;
+  size: number;
+  width: number;
+  depth: number;
+  height: number;
+  // 正面から見て、カメラを置く向き（three.js の平面上の単位ベクトル）
+  front: [number, number];
+  // 地上に見えている範囲の角。視点を合わせるときに画面へ収める
+  corners: Vec3[];
+};
 
-// 建物の中心と大きさ（m）から、視点ごとのカメラの位置を出す。北は建物座標の +y（three.js の -z）
-function viewPosition(view: ViewName, { center, size }: Frame): Vec3 {
+const FOV = 38;
+// 建物が見える範囲に占める割合
+const FILL = 0.84;
+
+// 見える範囲（パネルを除いた部分）の中央に建物が収まるよう、カメラと注視点を動かす。
+// 向きは変えずに、横にずらして、距離を変える。keepEye は目の高さを保つ（見上げる視点）
+function fitView(
+  position: Vector3,
+  target: Vector3,
+  corners: Vec3[],
+  aspect: number,
+  keepEye: boolean,
+) {
+  const eye = position.clone();
+  const look = target.clone();
+  const halfY = Math.tan((FOV / 2) * (Math.PI / 180)) * FILL;
+  const halfX = halfY * aspect;
+  const forward = new Vector3();
+  const right = new Vector3();
+  const up = new Vector3();
+  const point = new Vector3();
+  // 遠近があるので、1回では合わない。少しずつ合わせる
+  for (let step = 0; step < 10; step += 1) {
+    forward.subVectors(look, eye).normalize();
+    right.crossVectors(forward, WORLD_UP).normalize();
+    up.crossVectors(right, forward);
+    let x0 = Infinity;
+    let x1 = -Infinity;
+    let y0 = Infinity;
+    let y1 = -Infinity;
+    for (const corner of corners) {
+      point.set(...corner).sub(eye);
+      const depth = Math.max(point.dot(forward), 0.1);
+      const sx = point.dot(right) / depth;
+      const sy = point.dot(up) / depth;
+      x0 = Math.min(x0, sx);
+      x1 = Math.max(x1, sx);
+      y0 = Math.min(y0, sy);
+      y1 = Math.max(y1, sy);
+    }
+    const distance = eye.distanceTo(look);
+    const across = ((x0 + x1) / 2) * distance;
+    eye.addScaledVector(right, across);
+    look.addScaledVector(right, across);
+    // 見上げる視点は注視点だけを動かす。それ以外は向きを保ったまま平行に動かす
+    const lift = ((y0 + y1) / 2) * distance;
+    look.addScaledVector(up, lift);
+    if (!keepEye) eye.addScaledVector(up, lift);
+    const scale = Math.max((x1 - x0) / (2 * halfX), (y1 - y0) / (2 * halfY));
+    const height = eye.y;
+    eye.sub(look).multiplyScalar(scale).add(look);
+    if (keepEye) eye.y = height;
+  }
+  return { position: eye, target: look };
+}
+
+function viewPosition(view: ViewName, frame: Frame): Vec3 {
+  const { center, size } = frame;
   const d = size * 1.75;
   const [x, y, z] = center;
   switch (view) {
@@ -307,9 +367,28 @@ function viewPosition(view: ViewName, { center, size }: Frame): Vec3 {
       return [x + d, y + d * 0.18, z];
     case "west":
       return [x - d, y + d * 0.18, z];
-    case "oblique":
-      return [x + d * 0.68, y + d * 0.42, z + d * 0.72];
+    case "oblique": {
+      // 距離は fitView で決める
+      const distance = frame.size * 2;
+      // 人の目の高さに近いところから、建物を少し見上げる
+      const eye = Math.max(1.6, frame.height * 0.1);
+      return [x + frame.front[0] * distance, eye, z + frame.front[1] * distance];
+    }
   }
+}
+
+// 指摘の部材に寄るときの視点。正面の向きのまま、見下ろして寄る
+function focusPosition(
+  center: Vec3,
+  size: number,
+  front: [number, number],
+): Vec3 {
+  const d = size * 1.75;
+  return [
+    center[0] + front[0] * d,
+    center[1] + d * 0.42,
+    center[2] + front[1] * d,
+  ];
 }
 
 // 視点を切り替えると滑らかに動かす。手で動かし始めたら止める
@@ -317,31 +396,74 @@ function CameraRig({
   view,
   frame,
   focus,
+  insetLeft,
+  looksInside,
+  underground,
 }: {
   view: ViewName;
   frame: Frame;
   focus: { center: Vec3; size: number } | null;
+  insetLeft: number;
+  // 屋根を外しているときは、中が見えるよう見下ろす
+  looksInside: boolean;
+  // 透かしのときは地面の下からも見られる
+  underground: boolean;
 }) {
   const camera = useThree((state) => state.camera);
+  const size = useThree((state) => state.size);
   const controls = useThree(
     (state) => state.controls,
   ) as unknown as OrbitControlsImpl | null;
   const goal = useRef<{ position: Vector3; target: Vector3 } | null>(null);
+  // 開いた直後は動かさず、最初から収まった視点で見せる
+  const opening = useRef(true);
+  const visibleAspect =
+    size.width > insetLeft && size.height > 0
+      ? (size.width - insetLeft) / size.height
+      : 0;
+
+  // 画面の中心を、左のパネルを除いた見える範囲の中心へずらす
+  useEffect(() => {
+    if (!insetLeft || !("setViewOffset" in camera)) return;
+    camera.setViewOffset(
+      size.width,
+      size.height,
+      -insetLeft / 2,
+      0,
+      size.width,
+      size.height,
+    );
+    invalidate();
+    return () => camera.clearViewOffset();
+  }, [camera, insetLeft, size.width, size.height]);
 
   const fx = focus?.center[0];
   const fy = focus?.center[1];
   const fz = focus?.center[2];
   const fs = focus?.size;
   useEffect(() => {
-    const shown =
-      fx !== undefined && fy !== undefined && fz !== undefined && fs !== undefined
-        ? { center: [fx, fy, fz] as Vec3, size: fs }
-        : frame;
-    goal.current = {
-      position: new Vector3(...viewPosition(view, shown)),
-      target: new Vector3(...shown.center),
-    };
-  }, [view, frame, fx, fy, fz, fs]);
+    const focused =
+      fx !== undefined && fy !== undefined && fz !== undefined && fs !== undefined;
+    if (!focused && !visibleAspect) return;
+    const inside = looksInside && view === "oblique";
+    goal.current = focused
+      ? {
+          position: new Vector3(...focusPosition([fx, fy, fz], fs, frame.front)),
+          target: new Vector3(fx, fy, fz),
+        }
+      : fitView(
+          new Vector3(
+            ...(inside
+              ? focusPosition(frame.center, frame.size * 0.95, frame.front)
+              : viewPosition(view, frame)),
+          ),
+          new Vector3(...frame.center),
+          frame.corners,
+          visibleAspect,
+          view === "oblique" && !inside,
+        );
+    invalidate();
+  }, [view, frame, fx, fy, fz, fs, looksInside, visibleAspect]);
 
   useEffect(() => {
     if (!controls) return;
@@ -352,26 +474,126 @@ function CameraRig({
     return () => controls.removeEventListener("start", stop);
   }, [controls]);
 
-  useFrame((_, delta) => {
-    if (!goal.current || !controls) return;
-    const k = 1 - Math.exp(-delta * 5);
+  useFrame((state, delta) => {
+    const orbit = state.controls as unknown as OrbitControlsImpl | null;
+    if (!orbit) return;
+    // 見上げられるようにしつつ、カメラが地面より下に行かないようにする
+    const reach = camera.position.distanceTo(orbit.target);
+    const above = (orbit.target.y - MIN_EYE) / Math.max(reach, 0.01);
+    orbit.maxPolarAngle = underground
+      ? Math.PI
+      : Math.PI / 2 + Math.asin(Math.min(1, Math.max(0, above)));
+    if (!goal.current) return;
+    const k = opening.current ? 1 : 1 - Math.exp(-Math.min(delta, 0.1) * 5);
+    opening.current = false;
     camera.position.lerp(goal.current.position, k);
-    controls.target.lerp(goal.current.target, k);
-    controls.update();
+    orbit.target.lerp(goal.current.target, k);
+    orbit.update();
     if (camera.position.distanceTo(goal.current.position) < 0.02) {
       goal.current = null;
     }
+    invalidate();
   });
   return null;
 }
 
-// 外周の壁。開口のところは腰と垂れ壁だけにして、ガラスを入れる
-type WallBox = { center: Vec3; size: Vec3; glass: boolean };
+// 空：背景と映り込み。トーンマッピングは Canvas に設定する
+function SkySetup() {
+  const get = useThree((state) => state.get);
+  useEffect(() => {
+    const sky = makeSky();
+    const { scene } = get();
+    scene.background = sky;
+    scene.environment = sky;
+    invalidate();
+    return () => {
+      scene.background = null;
+      scene.environment = null;
+      sky.dispose();
+    };
+  }, [get]);
+  return null;
+}
 
-function wallBoxes(floor: ArchFloor): WallBox[] {
-  const boxes: WallBox[] = [];
+// 影は表示が変わったときだけ描き直す（回している間は描かない）
+function ShadowUpdater({ stamp }: { stamp: string }) {
+  const get = useThree((state) => state.get);
+  useEffect(() => {
+    const redraw = () => {
+      get().gl.shadowMap.needsUpdate = true;
+      invalidate();
+    };
+    redraw();
+    const later = requestAnimationFrame(redraw);
+    return () => cancelAnimationFrame(later);
+  }, [get, stamp]);
+  return null;
+}
+
+// 描き上がった絵を画像にして渡す（① の小さな画像）。カメラと影が落ち着くまで数フレーム待つ
+function Capture({ onCapture }: { onCapture: (image: string) => void }) {
+  const get = useThree((state) => state.get);
+  useEffect(() => {
+    let frames = 0;
+    let request = 0;
+    const tick = () => {
+      invalidate();
+      frames += 1;
+      if (frames < 5) {
+        request = requestAnimationFrame(tick);
+        return;
+      }
+      const { gl, scene, camera } = get();
+      gl.shadowMap.needsUpdate = true;
+      gl.render(scene, camera);
+      onCapture(gl.domElement.toDataURL("image/jpeg", 0.88));
+    };
+    request = requestAnimationFrame(tick);
+    return () => cancelAnimationFrame(request);
+  }, [get, onCapture]);
+  return null;
+}
+
+// 壁とガラスと枠の形を、素材ごとに1つにまとめる（描く回数を減らして滑らかに回す）
+type Pieces = Map<string, BufferGeometry[]>;
+const GLASS_KEY = "glass";
+
+function addPiece(pieces: Pieces, key: string, geometry: BufferGeometry) {
+  const list = pieces.get(key);
+  if (list) list.push(geometry);
+  else pieces.set(key, [geometry]);
+}
+
+function wallMaterial(
+  architecture: Architecture,
+  side: ArchOpening["side"],
+  along: number,
+  z: number,
+) {
+  const zones = architecture.materials?.wall_zones ?? [];
+  const hits = zones.filter(
+    (zone) =>
+      zone.side === side &&
+      zone.from <= along &&
+      along <= zone.to &&
+      zone.z0 <= z &&
+      z <= zone.z1,
+  );
+  // 狭い範囲の指定を優先する
+  hits.sort(
+    (a, b) => (a.to - a.from) * (a.z1 - a.z0) - (b.to - b.from) * (b.z1 - b.z0),
+  );
+  return hits[0]?.material ?? "standard_wall";
+}
+
+function floorPieces(floor: ArchFloor, architecture: Architecture): Pieces {
+  const pieces: Pieces = new Map();
   const points = floor.outline;
   const edges = points.map((p, i) => [p, points[(i + 1) % points.length]]);
+  const xs = points.map((p) => p[0]);
+  const ys = points.map((p) => p[1]);
+  const midX = (Math.min(...xs) + Math.max(...xs)) / 2;
+  const midY = (Math.min(...ys) + Math.max(...ys)) / 2;
   const box = (
     a: number,
     b: number,
@@ -379,20 +601,18 @@ function wallBoxes(floor: ArchFloor): WallBox[] {
     alongX: boolean,
     z0: number,
     z1: number,
-    glass: boolean,
+    thick: number,
+    key: string,
   ) => {
     if (b - a < 1 || z1 - z0 < 1) return;
     const mid = (a + b) / 2;
-    const thick = glass ? GLASS_THICKNESS : WALL_THICKNESS;
-    boxes.push({
-      center: alongX
-        ? toScene(mid, fixed, (z0 + z1) / 2)
-        : toScene(fixed, mid, (z0 + z1) / 2),
-      size: alongX
-        ? [(b - a) * MM, (z1 - z0) * MM, thick * MM]
-        : [thick * MM, (z1 - z0) * MM, (b - a) * MM],
-      glass,
-    });
+    const center = alongX
+      ? toScene(mid, fixed, (z0 + z1) / 2)
+      : toScene(fixed, mid, (z0 + z1) / 2);
+    const size: Vec3 = alongX
+      ? [(b - a) * MM, (z1 - z0) * MM, thick * MM]
+      : [thick * MM, (z1 - z0) * MM, (b - a) * MM];
+    addPiece(pieces, key, meterBox(size, center));
   };
   // 開口を、その面の側で範囲が重なる一番外の壁に割り当てる
   const onEdge = new Map<number, ArchOpening[]>();
@@ -408,7 +628,8 @@ function wallBoxes(floor: ArchFloor): WallBox[] {
         : [Math.min(p[1], q[1]), Math.max(p[1], q[1])];
       if (opening.to <= a || opening.from >= b) return;
       const value = alongX ? p[1] : p[0];
-      const outer = opening.side === "north" || opening.side === "east" ? value : -value;
+      const outer =
+        opening.side === "north" || opening.side === "east" ? value : -value;
       if (best < 0 || outer > bestValue) {
         best = index;
         bestValue = outer;
@@ -420,38 +641,194 @@ function wallBoxes(floor: ArchFloor): WallBox[] {
     const alongX = p[1] === q[1];
     if (!alongX && p[0] !== q[0]) return;
     const fixed = alongX ? p[1] : p[0];
+    const side: ArchOpening["side"] = alongX
+      ? fixed <= midY
+        ? "south"
+        : "north"
+      : fixed <= midX
+        ? "west"
+        : "east";
     const a = Math.min(alongX ? p[0] : p[1], alongX ? q[0] : q[1]);
     const b = Math.max(alongX ? p[0] : p[1], alongX ? q[0] : q[1]);
+    // 壁は素材の範囲の境目を越えないよう、1m ごとに素材を見てつなぐ
+    const wall = (from: number, to: number, z0: number, z1: number) => {
+      if (to - from < 1 || z1 - z0 < 1) return;
+      const height = (z0 + z1) / 2;
+      let start = from;
+      let current = wallMaterial(architecture, side, from + 1, height);
+      for (let at = from + 1000; at < to; at += 1000) {
+        const key = wallMaterial(architecture, side, at, height);
+        if (key !== current) {
+          box(start, at, fixed, alongX, z0, z1, WALL_THICKNESS, current);
+          start = at;
+          current = key;
+        }
+      }
+      box(start, to, fixed, alongX, z0, z1, WALL_THICKNESS, current);
+    };
     const openings = (onEdge.get(index) ?? []).sort((m, n) => m.from - n.from);
+    const frameKey =
+      architecture.materials?.glass[side] ?? "aluminum_curtain_wall";
     let cursor = a;
     for (const opening of openings) {
       const from = Math.max(opening.from, cursor);
       const to = Math.min(opening.to, b);
       if (to <= from) continue;
-      box(cursor, from, fixed, alongX, floor.z0, floor.z1, false);
-      box(from, to, fixed, alongX, floor.z0, opening.z0, false);
-      box(from, to, fixed, alongX, opening.z1, floor.z1, false);
-      box(from, to, fixed, alongX, opening.z0, opening.z1, true);
+      wall(cursor, from, floor.z0, floor.z1);
+      // 幅の広い開口の腰壁と垂れ壁は、外壁の仕上げではなく開口の枠と同じ素材にする
+      if (to - from >= 3000) {
+        box(from, to, fixed, alongX, floor.z0, opening.z0, WALL_THICKNESS, frameKey);
+        box(from, to, fixed, alongX, opening.z1, floor.z1, WALL_THICKNESS, frameKey);
+      } else {
+        wall(from, to, floor.z0, opening.z0);
+        wall(from, to, opening.z1, floor.z1);
+      }
+      box(from, to, fixed, alongX, opening.z0, opening.z1, GLASS_THICKNESS, GLASS_KEY);
+      // 枠：上下と、幅の広い開口の縦桟
+      const frame = (x0: number, x1: number, z0: number, z1: number) =>
+        box(x0, x1, fixed, alongX, z0, z1, 110, frameKey);
+      frame(from, to, opening.z0, opening.z0 + 50);
+      frame(from, to, opening.z1 - 50, opening.z1);
+      const count = Math.max(1, Math.round((to - from) / MULLION_SPACING));
+      for (let i = 0; i <= count; i += 1) {
+        const at = from + ((to - from) * i) / count;
+        frame(at - 25, at + 25, opening.z0, opening.z1);
+      }
       cursor = to;
     }
-    box(cursor, b, fixed, alongX, floor.z0, floor.z1, false);
+    wall(cursor, b, floor.z0, floor.z1);
   });
-  return boxes;
+  return pieces;
 }
 
-const NO_RAYCAST = () => null;
+// 庇やキャノピー：読んだ範囲と出から、素材の板と先端の枠を作る
+function projectionPieces(
+  projection: NonNullable<Architecture["materials"]>["projections"][number],
+  outline: [number, number][],
+): Pieces {
+  const pieces: Pieces = new Map();
+  const xs = outline.map((p) => p[0]);
+  const ys = outline.map((p) => p[1]);
+  const { side, from, to, depth, z, thickness, material } = projection;
+  const rect =
+    side === "south"
+      ? [from, Math.min(...ys) - depth, to, Math.min(...ys)]
+      : side === "north"
+        ? [from, Math.max(...ys), to, Math.max(...ys) + depth]
+        : side === "west"
+          ? [Math.min(...xs) - depth, from, Math.min(...xs), to]
+          : [Math.max(...xs), from, Math.max(...xs) + depth, to];
+  const [x0, y0, x1, y1] = rect;
+  const add = (
+    ax: number,
+    ay: number,
+    bx: number,
+    by: number,
+    zMin: number,
+    zMax: number,
+    key: string,
+  ) => {
+    addPiece(
+      pieces,
+      key,
+      meterBox(
+        [(bx - ax) * MM, (zMax - zMin) * MM, (by - ay) * MM],
+        toScene((ax + bx) / 2, (ay + by) / 2, (zMin + zMax) / 2),
+      ),
+    );
+  };
+  if (projection.kind === "庇") {
+    // 網の板と、先端の枠、腕木
+    add(x0, y0, x1, y1, z - 50, z, material);
+    const frame = "steel";
+    const alongX = side === "south" || side === "north";
+    if (alongX) {
+      const edge = side === "south" ? y0 : y1 - 80;
+      add(x0, edge, x1, edge + 80, z - thickness, z, frame);
+    } else {
+      const edge = side === "west" ? x0 : x1 - 80;
+      add(edge, y0, edge + 80, y1, z - thickness, z, frame);
+    }
+    const length = alongX ? x1 - x0 : y1 - y0;
+    const arms = Math.max(1, Math.round(length / 3000));
+    for (let i = 0; i <= arms; i += 1) {
+      const at = (alongX ? x0 : y0) + ((length - 60) * i) / arms;
+      if (alongX) add(at, y0, at + 60, y1, z - thickness, z - 50, frame);
+      else add(x0, at, x1, at + 60, z - thickness, z - 50, frame);
+    }
+  } else {
+    add(x0, y0, x1, y1, z - thickness, z, material);
+  }
+  return pieces;
+}
+
+// 屋根の縁の笠木
+function capPieces(
+  outline: [number, number][],
+  z: number,
+  key: string,
+): Pieces {
+  const pieces: Pieces = new Map();
+  outline.forEach((p, i) => {
+    const q = outline[(i + 1) % outline.length];
+    const alongX = p[1] === q[1];
+    if (!alongX && p[0] !== q[0]) return;
+    const length = alongX ? Math.abs(q[0] - p[0]) : Math.abs(q[1] - p[1]);
+    const center = toScene((p[0] + q[0]) / 2, (p[1] + q[1]) / 2, z + 40);
+    const size: Vec3 = alongX
+      ? [(length + 260) * MM, 0.08, 0.26]
+      : [0.26, 0.08, (length + 260) * MM];
+    addPiece(pieces, key, meterBox(size, center));
+  });
+  return pieces;
+}
+
+function mergePieces(pieces: Pieces) {
+  return [...pieces.entries()].map(([key, list]) => ({
+    key,
+    geometry: mergeGeometries(list, false),
+  }));
+}
+
+function MergedPieces({
+  pieces,
+  ghost,
+}: {
+  pieces: Pieces;
+  ghost: boolean;
+}) {
+  const merged = useMemo(() => mergePieces(pieces), [pieces]);
+  useEffect(
+    () => () => merged.forEach((item) => item.geometry.dispose()),
+    [merged],
+  );
+  return (
+    <>
+      {merged.map(({ key, geometry }) => (
+        <mesh
+          key={key}
+          geometry={geometry}
+          material={key === GLASS_KEY ? glassFor(ghost) : materialFor(key, ghost)}
+          raycast={NO_RAYCAST}
+          castShadow={!ghost && key !== GLASS_KEY}
+          receiveShadow={!ghost && key !== GLASS_KEY}
+        />
+      ))}
+    </>
+  );
+}
 
 // 平面の外形を板にする
 function Plate({
   outline,
   z,
   thickness,
-  color,
+  materialKey,
 }: {
   outline: [number, number][];
   z: number;
   thickness: number;
-  color: string;
+  materialKey: string;
 }) {
   const geometry = useMemo(() => {
     const shape = new OutlineShape(outline.map(([x, y]) => new Vector2(x * MM, y * MM)));
@@ -466,39 +843,12 @@ function Plate({
   return (
     <mesh
       geometry={geometry}
+      material={materialFor(materialKey)}
       position={[0, z * MM, 0]}
       raycast={NO_RAYCAST}
       castShadow
       receiveShadow
-    >
-      <meshStandardMaterial color={color} />
-    </mesh>
-  );
-}
-
-function FloorWalls({ floor, ghost }: { floor: ArchFloor; ghost: boolean }) {
-  const boxes = useMemo(() => wallBoxes(floor), [floor]);
-  return (
-    <group>
-      {boxes.map((item, index) => (
-        <mesh
-          key={index}
-          position={item.center}
-          raycast={NO_RAYCAST}
-          castShadow={!ghost && !item.glass}
-          receiveShadow={!item.glass}
-        >
-          <boxGeometry args={item.size} />
-          <meshStandardMaterial
-            key={`${item.glass}-${ghost}`}
-            color={item.glass ? GLASS : WALL}
-            transparent={ghost || item.glass}
-            opacity={ghost ? 0.07 : item.glass ? 0.42 : 1}
-            depthWrite={!ghost && !item.glass}
-          />
-        </mesh>
-      ))}
-    </group>
+    />
   );
 }
 
@@ -550,6 +900,44 @@ function labeledFloor(
     );
 }
 
+function FloorShell({
+  floor,
+  architecture,
+  ghost,
+}: {
+  floor: ArchFloor;
+  architecture: Architecture;
+  ghost: boolean;
+}) {
+  const pieces = useMemo(
+    () => floorPieces(floor, architecture),
+    [floor, architecture],
+  );
+  return <MergedPieces pieces={pieces} ghost={ghost} />;
+}
+
+function Cap({ floor, material }: { floor: ArchFloor; material: string }) {
+  const pieces = useMemo(
+    () => capPieces(floor.outline, floor.z1, material),
+    [floor, material],
+  );
+  return <MergedPieces pieces={pieces} ghost={false} />;
+}
+
+function Projection({
+  projection,
+  outline,
+}: {
+  projection: NonNullable<Architecture["materials"]>["projections"][number];
+  outline: [number, number][];
+}) {
+  const pieces = useMemo(
+    () => projectionPieces(projection, outline),
+    [projection, outline],
+  );
+  return <MergedPieces pieces={pieces} ghost={false} />;
+}
+
 function Exterior({
   architecture,
   floors,
@@ -568,16 +956,55 @@ function Exterior({
   const everything = topFloorIndex >= floors.length - 1;
   const roofOn = everything && display === "normal";
   const topMain = labeledFloor(architecture, floors, topFloorIndex);
+  const materials = architecture.materials;
+  // 主屋根の外形を、庇の出の基準にする
+  const mainOutline = architecture.floors.find(
+    (floor) => floor.rooms.length > 0 && floor.floor !== "PH",
+  )?.outline;
+  // 庇は外壁から出る。屋上階の庇の基準は、塔屋ではなく主屋根の外形
+  const levelOutline = (name: string) =>
+    (name === "PH"
+      ? architecture.roofs[0]?.outline
+      : architecture.floors.find(
+          (floor) => floor.floor === name && floor.rooms.length > 0,
+        )?.outline) ?? mainOutline;
   return (
     <group>
       {visible
         .filter((floor) => !(floor.floor === "PH" && !everything))
         .map((floor, index) => (
-          <FloorWalls key={index} floor={floor} ghost={ghost} />
+          <FloorShell
+            key={index}
+            floor={floor}
+            architecture={architecture}
+            ghost={ghost}
+          />
         ))}
-      {!ghost && topMain && !roofOn && (
-        <Plate outline={topMain.outline} z={topMain.z0} thickness={60} color="#EFEBE2" />
-      )}
+      {!ghost &&
+        visible
+          .filter((floor) => floor.floor !== "PH" && floor.rooms.length > 0)
+          .map((floor) => (
+            <Plate
+              key={floor.floor}
+              outline={floor.outline}
+              z={floor.z0 - 60}
+              thickness={120}
+              materialKey="floor_plate"
+            />
+          ))}
+      {!ghost &&
+        materials?.projections
+          .filter(
+            (projection) =>
+              floorIndexOf(floors, projection.floor) <= topFloorIndex &&
+              (projection.floor !== "PH" || roofOn),
+          )
+          .map((projection, index) => {
+            const outline = levelOutline(projection.floor);
+            return outline ? (
+              <Projection key={index} projection={projection} outline={outline} />
+            ) : null;
+          })}
       {architecture.roofs
         .filter(() => roofOn)
         .map((roof, index) => (
@@ -586,9 +1013,34 @@ function Exterior({
             outline={roof.outline}
             z={roof.z}
             thickness={200}
-            color={ROOF}
+            materialKey={
+              (roof.floor === "PH" ? materials?.roofs.PH : materials?.roofs.main) ??
+              "roof_membrane"
+            }
           />
         ))}
+      {roofOn &&
+        architecture.floors
+          .filter(
+            (floor) =>
+              floor.floor === "PH" ||
+              (floor.rooms.length > 0 && floor.z1 > (architecture.roofs[0]?.z ?? 0)),
+          )
+          .map((floor) => (
+            <Cap
+              key={floor.floor}
+              floor={floor}
+              material={materials?.cap ?? "aluminum_cap"}
+            />
+          ))}
+      {!ghost && !roofOn && topMain && (
+        <Plate
+          outline={topMain.outline}
+          z={topMain.z0}
+          thickness={30}
+          materialKey="floor_plate"
+        />
+      )}
     </group>
   );
 }
@@ -603,6 +1055,8 @@ function Projector({
 }) {
   const vector = useMemo(() => new Vector3(), []);
   useFrame(({ camera, size }) => {
+    // カメラを動かしたフレームでも部材からずれないよう、先に行列を更新する
+    camera.updateMatrixWorld();
     points.forEach((point, index) => {
       const node = nodes.current[index];
       if (!node) return;
@@ -616,7 +1070,7 @@ function Projector({
   return null;
 }
 
-// 太陽の光と影。sun がなければ、見やすさのための固定の光にする
+// 太陽の光と柔らかい影。日当たりを見せないときは、正面を明るく照らす向きに置く
 function SunLight({
   direction,
   frame,
@@ -642,11 +1096,13 @@ function SunLight({
         cy + direction.z * distance,
         cz - direction.y * distance,
       ]}
-      intensity={up ? 0.8 + 2 * direction.z : 0}
-      color="#FFF4DF"
+      intensity={up ? 1.1 + 1.9 * direction.z : 0}
+      color="#FFF6E6"
       castShadow={up}
       shadow-mapSize={[2048, 2048]}
-      shadow-bias={-0.0005}
+      shadow-bias={-0.0004}
+      shadow-normalBias={0.03}
+      shadow-radius={6}
       shadow-camera-left={-reach}
       shadow-camera-right={reach}
       shadow-camera-top={reach}
@@ -675,7 +1131,42 @@ export type SceneProps = {
   showRooms?: boolean;
   // 太陽のある向き（建物の座標）。日当たりを見せるときだけ渡す
   sun?: { x: number; y: number; z: number } | null;
+  // 左のパネルで隠れる幅（px）。その分だけ建物を右に寄せる
+  insetLeft?: number;
+  // 渡すと、描き上がった絵を画像にして返す
+  onCapture?: (image: string) => void;
 };
+
+// 正面を決める：ガラスの開口が一番広い面。読めなければ南。
+// カメラは正面から斜めに振る。建物の高い部分のある側へ振って、全体の形が見えるようにする
+function frontOf(model: BuildingModel, xMid: number): [number, number] {
+  const totals: Record<string, number> = { north: 0, south: 0, east: 0, west: 0 };
+  for (const floor of model.architecture?.floors ?? []) {
+    for (const opening of floor.openings) {
+      totals[opening.side] += opening.to - opening.from;
+    }
+  }
+  const side = Object.entries(totals).reduce(
+    (best, entry) => (entry[1] > best[1] ? entry : best),
+    ["south", 0] as [string, number],
+  )[0];
+  const towers = model.architecture?.floors.filter(
+    (floor) => floor.floor === "PH",
+  );
+  const towerX = towers?.[0]
+    ? towers[0].outline.reduce((sum, p) => sum + p[0], 0) /
+      towers[0].outline.length
+    : xMid + 1;
+  const swing = (towerX >= xMid ? 1 : -1) * 0.56;
+  const base: Record<string, number> = {
+    south: 0,
+    east: Math.PI / 2,
+    north: Math.PI,
+    west: -Math.PI / 2,
+  };
+  const angle = base[side] + swing;
+  return [Math.sin(angle), Math.cos(angle)];
+}
 
 export default function BuildingScene({
   model,
@@ -690,9 +1181,12 @@ export default function BuildingScene({
   compact = false,
   showRooms = false,
   sun = null,
+  insetLeft = 0,
+  onCapture,
 }: SceneProps) {
   const floors = floorsOf(model);
   const roofIndex = floors.findIndex((floor) => /^R/.test(floor));
+  const xray = display === "xray";
   const visible = model.members.filter((m) => {
     const index = floors.indexOf(m.floor);
     if (index > topFloorIndex) return false;
@@ -702,7 +1196,7 @@ export default function BuildingScene({
     return !(display === "noRoof" && roofIndex >= 0 && index >= roofIndex);
   });
 
-  const frame = useMemo<Frame & { groundLevel: number }>(() => {
+  const frame = useMemo<Frame & { zMin: number }>(() => {
     const xs = Object.values(model.grid_x);
     const ys = Object.values(model.grid_y);
     const heights = model.members.flatMap((m) =>
@@ -713,17 +1207,49 @@ export default function BuildingScene({
           : [m.z0, m.z1],
     );
     const zMin = Math.min(...heights);
-    const zMax = Math.max(...heights);
+    const zMax = Math.max(
+      ...heights,
+      ...(model.architecture?.floors.map((floor) => floor.z1) ?? []),
+    );
     const xMid = (Math.min(...xs) + Math.max(...xs)) / 2;
     const yMid = (Math.min(...ys) + Math.max(...ys)) / 2;
-    const plan = Math.hypot(
-      Math.max(...xs) - Math.min(...xs),
-      Math.max(...ys) - Math.min(...ys),
+    const width = (Math.max(...xs) - Math.min(...xs)) * MM;
+    const depth = (Math.max(...ys) - Math.min(...ys)) * MM;
+    // 視点は地上の部分で決める（杭や基礎は地面の下）
+    const height = zMax * MM;
+    // 外周の壁や庇は通り芯の外に出るので、合わせて範囲に入れる
+    const architecture = model.architecture;
+    const plan = [
+      ...xs.flatMap((x) => ys.map((y) => [x, y] as [number, number])),
+      ...(architecture?.floors.flatMap((floor) => floor.outline) ?? []),
+    ];
+    const reach = (side: ArchOpening["side"]) =>
+      Math.max(
+        0,
+        ...(architecture?.materials?.projections
+          .filter((p) => p.side === side)
+          .map((p) => p.depth) ?? []),
+      );
+    const planX = plan.map((p) => p[0]);
+    const planY = plan.map((p) => p[1]);
+    const corners: Vec3[] = [
+      Math.min(...planX) - reach("west"),
+      Math.max(...planX) + reach("east"),
+    ].flatMap((x) =>
+      [
+        Math.min(...planY) - reach("south"),
+        Math.max(...planY) + reach("north"),
+      ].flatMap((y) => [toScene(x, y, 0), toScene(x, y, zMax)]),
     );
     return {
-      center: toScene(xMid, yMid, (zMin + zMax) / 2),
-      size: Math.max(plan, zMax - zMin) * MM,
-      groundLevel: zMin - 100,
+      center: toScene(xMid, yMid, zMax * 0.45),
+      size: Math.max(Math.hypot(width, depth), height),
+      width,
+      depth,
+      height,
+      front: frontOf(model, xMid),
+      corners,
+      zMin,
     };
   }, [model]);
 
@@ -747,8 +1273,16 @@ export default function BuildingScene({
     };
   }, [model, highlighted, frame.size]);
 
-  const groundY = frame.groundLevel * MM;
+  // 地面は設計GLのあたり。透かしのときだけ、杭や基礎が見えるよう下げる
+  const groundLevel = xray ? frame.zMin - 100 : -40;
   const start = useMemo(() => viewPosition("oblique", frame), [frame]);
+
+  // 日当たりを見せないときの光。カメラ側の斜め上から正面を照らす
+  const light = sun ?? {
+    x: frame.front[0] * 0.5 + frame.front[1] * 0.45,
+    y: -(frame.front[1] * 0.5 - frame.front[0] * 0.45),
+    z: 0.72,
+  };
 
   // 丸は光らせた部材のうち、まとまりの中心に一番近いものの中心に置く（部材のないところを指さない）
   const marker = useMemo(() => {
@@ -785,40 +1319,60 @@ export default function BuildingScene({
   return (
     <div className={styles.stage}>
     <Canvas
-      shadows
-      camera={{ fov: 40, near: 0.1, far: 2000, position: start }}
+      frameloop="demand"
+      dpr={onCapture ? 2 : [1, 1.5]}
+      shadows={{ type: PCFShadowMap, autoUpdate: false }}
+      gl={{ toneMapping: ACESFilmicToneMapping, toneMappingExposure: 0.82 }}
+      camera={{ fov: FOV, near: 0.1, far: 2500, position: start }}
       onPointerMissed={() => onSelect(null)}
     >
-      <color attach="background" args={[FOG]} />
-      <fog attach="fog" args={[FOG, frame.size * 2.6, frame.size * 8]} />
-      <hemisphereLight
-        args={["#ffffff", "#b8b4a8", sun ? (sun.z > 0 ? 0.75 : 0.35) : 1.1]}
+      <SkySetup />
+      {onCapture && <Capture onCapture={onCapture} />}
+      <fog attach="fog" args={[HORIZON, frame.size * 7, frame.size * 26]} />
+      <hemisphereLight args={["#D3E3F4", "#8E9093", sun && sun.z <= 0 ? 0.2 : 0.45]} />
+      <SunLight direction={light} frame={frame} />
+      <ShadowUpdater
+        stamp={[display, topFloorIndex, highlighted.size, light.x, light.y, light.z].join()}
       />
-      {sun ? (
-        <SunLight direction={sun} frame={frame} />
-      ) : (
-        <directionalLight position={[30, 50, 20]} intensity={1.2} />
-      )}
-      <OrbitControls makeDefault target={frame.center} enableDamping />
-      <CameraRig view={view} frame={frame} focus={focus} />
+      <OrbitControls
+        makeDefault
+        target={frame.center}
+        enableDamping
+      />
+      <CameraRig
+        view={view}
+        frame={frame}
+        focus={focus}
+        insetLeft={insetLeft}
+        underground={xray}
+        looksInside={
+          !compact &&
+          Boolean(model.architecture) &&
+          (display === "noRoof" || topFloorIndex < floors.length - 1)
+        }
+      />
       <mesh
-        position={[frame.center[0], groundY, frame.center[2]]}
+        position={[frame.center[0], groundLevel * MM, frame.center[2]]}
         rotation={[-Math.PI / 2, 0, 0]}
         receiveShadow
+        raycast={NO_RAYCAST}
       >
-        <circleGeometry args={[frame.size * 12, 64]} />
-        <meshStandardMaterial color={GROUND} />
+        <circleGeometry args={[frame.size * 30, 64]} />
+        <meshStandardMaterial color={GROUND_COLOR} roughness={0.95} metalness={0} />
       </mesh>
-      {!compact && <GridLines model={model} level={frame.groundLevel + 30} />}
+      {!compact && display !== "normal" && (
+        <GridLines model={model} level={groundLevel + 30} />
+      )}
       {visible.map((m) => {
         const key = memberKey(m);
         return (
           <MemberMesh
             key={key}
             member={m}
+            materialKey={memberMaterial(model.structure, model.name, m.type)}
             selected={m === selected}
             glow={highlighted.has(key) ? highlightColor : undefined}
-            ghost={display === "xray"}
+            ghost={xray}
             onSelect={onSelect}
           />
         );

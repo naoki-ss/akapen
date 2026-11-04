@@ -115,9 +115,37 @@ export type ArchFloor = {
   rooms: ArchRoom[];
 };
 
+// 図面の仕上げから読んだ素材。material は lib/materials.ts の対応表のキー
+export type ArchMaterials = {
+  wall_zones: {
+    side: ArchOpening["side"];
+    from: number;
+    to: number;
+    z0: number;
+    z1: number;
+    material: string;
+  }[];
+  // 面ごとのガラスの枠の素材
+  glass: Partial<Record<ArchOpening["side"], string>>;
+  roofs: { main?: string | null; PH?: string | null };
+  cap: string | null;
+  projections: {
+    floor: string;
+    kind: string;
+    side: ArchOpening["side"];
+    from: number;
+    to: number;
+    depth: number;
+    z: number;
+    thickness: number;
+    material: string;
+  }[];
+};
+
 export type Architecture = {
   floors: ArchFloor[];
   roofs: { floor: string; z: number; outline: [number, number][] }[];
+  materials?: ArchMaterials;
   checks: { kind: string; result: string; message: string }[];
   source: string;
 };
@@ -132,6 +160,8 @@ export type BuildingModel = {
   floors?: string[];
   members: Member[];
   architecture?: Architecture;
+  // 構造の種類（RC造、S造）。素材の標準を決める。なければ名前から判断する
+  structure?: string;
   // 建設地の代表点と、図面の上が真北から時計回りに何度か
   site?: { lat: number; lon: number; north_deg: number };
 };

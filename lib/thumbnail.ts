@@ -1,4 +1,4 @@
-// ① のカードに出す小さな3D。画像を持たず、建物データから線を引く（どの物件でも同じ作り方）
+// ① のカードの下絵。3Dの画像（SceneThumb）ができるまでと、WebGL が使えないときに建物データから線を引く
 
 import type { BuildingModel } from "./model";
 

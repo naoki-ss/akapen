@@ -77,17 +77,14 @@ export function getBuilding(slug: string) {
   const building = listBuildings().find((item) => item.slug === slug);
   if (!building) return null;
   const info = uploadEnabled() ? projectInfo(slug) : null;
-  if (building.model.site || !info?.site) return building;
+  const site =
+    building.model.site ??
+    (info?.site
+      ? { lat: info.site.lat, lon: info.site.lon, north_deg: info.north_deg ?? 0 }
+      : undefined);
   return {
     ...building,
-    model: {
-      ...building.model,
-      site: {
-        lat: info.site.lat,
-        lon: info.site.lon,
-        north_deg: info.north_deg ?? 0,
-      },
-    },
+    model: { ...building.model, site, structure: info?.structure },
   };
 }
 

@@ -128,6 +128,7 @@ export default function ModelConsole({
             onSelect={setSelected}
             display={display}
             showRooms={Boolean(model.architecture)}
+            insetLeft={352}
             callout={
               active
                 ? {

@@ -216,3 +216,27 @@
   text-decoration: underline;
   cursor: pointer;
 }
+
+/* ⑤ の視点などの選択 */
+.choice {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 4px;
+}
+
+.choice button {
+  padding: 4px 2px;
+  border: 1px solid var(--line-strong);
+  border-radius: 5px;
+  background: var(--panel);
+  color: var(--ink);
+  font-size: 12px;
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.choice button[aria-pressed="true"] {
+  border-color: var(--accent);
+  background: var(--accent);
+  color: #fff;
+}
