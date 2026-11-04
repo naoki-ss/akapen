@@ -33,6 +33,7 @@ FONT_FILES = [
 FONT_NAME = "skjp"
 NOTICE = "AIが挙げた確認候補です。確定する前に人が確認してください。"
 LEGEND_TITLE = "凡例"
+CHECKLIST_HEADING = "チェックリストの確認結果"
 # A3 の図面での文字の大きさ。ページの大きさに合わせて変える
 BASE_WIDTH = 1191
 COMMENT_SIZE = 8.5
@@ -249,12 +250,14 @@ class ListPages:
     WIDTH, HEIGHT = 842, 595
     MARGIN = 28
     COLUMNS = [("番号", 30), ("種類", 50), ("図面", 34), ("内容", 395), ("根拠の図面とページ", 225), ("要確認", 42)]
+    CHECKLIST_COLUMNS = [("項目", 30), ("確認の内容", 330), ("結果", 130), ("ページ", 40), ("理由", 256)]
     SIZE = 8
 
     def __init__(self, doc, font, font_buffer, title):
         self.doc, self.font, self.font_buffer, self.title = doc, font, font_buffer, title
         self.page = None
         self.count = 0
+        self.columns = self.COLUMNS
 
     def new_page(self):
         self.page = self.doc.new_page(width=self.WIDTH, height=self.HEIGHT)
@@ -271,20 +274,20 @@ class ListPages:
             x += 12 + self.font.text_length(spec["label"], fontsize=self.SIZE) + 12
         self.text((x + 6, y), NOTICE, self.SIZE, (0.3, 0.3, 0.3))
         self.y = y + 8
-        self.row([name for name, _ in self.COLUMNS], header=True)
+        self.row([name for name, _ in self.columns], header=True)
 
     def text(self, point, text, size, color=(0, 0, 0)):
         self.page.insert_text(point, text, fontname=FONT_NAME, fontsize=size, color=color)
 
     def row(self, cells, color=(0, 0, 0), header=False):
         size = self.SIZE
-        wrapped = [wrap(str(cell), self.font, size, width - 6) for cell, (_, width) in zip(cells, self.COLUMNS)]
+        wrapped = [wrap(str(cell), self.font, size, width - 6) for cell, (_, width) in zip(cells, self.columns)]
         height = max(len(lines) for lines in wrapped) * size * 1.35 + 5
         if self.y + height > self.HEIGHT - self.MARGIN:
             if self.page is not None and not header:
                 self.new_page()
         x = self.MARGIN
-        for index, (lines, (_, width)) in enumerate(zip(wrapped, self.COLUMNS)):
+        for index, (lines, (_, width)) in enumerate(zip(wrapped, self.columns)):
             rect = pymupdf.Rect(x, self.y, x + width, self.y + height)
             self.page.draw_rect(rect, color=(0.6, 0.6, 0.6), fill=(0.92, 0.92, 0.92) if header else None, width=0.4)
             y = self.y + size + 1.5
@@ -296,6 +299,11 @@ class ListPages:
         self.y += height
 
 
+def checklist_cells(row):
+    pages = "、".join(f"p.{n}" for n in row["pages"])
+    return [row["id"], f"{row['item']}：{row['content']}", row["result"], pages, row["reason"]]
+
+
 def evidence_text(item):
     parts = [f"{e.get('drawing', '')} {e.get('page', '')} {e.get('where', '')}".strip() for e in item.get("evidence", [])]
     return "\n".join(parts) if parts else "（根拠の記載なし）"
@@ -305,17 +313,21 @@ def content_text(item):
     return f"{item['title']}\n{item['content']}"
 
 
-def collect_text(findings, title, notes):
+def collect_text(findings, title, notes, checklist=None):
     text = [LEGEND_TITLE, NOTICE, title, "（番号は最後の一覧ページと対応）赤：設計図書・議事録との矛盾青：ナレッジ一覧0123456789.[要確認] 枠なし（根拠の記載なし）はいあり"]
     text += [name for name, _ in ListPages.COLUMNS] + [spec["label"] for spec in SOURCE_TYPES.values()] + list(notes)
     for item in findings:
         text += [item["comment"] or "", content_text(item), evidence_text(item)]
+    if checklist:
+        text += [CHECKLIST_HEADING] + [name for name, _ in ListPages.CHECKLIST_COLUMNS]
+        for row in checklist:
+            text += [str(cell) for cell in checklist_cells(row)]
     return "".join(text)
 
 
-def make_marked_pdf(source_path, findings, out_path, title="施工図の朱書き", notes=()):
-    """朱書きを重ねたPDFを書き出す。notes は一覧の最後に書く注記"""
-    font_buffer = build_font(collect_text(findings, title, notes))
+def make_marked_pdf(source_path, findings, out_path, title="施工図の朱書き", notes=(), checklist=None):
+    """朱書きを重ねたPDFを書き出す。notes は一覧の最後に書く注記。checklist は項目ごとの結果（別の表にする）"""
+    font_buffer = build_font(collect_text(findings, title, notes, checklist))
     font = pymupdf.Font(fontbuffer=font_buffer)
     doc = pymupdf.open(source_path)
     sheet_count = doc.page_count
@@ -338,6 +350,12 @@ def make_marked_pdf(source_path, findings, out_path, title="施工図の朱書�
                 pages.new_page()
             pages.y += 11
             pages.text((ListPages.MARGIN, pages.y), line, ListPages.SIZE)
+    if checklist:
+        pages.columns = ListPages.CHECKLIST_COLUMNS
+        pages.title = CHECKLIST_HEADING
+        pages.new_page()
+        for row in checklist:
+            pages.row(checklist_cells(row))
     doc.save(out_path, garbage=1, deflate=True)
     doc.close()
     return {"sheet_pages": sheet_count, "list_pages": pages.count}

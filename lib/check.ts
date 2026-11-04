@@ -40,6 +40,8 @@ export type Finding = {
   source_type?: "design" | "minutes" | "knowledge";
   source_label?: string;
   needs_confirmation?: boolean;
+  // ナレッジの指摘の根拠になったチェックリストの項目
+  checklist_id?: string | null;
 };
 
 export type OrderChange = {

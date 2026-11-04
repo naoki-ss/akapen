@@ -42,10 +42,30 @@ if uploads.exists():
             upload_hashes[hashlib.sha256(item.read_bytes()).hexdigest()] = item.name
 print(f"アップロードのファイル {len(upload_hashes)} 種類と照合")
 
+# 社内のチェックリストは公開してよいか決まるまで入れない。本体と同じファイル、項目の文章の転記を止める。
+# 短い文（「設計図通りか」など）は一般的な言い回しと区別できないので調べない
+SPACES = re.compile(r"\s+")
+CHECKLIST_MIN_CHARS = 8
+checklist_phrases = {}
+checklist_hashes = set()
+knowledge = PRIVATE / "knowledge"
+if knowledge.resolve().is_relative_to(REPO.resolve()):
+    problems.append("チェックリストの保存先がリポジトリの中です")
+for source in sorted(knowledge.glob("*.json")) if knowledge.exists() else []:
+    checklist_hashes.add(hashlib.sha256(source.read_bytes()).hexdigest())
+    for entry in json.loads(source.read_text())["items"]:
+        for field in ("item", "content", "note"):
+            phrase = SPACES.sub("", entry[field])
+            if len(phrase) >= CHECKLIST_MIN_CHARS:
+                checklist_phrases[phrase] = f"{entry['id']} の {field}"
+print(f"チェックリストの文 {len(checklist_phrases)} 件と照合")
+
 for name in filter(None, files):
     path = REPO / name
     if path.is_file() and hashlib.sha256(path.read_bytes()).hexdigest() in upload_hashes:
         problems.append(f"{name}: アップロードされたファイルと同じ内容です")
+    if path.is_file() and hashlib.sha256(path.read_bytes()).hexdigest() in checklist_hashes:
+        problems.append(f"{name}: チェックリストの本体と同じ内容です")
     if not path.is_file() or path.name == "package-lock.json":
         continue
     if path.suffix.lower() == ".png" and name.startswith("demo-data/"):
@@ -63,6 +83,10 @@ for name in filter(None, files):
         text = path.read_text()
     except UnicodeDecodeError:
         continue
+    compact = SPACES.sub("", text)
+    for phrase, where in checklist_phrases.items():
+        if phrase in compact:
+            problems.append(f"{name}: チェックリスト（{where}）の文と一致")
     for phrase in phrases:
         text = text.replace(phrase, "")
     targets = names if name.startswith(numbers_exempt) else names + numbers

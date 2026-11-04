@@ -18,9 +18,19 @@ type Status = {
   seconds: number;
 };
 
+type ChecklistRow = {
+  id: string;
+  item: string;
+  content: string;
+  result: string;
+  pages: number[];
+  reason: string;
+};
+
 type Result = CheckResult & {
   sheets: Sheet[];
   notes: string[];
+  checklist?: ChecklistRow[] | null;
   usd: number;
   seconds: number;
 };
@@ -130,7 +140,7 @@ export default function UploadCheck({
         図面はClaude APIで処理されます。アップロードした図面と結果は、このサーバーのリポジトリの外に保存します。
       </p>
       <p className={styles.lead}>
-        選択中の物件の設計図書（構造図・差替図面）と照らし合わせます。議事録とナレッジの照合はこれから追加します。1ページで数分、約1〜2ドル掛かります。
+        選択中の物件の設計図書（構造図・差替図面）と照らし合わせます。鉄骨施工図は社内のチェックリストでも確認します（青の朱書き）。議事録の照合はこれから追加します。1ページで数分、約2ドル掛かります。
       </p>
       <input ref={input} type="file" accept="application/pdf,.pdf" disabled={running} aria-label="施工図PDF" />
       <button className={styles.openCompare} onClick={send} disabled={running}>
@@ -176,6 +186,26 @@ export default function UploadCheck({
             }
             onCompare={onCompare}
           />
+          {result.checklist && (
+            <details className={styles.checklist}>
+              <summary>チェックリストの確認結果（{result.checklist.length} 項目）</summary>
+              <ul>
+                {result.checklist.map((row) => (
+                  <li key={row.id}>
+                    <b>
+                      {row.id} {row.result}
+                      {row.pages.length > 0 &&
+                        `（${row.pages.map((n) => `p.${n}`).join("、")}）`}
+                    </b>
+                    <span>
+                      {row.item}：{row.content}
+                    </span>
+                    {row.reason && <small>{row.reason}</small>}
+                  </li>
+                ))}
+              </ul>
+            </details>
+          )}
         </>
       )}
     </div>

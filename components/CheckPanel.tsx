@@ -329,6 +329,11 @@ export function FindingCards({
                 {finding.severity}
               </span>
               <span className={styles.title}>{finding.title}</span>
+              {finding.source_type === "knowledge" && (
+                <span className={`${styles.badge} ${styles.knowledge}`}>
+                  ナレッジ
+                </span>
+              )}
               {finding.needs_confirmation && (
                 <span className={`${styles.badge} ${styles.unconfirmed}`}>
                   要確認

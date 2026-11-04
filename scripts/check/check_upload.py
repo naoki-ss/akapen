@@ -7,8 +7,8 @@
 
 物件ごとの設計図書は ~/sekozu-data/projects.json に登録する（図面の場所を含むのでコミットしない）。
 
-照合を足すときは CHECKERS に足す。今は設計図書との照合だけで、議事録とナレッジはこれから足す。
-1つの照合は (page_context) -> (指摘のリスト, 費用) を返す。指摘の source_type で色と種類が決まる。
+照合を足すときは checkers_for に足す。今は設計図書との照合（赤）とナレッジの確認（青）で、議事録はこれから足す。
+1つの照合は (page_context) -> (指摘のリスト, 費用, 記録) を返す。指摘の source_type で色と種類が決まる。
 """
 import copy
 import json
@@ -28,6 +28,7 @@ import pymupdf
 from ai_review import call_claude, load_env
 from common import PRIVATE, REPO, write_json
 from index_steel_sheets import SCHEMA as INDEX_SCHEMA, SYSTEM as INDEX_SYSTEM
+import knowledge_check
 from markup_pdf import SOURCE_TYPES, make_marked_pdf, to_rect, valid_regions
 from repeat_runs import PRICE_INPUT, PRICE_OUTPUT
 from review_steel_sheet import SYSTEM as STEEL_SYSTEM, red_pixels, render
@@ -36,6 +37,8 @@ from steel_experiment import REVISED_NOTE, ROOT as EXPERIMENTS, build_inputs, im
 PROJECTS = PRIVATE / "projects.json"
 UPLOADS = PRIVATE / "uploads"
 WORKERS = 3
+MESSAGE_FILES = {"design": "review", "knowledge": "knowledge"}
+CHECK_LABELS = {"design": "設計図書との照合（赤）", "knowledge": "ナレッジの確認（青）"}
 MAX_PAGES = 40
 PAGE_DPI = 130
 CROP_DPI = 150
@@ -182,36 +185,86 @@ def run_design_check(context):
     return findings, tokens[2], {"unreadable": reply.get("unreadable", []), "input_tokens": tokens[0], "output_tokens": tokens[1]}
 
 
-# 照合の一覧。議事録とナレッジはここに足す（minutes は赤、knowledge は青で描かれる）
-CHECKERS = [run_design_check]
+def run_knowledge_check(context):
+    """チェックリストにもとづく確認。設計図は渡さない（設計図との照合は赤の担当）"""
+    project, classified, number = context["project"], context["classified"], context["number"]
+    targets = knowledge_check.targets_of(context["checklist"])
+    page = pymupdf.open(context["input"])[number - 1]
+    content = [{"type": "text", "text": "施工図：全体図"}, image_block(render(page))]
+    for png, place in tiles(page, 4, 3):
+        content += [{"type": "text", "text": f"施工図：{place} の分割図"}, image_block(png)]
+    content.append({"type": "text", "text": knowledge_check.prompt_text(targets)})
+    raw_dir = context["raw_dir"]
+    write_json(raw_dir / "knowledge-prompt.json", {"system": knowledge_check.SYSTEM,
+                                                   "text_blocks": [b["text"] for b in content if b["type"] == "text"]})
+    schema = knowledge_check.build_schema(targets)
+    reply = call_claude(context["client"], knowledge_check.SYSTEM, content, schema, raw_dir, "knowledge")
+    write_json(raw_dir / "knowledge-result.json", reply)
+    tokens = message_cost(raw_dir / "knowledge.json")
+    level = plan_for(project, classified)[1]
+    found, dropped = knowledge_check.to_findings(reply, targets, number, level)
+    for item in found:
+        item["regions"] = valid_regions(item.get("regions"))
+    results = knowledge_check.page_results(reply, targets, found)
+    return found, tokens[2], {"unreadable": reply.get("unreadable", []), "input_tokens": tokens[0], "output_tokens": tokens[1],
+                              "item_results": results, "dropped": dropped}
 
 
-def check_page(job, client, project, input_path, number, job_id):
+# 照合の一覧。議事録はここに足す（minutes は赤、knowledge は青で描かれる）
+def checkers_for(project, checklist):
+    checkers = {"design": run_design_check}
+    if checklist:
+        checkers["knowledge"] = run_knowledge_check
+    return checkers
+
+
+def timed(checker, context):
+    started = time.time()
+    found, usd, record = checker(context)
+    return found, usd, {**record, "usd": round(usd, 3), "seconds": round(time.time() - started, 1)}
+
+
+def stopped_cost(raw_dir, name):
+    """応答が返ったあとに止まった回の費用（読み取りの分は成功した時点で足してある）"""
+    path = raw_dir / f"{MESSAGE_FILES[name]}.json"
+    return message_cost(path)[2] if path.exists() else 0.0
+
+
+def check_page(job, client, project, checklist, input_path, number, job_id):
     job.page_started(number)
     raw_dir = job.folder / "raw" / f"p{number}"
     raw_dir.mkdir(parents=True, exist_ok=True)
     page = pymupdf.open(input_path)[number - 1]
-    usd, tokens = 0.0, {}
+    usd = 0.0
+    checks = {}
     started = time.time()
     try:
         classified, cost = classify_page(client, page, raw_dir)
         usd += cost
         write_json(raw_dir / "classified.json", classified)
         context = {"client": client, "project": project, "classified": classified, "input": str(input_path),
-                   "number": number, "raw_dir": raw_dir}
-        findings = []
-        for checker in CHECKERS:
-            found, cost, tokens = checker(context)
-            usd += cost
-            findings += found
-        return {"number": number, "ok": True, "findings": findings, "classified": classified, "usd": usd,
-                "seconds": round(time.time() - started, 1), "red_pixels": red_pixels(page), **tokens}
+                   "number": number, "raw_dir": raw_dir, "checklist": checklist}
+        checkers = checkers_for(project, checklist)
+        findings, failed = [], []
+        # 照合どうしは待ち合わせない
+        with ThreadPoolExecutor(len(checkers)) as pool:
+            running = {name: pool.submit(timed, checker, context) for name, checker in checkers.items()}
+        for name, future in running.items():
+            try:
+                found, cost, checks[name] = future.result()
+                usd += cost
+                findings += found
+            except (Exception, SystemExit):
+                # 片方の失敗でもう片方の結果を捨てない。一覧に「判定できなかった」と書く
+                (raw_dir / f"error-{name}.txt").write_text(traceback.format_exc())
+                failed.append(name)
+                usd += stopped_cost(raw_dir, name)
+        return {"number": number, "ok": len(failed) < len(checkers), "failed_checks": failed, "findings": findings,
+                "classified": classified, "usd": usd, "seconds": round(time.time() - started, 1), "red_pixels": red_pixels(page),
+                "checks": checks, "error": "一部の照合に失敗" if failed else None}
     except (Exception, SystemExit) as error:  # 1ページの失敗で全体を止めない。一覧に「判定できなかった」と書く
         (raw_dir / "error.txt").write_text(traceback.format_exc())
-        # 途中で止まった回の費用も記録する（読み取りの分は成功した時点で足してある）
-        if (raw_dir / "review.json").exists():
-            usd += message_cost(raw_dir / "review.json")[2]
-        return {"number": number, "ok": False, "findings": [], "error": type(error).__name__, "usd": usd,
+        return {"number": number, "ok": False, "failed_checks": [], "findings": [], "error": type(error).__name__, "usd": usd,
                 "seconds": round(time.time() - started, 1)}
     finally:
         record_cost(EXPERIMENTS / "ledger.json", f"upload-{job_id[:8]}-p{number}", round(usd, 3))
@@ -271,6 +324,8 @@ def to_view(item, slug, classified):
     refs, floor = member_refs(item, classified, slug)
     box = item["regions"][0] if item["regions"] else [0, 0, 1, 1]
     sources = "、".join(f"{e['drawing']} {e['page']}" for e in item.get("evidence", []))
+    if item.get("checklist"):
+        sources = f"チェックリスト {item['checklist']['id']} {item['checklist']['basis']}"
     label = SOURCE_TYPES[item["source_type"]]["label"]
     return {
         "id": str(item["number"]),
@@ -290,6 +345,7 @@ def to_view(item, slug, classified):
         "source_type": item["source_type"],
         "source_label": label,
         "needs_confirmation": item["needs_confirmation"],
+        "checklist_id": item.get("checklist", {}).get("id"),
     }
 
 
@@ -316,8 +372,10 @@ def main():
         if not os.environ.get("ANTHROPIC_API_KEY"):
             raise ValueError("ANTHROPIC_API_KEY がありません")
         client = anthropic.Anthropic()
+        checklist = knowledge_check.load_checklist(project)
+        use_knowledge = "knowledge" in checkers_for(project, checklist)
         with ThreadPoolExecutor(WORKERS) as pool:
-            pages = list(pool.map(lambda n: check_page(job, client, project, input_path, n, folder.name), range(1, page_count + 1)))
+            pages = list(pool.map(lambda n: check_page(job, client, project, checklist, input_path, n, folder.name), range(1, page_count + 1)))
 
         job.update(stage="朱書き", message="朱書きPDFを作成中です", active_pages=[])
         findings = []
@@ -332,23 +390,37 @@ def main():
         unlocated = [item["number"] for item in findings if not item["regions"]]
         if unlocated:
             notes.append("次の指摘は図面上の場所を示せませんでした： " + "、".join(str(n) for n in unlocated))
-        notes.append("今回の照合は設計図書のみです。議事録とナレッジの照合は行っていません。")
+        for page in pages:
+            if page["failed_checks"]:
+                names = "、".join(CHECK_LABELS[name] for name in page["failed_checks"])
+                notes.append(f"p.{page['number']} は次の照合が完了していません（指摘がないという意味ではありません）： {names}")
+        dropped = sum(page.get("checks", {}).get("knowledge", {}).get("dropped", 0) for page in pages)
+        if dropped:
+            notes.append(f"チェックリストの対象外の項目を根拠にした指摘 {dropped} 件を除きました。")
+        checklist_rows = None
+        if use_knowledge:
+            done = [(page["number"], page["checks"]["knowledge"]["item_results"]) for page in pages if "knowledge" in page.get("checks", {})]
+            checklist_rows = knowledge_check.summary_rows(checklist, done)
+            notes.append("今回の照合は設計図書とナレッジです。議事録の照合は行っていません。")
+        else:
+            notes.append("今回の照合は設計図書のみです。議事録とナレッジの照合は行っていません。")
         marked = folder / "marked.pdf"
-        summary = make_marked_pdf(input_path, findings, marked, title="施工図の朱書き", notes=notes)
+        summary = make_marked_pdf(input_path, findings, marked, title="施工図の朱書き", notes=notes, checklist=checklist_rows)
         sheets = render_outputs(job, marked, findings, page_count)
         by_page = {page["number"]: page for page in pages}
         views = [to_view(item, slug, by_page[item["page"]].get("classified")) for item in findings]
         usd = round(sum(page["usd"] for page in pages), 3)
         seconds = round(time.time() - job.started, 1)
         result = {
-            "mode": f"設計図書との照合（条件D）。{page_count} ページ、{len(findings)} 件。",
+            "mode": f"設計図書との照合（条件D）{'とナレッジの確認' if use_knowledge else ''}。{page_count} ページ、{len(findings)} 件。",
             "findings": views,
             "changes": [],
             "sheets": sheets,
             "failed_pages": failed,
             "notes": notes,
             "summary": summary,
-            "pages": [{k: page.get(k) for k in ("number", "ok", "usd", "seconds", "input_tokens", "output_tokens", "red_pixels", "error")} |
+            "checklist": checklist_rows,
+            "pages": [{k: page.get(k) for k in ("number", "ok", "usd", "seconds", "checks", "failed_checks", "red_pixels", "error")} |
                       {"title": (page.get("classified") or {}).get("title")} for page in pages],
             "usd": usd,
             "seconds": seconds,

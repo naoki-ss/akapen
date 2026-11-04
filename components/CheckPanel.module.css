@@ -122,6 +122,33 @@
   box-shadow: inset 0 0 0 1.5px #2b5f9e;
 }
 
+.knowledge {
+  background: #0d4dcc;
+  color: #fff;
+}
+
+.checklist {
+  font-size: 12px;
+}
+
+.checklist summary {
+  cursor: pointer;
+  font-weight: 600;
+}
+
+.checklist ul {
+  margin: 6px 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.checklist li {
+  display: grid;
+  gap: 2px;
+  padding: 6px 0;
+  border-top: 1px solid #e3e3e3;
+}
+
 .planted {
   padding: 2px 6px;
   border-radius: 4px;
