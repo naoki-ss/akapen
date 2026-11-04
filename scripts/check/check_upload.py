@@ -29,6 +29,7 @@ from ai_review import call_claude, load_env
 from common import PRIVATE, REPO, write_json
 from index_steel_sheets import SCHEMA as INDEX_SCHEMA, SYSTEM as INDEX_SYSTEM
 import knowledge_check
+import merge_findings
 from markup_pdf import SOURCE_TYPES, make_marked_pdf, to_rect, valid_regions
 from repeat_runs import PRICE_INPUT, PRICE_OUTPUT
 from review_steel_sheet import SYSTEM as STEEL_SYSTEM, red_pixels, render
@@ -332,7 +333,7 @@ def to_view(item, slug, classified):
         "severity": item["severity"],
         "category": item["category"],
         "title": item["title"],
-        "content": item["content"] + (f"（根拠：{sources}）" if sources else ""),
+        "content": item["content"] + (f"（根拠：{sources}）" if sources else "") + merge_findings.merged_note(item),
         "drawing": {"doc": "アップロードした施工図", "page": item["page"], "bbox": box, "sheet": f"p{item['page']}"},
         "members": {"grids": item["grids"], "marks": item["marks"], "floor": floor or ""},
         "model_refs": refs,
@@ -346,7 +347,89 @@ def to_view(item, slug, classified):
         "source_label": label,
         "needs_confirmation": item["needs_confirmation"],
         "checklist_id": item.get("checklist", {}).get("id"),
+        "merged_numbers": item.get("merged_numbers"),
     }
+
+
+def merge_same(client, findings, raw_dir):
+    """赤と青の同じ指摘をまとめる。(費用, 注記)。判定に失敗したら、まとめずに別々の枠のまま返す"""
+    pairs = merge_findings.candidates(findings)
+    if not pairs:
+        return 0.0, None
+    ids = [merge_findings.pair_id(red, blue) for red, blue in pairs]
+    content = [{"type": "text", "text": merge_findings.prompt_text(pairs)}]
+    usd = 0.0
+    try:
+        reply = call_claude(client, merge_findings.SYSTEM, content, merge_findings.schema(ids), raw_dir, "merge")
+        usd = message_cost(raw_dir / "merge.json")[2]
+        write_json(raw_dir / "merge-result.json", reply)
+    except (Exception, SystemExit):
+        (raw_dir / "error-merge.txt").write_text(traceback.format_exc())
+        if (raw_dir / "merge.json").exists():
+            usd = message_cost(raw_dir / "merge.json")[2]
+        return usd, "赤と青が同じ内容かの判定が完了しなかったので、枠はまとめていません。"
+    same = {entry["pair"] for entry in reply["pairs"] if entry["same"]}
+    merge_findings.apply_merges(findings, [(red, blue) for red, blue in pairs if merge_findings.pair_id(red, blue) in same])
+    return usd, None
+
+
+def finish_job(job, folder, slug, pages, checklist, use_knowledge, client, input_path, page_count):
+    """ページごとの結果から、朱書きPDFと result.json を作る"""
+    job.update(stage="朱書き", message="朱書きPDFを作成中です", active_pages=[])
+    findings = []
+    for page in pages:
+        findings += page["findings"]
+    for number, item in enumerate(findings, 1):
+        item["number"] = number
+    failed = [page["number"] for page in pages if not page["ok"]]
+    notes = []
+    merge_usd, merge_note = merge_same(client, findings, folder / "raw")
+    if merge_usd:
+        record_cost(EXPERIMENTS / "ledger.json", f"upload-{folder.name[:8]}-merge", round(merge_usd, 3))
+    if merge_note:
+        notes.append(merge_note)
+    if failed:
+        notes.append("次のページは判定できませんでした（指摘がないという意味ではありません）： " + "、".join(f"p.{n}" for n in failed))
+    unlocated = [item["number"] for item in findings if not item["regions"]]
+    if unlocated:
+        notes.append("次の指摘は図面上の場所を示せませんでした： " + "、".join(str(n) for n in unlocated))
+    for page in pages:
+        if page["failed_checks"]:
+            names = "、".join(CHECK_LABELS[name] for name in page["failed_checks"])
+            notes.append(f"p.{page['number']} は次の照合が完了していません（指摘がないという意味ではありません）： {names}")
+    dropped = sum(page.get("checks", {}).get("knowledge", {}).get("dropped", 0) for page in pages)
+    if dropped:
+        notes.append(f"チェックリストの対象外の項目を根拠にした指摘 {dropped} 件を除きました。")
+    checklist_rows = None
+    if use_knowledge:
+        done = [(page["number"], page["checks"]["knowledge"]["item_results"]) for page in pages if "knowledge" in page.get("checks", {})]
+        checklist_rows = knowledge_check.summary_rows(checklist, done)
+        notes.append("今回の照合は設計図書とナレッジです。議事録の照合は行っていません。")
+    else:
+        notes.append("今回の照合は設計図書のみです。議事録とナレッジの照合は行っていません。")
+    marked = folder / "marked.pdf"
+    summary = make_marked_pdf(input_path, findings, marked, title="施工図の朱書き", notes=notes, checklist=checklist_rows)
+    sheets = render_outputs(job, marked, findings, page_count)
+    by_page = {page["number"]: page for page in pages}
+    views = [to_view(item, slug, by_page[item["page"]].get("classified")) for item in findings]
+    usd = round(sum(page["usd"] for page in pages) + merge_usd, 3)
+    seconds = round(time.time() - job.started, 1)
+    write_json(folder / "result.json", {
+        "mode": f"設計図書との照合（条件D）{'とナレッジの確認' if use_knowledge else ''}。{page_count} ページ、{len(findings)} 件。",
+        "findings": views,
+        "changes": [],
+        "sheets": sheets,
+        "failed_pages": failed,
+        "notes": notes,
+        "summary": summary,
+        "checklist": checklist_rows,
+        "pages": [{k: page.get(k) for k in ("number", "ok", "usd", "seconds", "checks", "failed_checks", "red_pixels", "error")} |
+                  {"title": (page.get("classified") or {}).get("title")} for page in pages],
+        "merge_usd": round(merge_usd, 3),
+        "usd": usd,
+        "seconds": seconds,
+    })
+    job.update(state="done", stage="完了", message=f"完了しました（{len(findings)} 件）", usd=usd)
 
 
 def main():
@@ -377,56 +460,7 @@ def main():
         with ThreadPoolExecutor(WORKERS) as pool:
             pages = list(pool.map(lambda n: check_page(job, client, project, checklist, input_path, n, folder.name), range(1, page_count + 1)))
 
-        job.update(stage="朱書き", message="朱書きPDFを作成中です", active_pages=[])
-        findings = []
-        for page in pages:
-            findings += page["findings"]
-        for number, item in enumerate(findings, 1):
-            item["number"] = number
-        failed = [page["number"] for page in pages if not page["ok"]]
-        notes = []
-        if failed:
-            notes.append("次のページは判定できませんでした（指摘がないという意味ではありません）： " + "、".join(f"p.{n}" for n in failed))
-        unlocated = [item["number"] for item in findings if not item["regions"]]
-        if unlocated:
-            notes.append("次の指摘は図面上の場所を示せませんでした： " + "、".join(str(n) for n in unlocated))
-        for page in pages:
-            if page["failed_checks"]:
-                names = "、".join(CHECK_LABELS[name] for name in page["failed_checks"])
-                notes.append(f"p.{page['number']} は次の照合が完了していません（指摘がないという意味ではありません）： {names}")
-        dropped = sum(page.get("checks", {}).get("knowledge", {}).get("dropped", 0) for page in pages)
-        if dropped:
-            notes.append(f"チェックリストの対象外の項目を根拠にした指摘 {dropped} 件を除きました。")
-        checklist_rows = None
-        if use_knowledge:
-            done = [(page["number"], page["checks"]["knowledge"]["item_results"]) for page in pages if "knowledge" in page.get("checks", {})]
-            checklist_rows = knowledge_check.summary_rows(checklist, done)
-            notes.append("今回の照合は設計図書とナレッジです。議事録の照合は行っていません。")
-        else:
-            notes.append("今回の照合は設計図書のみです。議事録とナレッジの照合は行っていません。")
-        marked = folder / "marked.pdf"
-        summary = make_marked_pdf(input_path, findings, marked, title="施工図の朱書き", notes=notes, checklist=checklist_rows)
-        sheets = render_outputs(job, marked, findings, page_count)
-        by_page = {page["number"]: page for page in pages}
-        views = [to_view(item, slug, by_page[item["page"]].get("classified")) for item in findings]
-        usd = round(sum(page["usd"] for page in pages), 3)
-        seconds = round(time.time() - job.started, 1)
-        result = {
-            "mode": f"設計図書との照合（条件D）{'とナレッジの確認' if use_knowledge else ''}。{page_count} ページ、{len(findings)} 件。",
-            "findings": views,
-            "changes": [],
-            "sheets": sheets,
-            "failed_pages": failed,
-            "notes": notes,
-            "summary": summary,
-            "checklist": checklist_rows,
-            "pages": [{k: page.get(k) for k in ("number", "ok", "usd", "seconds", "checks", "failed_checks", "red_pixels", "error")} |
-                      {"title": (page.get("classified") or {}).get("title")} for page in pages],
-            "usd": usd,
-            "seconds": seconds,
-        }
-        write_json(folder / "result.json", result)
-        job.update(state="done", stage="完了", message=f"完了しました（{len(findings)} 件）", usd=usd)
+        finish_job(job, folder, slug, pages, checklist, use_knowledge, client, input_path, page_count)
     except (Exception, SystemExit) as error:
         (folder / "error.txt").write_text(traceback.format_exc())
         # 画面には詳細を出さない（図面の場所などが混ざるため）

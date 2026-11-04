@@ -18,6 +18,8 @@ import pymupdf
 from fontTools import subset
 from fontTools.ttLib import TTCollection, TTFont
 
+from merge_findings import merged_note
+
 RED = (0.8, 0.1, 0.1)
 BLUE = (0.05, 0.3, 0.8)
 SOURCE_TYPES = {
@@ -175,13 +177,14 @@ def place_comment(page, frame, size, ink, taken, frames):
     return best
 
 
-def draw_tag(canvas, frame, number, color, scale, font):
+def draw_tag(canvas, frame, number, color, scale, font, x=None):
     size = 8.5 * scale
     label = str(number)
     width = font.text_length(label, fontsize=size) + 5 * scale
     height = size + 3 * scale
     y0 = frame.y0 - height if frame.y0 - height > 0 else frame.y0
-    tag = pymupdf.Rect(frame.x0, y0, frame.x0 + width, y0 + height)
+    x0 = frame.x0 if x is None else x
+    tag = pymupdf.Rect(x0, y0, x0 + width, y0 + height)
     canvas.rect(tag, color=color, fill=color)
     canvas.text((tag.x0 + 2.5 * scale, tag.y1 - 2.2 * scale), label, size, (1, 1, 1))
     return tag
@@ -212,37 +215,60 @@ def mark_page(doc, page, items, layers, font, font_buffer, legend_layer):
     page.insert_font(fontname=FONT_NAME, fontbuffer=font_buffer)
     frames = [to_rect(page, box) for item in items for box in item["regions"]]
     taken = [pymupdf.Rect(0, 0, 255 * scale, 55 * scale)]
+    drawn = set()
     for item in items:
-        color = SOURCE_TYPES[item["source_type"]]["color"]
-        canvas = Canvas(page, layers[item["source_type"]])
-        rects = [to_rect(page, box) for box in item["regions"]]
-        for rect in rects:
-            canvas.rect(rect, color=color, width=1.6 * scale)
-            taken.append(draw_tag(canvas, rect, item["number"], color, scale, font))
-        size = COMMENT_SIZE * scale
+        if item["number"] in drawn:
+            continue
+        # まとめた指摘は1組で描く。赤を先にする
+        numbers = item.get("merged_numbers", [item["number"]])
+        group = sorted((other for other in items if other["number"] in numbers), key=lambda other: other["source_type"] == "knowledge")
+        drawn.update(numbers)
+        draw_group(page, group, layers, font, scale, ink, taken, frames)
+    draw_legend(page, legend_layer, font)
+
+
+def draw_group(page, group, layers, font, scale, ink, taken, frames):
+    """1つの枠と1つのコメントを描く。色ごとに自分の層に描くので、層を消すとその色の枠と番号と文だけが消える"""
+    canvases = [Canvas(page, layers[item["source_type"]]) for item in group]
+    colors = [SOURCE_TYPES[item["source_type"]]["color"] for item in group]
+    rects = [to_rect(page, box) for box in group[0]["regions"]]
+    for rect in rects:
+        next_tag = None
+        for index, (item, canvas, color) in enumerate(zip(group, canvases, colors)):
+            # 2色の枠は、内側に赤、外側に青を沿わせて1つの枠に見せる
+            outset = index * 2.2 * scale
+            canvas.rect(rect + (-outset, -outset, outset, outset), color=color, width=1.6 * scale)
+            tag = draw_tag(canvas, rect + (-2.2 * scale * (len(group) - 1), -2.2 * scale * (len(group) - 1), 0, 0), item["number"], color, scale, font, next_tag)
+            next_tag = tag.x1 + 1
+            taken.append(tag)
+    size = COMMENT_SIZE * scale
+    blocks = []
+    for item in group:
         comment = (item["comment"] or item["title"])[:MAX_COMMENT_CHARS]
         if item.get("needs_confirmation"):
             comment = f"[要確認] {comment}"
-        label = f"{item['number']}. {comment}"
-        lines = wrap(label, font, size, COMMENT_WIDTH * scale - 8 * scale)
-        widest = max(font.text_length(line, fontsize=size) for line in lines)
-        box_size = (widest + 8 * scale, len(lines) * size * 1.3 + 6 * scale)
-        # 枠がない指摘は、ページの左上の凡例の下から順に置く
-        anchor = rects[0] if rects else pymupdf.Rect(10 * scale, 60 * scale, 10 * scale, 60 * scale)
-        box = place_comment(page, anchor, box_size, ink, taken, frames)
-        taken.append(box)
-        if rects:
-            start = pymupdf.Point(min(max(anchor.x0, box.x0), box.x1), min(max(anchor.y0, box.y0), box.y1))
-            end = pymupdf.Point(min(max(box.x0, anchor.x0), anchor.x1), min(max(box.y0, anchor.y0), anchor.y1))
-            if abs(start - end) > 4:
-                canvas.line(start, end, color, 0.7 * scale)
-        canvas.rect(box, color=color, fill=(1, 1, 1), width=0.8 * scale, opacity=0.93)
-        y = box.y0 + 3 * scale + size
+        blocks.append(wrap(f"{item['number']}. {comment}", font, size, COMMENT_WIDTH * scale - 8 * scale))
+    widest = max(font.text_length(line, fontsize=size) for lines in blocks for line in lines)
+    line_count = sum(len(lines) for lines in blocks)
+    box_size = (widest + 8 * scale, line_count * size * 1.3 + 6 * scale)
+    # 枠がない指摘は、ページの左上の凡例の下から順に置く
+    anchor = rects[0] if rects else pymupdf.Rect(10 * scale, 60 * scale, 10 * scale, 60 * scale)
+    box = place_comment(page, anchor, box_size, ink, taken, frames)
+    taken.append(box)
+    if rects:
+        start = pymupdf.Point(min(max(anchor.x0, box.x0), box.x1), min(max(anchor.y0, box.y0), box.y1))
+        end = pymupdf.Point(min(max(box.x0, anchor.x0), anchor.x1), min(max(box.y0, anchor.y0), anchor.y1))
+        if abs(start - end) > 4:
+            canvases[0].line(start, end, colors[0], 0.7 * scale)
+    y = box.y0 + 3 * scale + size
+    for index, (lines, canvas, color) in enumerate(zip(blocks, canvases, colors)):
+        # 白い地は最初の色だけに付ける。あとから塗ると先の文字が隠れる
+        canvas.rect(box, color=color, fill=(1, 1, 1) if index == 0 else None, width=0.8 * scale, opacity=0.93 if index == 0 else 1.0)
         for line in lines:
             canvas.text((box.x0 + 4 * scale, y), line, size, color)
             y += size * 1.3
+    for canvas in canvases:
         canvas.commit()
-    draw_legend(page, legend_layer, font)
 
 
 class ListPages:
@@ -311,7 +337,7 @@ def evidence_text(item):
 
 
 def content_text(item):
-    return f"{item['title']}\n{item['content']}"
+    return f"{item['title']}\n{item['content']}{merged_note(item)}"
 
 
 def collect_text(findings, title, notes, checklist=None):
