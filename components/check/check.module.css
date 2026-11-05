@@ -1543,3 +1543,24 @@
 .note {
   pointer-events: none;
 }
+
+/* 寄っても枠と番号が太らない。太さと文字の大きさを倍率で割る */
+.frameLine rect {
+  stroke-width: calc(1.5px / var(--view-scale, 1));
+}
+
+.frame[data-active="true"] .frameLine rect {
+  stroke-width: calc(2.5px / var(--view-scale, 1));
+}
+
+.frame[data-active="true"] {
+  box-shadow: none;
+}
+
+.frameNumber {
+  font-size: calc(max(9px, 0.9cqw) / var(--view-scale, 1));
+}
+
+.note {
+  font-size: calc(max(11px, 1.05cqw) / var(--view-scale, 1));
+}
