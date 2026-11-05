@@ -31,6 +31,9 @@ PAD = 0.03
 # 表の行とみなす語の数と高さ（ページに対する割合）
 MIN_ROW_WORDS = 4
 MAX_ROW_HEIGHT = 0.03
+# 表の行の判定：上下の行を見る範囲と、列がそろっているとみなす差（ページに対する比）
+ROW_REACH = 0.05
+COLUMN_GAP = 0.006
 WIDE_BOX = 0.5
 WIDE_CROP_HEIGHT = 0.14
 # 符号の組を探す範囲（ページに対する割合）
@@ -213,14 +216,28 @@ def locate(page, tokens, masks):
     return [min(b[0] for b in boxes), min(b[1] for b in boxes), max(b[2] for b in boxes), max(b[3] for b in boxes)], list(near)
 
 
+def overlaps(a, b):
+    return a[0] < b[2] and b[0] < a[2] and a[1] < b[3] and b[1] < a[3]
+
+
 def inside(box, mask):
     return box[0] >= mask[0] and box[1] >= mask[1] and box[2] <= mask[2] and box[3] <= mask[3]
+
+
+def aligned_with_neighbors(page, words):
+    """表の行かどうか。行の語の半分以上が、上下の行の語と左端や中央をそろえていれば表とみなす（図の中の注記を横いっぱいに広げない）"""
+    others = [b for b, _ in display_words(page) if b not in words]
+    top, bottom = min(w[1] for w in words), max(w[3] for w in words)
+    near = [b for b in others if top - ROW_REACH < b[1] and b[3] < bottom + ROW_REACH]
+    center = lambda b: (b[0] + b[2]) / 2
+    same = sum(any(abs(b[0] - w[0]) < COLUMN_GAP or abs(center(b) - center(w)) < COLUMN_GAP for b in near) for w in words)
+    return same * 2 >= len(words)
 
 
 def full_row(page, box):
     """表の行なら、枠をその行の端まで広げる。備考の欄など、判定に使った文字が必ず入るようにする"""
     words = [b for b, _ in display_words(page) if b[1] < (box[1] + box[3]) / 2 < b[3] or box[1] <= (b[1] + b[3]) / 2 <= box[3]]
-    if len(words) < MIN_ROW_WORDS or box[3] - box[1] > MAX_ROW_HEIGHT:
+    if len(words) < MIN_ROW_WORDS or box[3] - box[1] > MAX_ROW_HEIGHT or not aligned_with_neighbors(page, words):
         return box
     return [min(box[0], *[w[0] for w in words]), box[1], max(box[2], *[w[2] for w in words]), box[3]]
 
@@ -359,8 +376,9 @@ def design_refs(finding, documents, client, folder, public_only=False):
         page = entry["pdf"][number - 1]
         masks = title_blocks(client, entry["path"], number, page)
         # 題名や根拠の符号が文字で見つかれば、そちらを使う（AIが返す位置より確かなので）
-        found, _ = locate(page, main_tokens, masks or [])
-        if found:
+        found, names = locate(page, main_tokens, masks or [])
+        # 1語だけの一致は、AIが示した場所と離れていれば別の場所の文字とみなす
+        if found and (not box or len(names) >= 2 or overlaps(found, box)):
             box, located = found, "text"
         elif not box:
             box, _ = locate(page, all_tokens, masks or [])

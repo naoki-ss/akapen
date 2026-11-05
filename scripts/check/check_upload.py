@@ -41,7 +41,7 @@ import merge_findings
 import red_filter
 import minutes_check
 from markup_pdf import SOURCE_TYPES, layer_overlay, make_marked_pdf, mask_pdf, set_visible_layers, to_rect, valid_regions
-from claude_api import PRICE_INPUT, PRICE_OUTPUT
+from claude_api import METER, usage_usd
 from review_steel_sheet import SYSTEM as STEEL_SYSTEM, red_pixels, render
 from steel_experiment import REVISED_NOTE, ROOT as EXPERIMENTS, build_inputs, image_block, record_cost, schema_for, tiles
 
@@ -84,6 +84,7 @@ class Job:
         self.started = time.time()
         # 止めている間は、打ち切るページの進み具合で画面の表示や費用の記録を変えない
         self.stopping = False
+        self.max_usd = None
         self.status = {"state": "running", "stage": "準備中", "message": "準備中です", "pid": os.getpid(),
                        "pages_total": 0, "pages_done": 0, "active_pages": [], "usd": 0.0, "seconds": 0,
                        "started_at": datetime.now().isoformat(timespec="seconds")}
@@ -91,6 +92,9 @@ class Job:
 
     def write(self):
         self.status["seconds"] = round(time.time() - self.started, 1)
+        # 費用は応答の途中の呼び出しも入れた正しい数字を見せる（作り直しでは呼ばないので元の値を残す）
+        if METER.total():
+            self.status["usd"] = round(METER.total(), 3)
         # 画面が書きかけを読まないように、書き終えてから置き換える
         temp = self.folder / "status.json.tmp"
         temp.write_text(json.dumps(self.status, ensure_ascii=False))
@@ -109,13 +113,12 @@ class Job:
             self._page_message()
             self.write()
 
-    def page_finished(self, number, usd):
+    def page_finished(self, number):
         with self.lock:
             if self.stopping:
                 return
             self.status["active_pages"] = [p for p in self.status["active_pages"] if p != number]
             self.status["pages_done"] += 1
-            self.status["usd"] = round(self.status["usd"] + usd, 3)
             self._page_message()
             self.write()
 
@@ -129,13 +132,17 @@ class Job:
 
 def message_cost(path):
     usage = json.loads(Path(path).read_text())["usage"]
-    return usage["input_tokens"], usage["output_tokens"], (usage["input_tokens"] * PRICE_INPUT + usage["output_tokens"] * PRICE_OUTPUT) / 1_000_000
+    return usage["input_tokens"], usage["output_tokens"], usage_usd(usage)
 
 
 def raw_cost(raw_dir):
-    """このページで応答が返った呼び出しの費用の合計"""
-    names = ["classify", *MESSAGE_FILES.values()]
-    return sum(message_cost(raw_dir / f"{name}.json")[2] for name in names if (raw_dir / f"{name}.json").exists())
+    """このページで応答が返った呼び出しの費用の合計（生の応答はどれも usage を持つ）"""
+    total = 0.0
+    for path in Path(raw_dir).glob("*.json"):
+        usage = json.loads(path.read_text()).get("usage") if path.stat().st_size else None
+        if usage:
+            total += usage_usd(usage)
+    return total
 
 
 def load_project(slug):
@@ -355,7 +362,7 @@ def check_page(job, client, project, library, minutes, input_path, number, job_i
         # 止めたあとに終わったページは、打ち切ったページとしてまとめて記録する
         if not job.stopping:
             record_cost(EXPERIMENTS / "ledger.json", f"upload-{job_id[:8]}-p{number}", round(usd, 3))
-        job.page_finished(number, usd)
+        job.page_finished(number)
 
 
 def run_pages(job, numbers, work):
@@ -365,6 +372,10 @@ def run_pages(job, numbers, work):
     pending = set(futures.values())
     while pending and not stop_requested(job.folder):
         _, pending = wait(pending, timeout=1, return_when=FIRST_COMPLETED)
+        job.update()
+        # 費用の上限は、応答の途中の呼び出しも入れた数字で見る
+        if job.max_usd and METER.total() >= job.max_usd:
+            (job.folder / "stop.flag").write_text(f"費用が上限 {job.max_usd} ドルに達しました")
     pool.shutdown(wait=not pending, cancel_futures=bool(pending))
     # 止める指示のあとは、結果に入れるページをここで決める。job.stopping より先に数えると、記録の漏れが出る
     with job.lock:
@@ -686,6 +697,10 @@ def finish_job(job, folder, slug, pages, checklist, use_knowledge, client, input
         traceback.print_exc()
         notes.append("根拠の資料の一部を作れませんでした。文面の根拠は表示できます。")
     usd = round(sum(page["usd"] for page in pages) + merge_usd + stopped_usd + basis_usd + filter_usd, 3)
+    # ページの失敗などで内訳に入らなかった費用も、合計と記録に入れる
+    if METER.total() - usd > 0.001:
+        record_cost(EXPERIMENTS / "ledger.json", f"upload-{folder.name[:8]}-other", round(METER.total() - usd, 3))
+        usd = round(METER.total(), 3)
     seconds = round(time.time() - job.started, 1)
     write_json(folder / "result.json", {
         "mode": f"{'、'.join(used)}の照合（設計図書は条件D）。{len(numbers)} ページ、{len(findings)} 件。",
@@ -731,6 +746,7 @@ def main():
             raise ValueError("選んだページがPDFにありません")
         # どの版の設計図書で照合したかを残す。新しい版が入ったときに、再チェックが必要と分かるように
         write_json(folder / "job.json", {**meta, "design_sets": drawing_ledger.current_sets(slug)})
+        job.max_usd = meta.get("max_usd")
         job.update(pages_total=len(numbers), stage="確認中", message=f"チェックを始めます（全 {len(numbers)} ページ）")
 
         load_env()
@@ -744,14 +760,16 @@ def main():
         masks = project.get("masks")
         if not stopped:
             finish_job(job, folder, slug, pages, checklist, use_knowledge, client, input_path, minutes, masks)
+            write_json(folder / "cost.json", METER.snapshot())
             return
         job.update(stage="止めています", message="止めています。終わったページの朱書きを作っています", active_pages=[])
-        partial = lambda: sum(raw_cost(folder / "raw" / f"p{number}") for number in stopped)
+        # 途中で止めたページの費用。応答の途中の呼び出しは、入力の分と出力の見積もりを入れる
+        partial = lambda: max(0.0, METER.total() - sum(page["usd"] for page in pages))
         if pages:
             finish_job(job, folder, slug, pages, checklist, use_knowledge, None, input_path, minutes, masks, stopped, partial())
         else:
             job.update(state="stopped", stage="止めました", message="止めました。終わったページはありません", usd=round(partial(), 3))
-        # 応答が返らなかった呼び出しの費用は分からないので、記録に入らない
+        write_json(folder / "cost.json", METER.snapshot())
         record_cost(EXPERIMENTS / "ledger.json", f"upload-{folder.name[:8]}-stopped", round(partial(), 3))
         os._exit(0)  # 走っている呼び出しを待たない
     except (Exception, SystemExit) as error:

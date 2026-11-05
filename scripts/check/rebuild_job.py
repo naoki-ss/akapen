@@ -3,6 +3,7 @@
   python rebuild_job.py <ジョブのフォルダ>
 
 朱書きの描き方や題名、塗りつぶしを変えたあとに、前の結果へ反映するときに使う。時間と費用は元の値を残す。
+client を渡すと、まだ判定していない文面の整理（赤の絞り込み、赤青のまとめ）だけAIを呼び、その費用を足す。
 結果を書く前に処理が止まったジョブ（result.json がない）は、全部の照合の応答がそろったページだけで結果を作る。
 """
 import json
@@ -14,6 +15,7 @@ import pymupdf
 import knowledge_check
 import minutes_check
 from check_upload import Job, UPLOADS, checkers_for, design_findings, finish_job, load_project, plan_for, raw_cost
+from claude_api import METER
 from common import write_json
 from markup_pdf import valid_regions
 from review_steel_sheet import red_pixels
@@ -53,7 +55,7 @@ def page_findings(raw_dir, project, classified, number, library, minutes):
     return found, checks
 
 
-def rebuild_saved(folder, slug, project, checklist, minutes):
+def rebuild_saved(folder, slug, project, checklist, minutes, client=None):
     before = json.loads((folder / "result.json").read_text())
     pages = []
     for page in before["pages"]:
@@ -64,11 +66,12 @@ def rebuild_saved(folder, slug, project, checklist, minutes):
     # 元の結果で行っていない照合は、作り直しでも行っていないものとして扱う
     checks = {name for page in pages for name in page["checks"]}
     job = Job(folder)
-    finish_job(job, folder, slug, pages, checklist, "knowledge" in checks, None, folder / "input.pdf",
+    finish_job(job, folder, slug, pages, checklist, "knowledge" in checks, client, folder / "input.pdf",
                minutes if "minutes" in checks and not (folder / "drop_minutes.flag").exists() else (), project.get("masks"), before.get("stopped_pages", []))
     after = json.loads((folder / "result.json").read_text())
-    write_json(folder / "result.json", {**after, "usd": before["usd"], "seconds": before["seconds"]})
-    job.update(usd=before["usd"])
+    usd = round(before["usd"] + METER.total(), 3)
+    write_json(folder / "result.json", {**after, "usd": usd, "seconds": before["seconds"]})
+    job.update(usd=usd)
     print(f"{len(after['findings'])} 件を作り直しました（前は {len(before['findings'])} 件）")
 
 
