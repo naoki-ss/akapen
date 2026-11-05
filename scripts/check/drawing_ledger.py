@@ -31,6 +31,7 @@ PROJECTS = PRIVATE / "projects.json"
 FULL_SET_RATIO = 0.8
 PAGE_LONG_EDGE = 1568
 AI_USD_PER_PAGE = 0.03
+USD_PER_MODEL_PAGE = 0.22
 
 TITLE_SYSTEM = """図面の1ページを見て、表題欄にある図面名と図面番号を答えます。読めなければ空にします。会社名や人名は書きません。"""
 TITLE_SCHEMA = {
@@ -111,7 +112,9 @@ def propose(slug, incoming):
             row["candidate"] = same_number["id"] if same_number else None
             row["note"] = "図名を読めませんでした"
     unread = sum(1 for row in rows if not row["title"])
-    return {"pages": rows, "unread": unread, "ai_usd": round(unread * AI_USD_PER_PAGE, 2),
+    # 3Dの材料になるページの読み直しの費用（読んだページは使い回すので、多くてもこの額）
+    model_pages = sum(1 for row in rows if re.search(r"伏図|軸組|リスト", row["title"] or ""))
+    return {"pages": rows, "unread": unread, "ai_usd": round(unread * AI_USD_PER_PAGE, 2), "model_usd": round(model_pages * USD_PER_MODEL_PAGE, 1),
             "sheets": [{"id": s["id"], "title": s["title"], "versions": len(s["versions"])} for s in ledger["sheets"]]}
 
 

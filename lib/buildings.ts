@@ -5,6 +5,7 @@ import path from "node:path";
 import type { CheckResult, Finding } from "./check";
 import { isBlue, numbered } from "./findings";
 import { jobFolder, listJobs, readDecisions, uploadEnabled } from "./jobs";
+import { updatedModel } from "./ledger";
 import type { BuildingModel } from "./model";
 import { listProjects, projectInfo } from "./projects";
 import { thumbnailOf, type Thumbnail } from "./thumbnail";
@@ -76,9 +77,11 @@ export function getBuilding(slug: string) {
     (info?.site
       ? { lat: info.site.lat, lon: info.site.lon, north_deg: info.north_deg ?? 0 }
       : undefined);
+  // 設計図書の新しい版から作り直した建物データがあれば、それを使う
+  const model = uploadEnabled() ? (updatedModel(slug) ?? building.model) : building.model;
   return {
     ...building,
-    model: { ...building.model, site, structure: info?.structure },
+    model: { ...model, site: model.site ?? site, structure: info?.structure },
   };
 }
 

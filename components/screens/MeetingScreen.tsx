@@ -72,7 +72,7 @@ export default function MeetingScreen({
       <header className={`${styles.panel} ${styles.meetingHead}`}>
         <Logo />
         <b>{model.name}</b>
-        <Link href={`/projects/${slug}`}>コンソールに戻る</Link>
+        <Link href={`/projects/${slug}/model`}>建物3Dに戻る</Link>
         {canRecord && (
           <button
             type="button"

@@ -1,11 +1,9 @@
 "use client";
 
-import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
-import type { Ledger, Proposal, ProposedPage } from "@/lib/ledger";
-import type { ShopSheet, ShopVersion } from "@/lib/sheetStatus";
-import AppFrame from "../AppFrame";
+import type { Ledger, ModelChanges, ModelStatus, Proposal, ProposedPage } from "@/lib/ledger";
+import { useEffect } from "react";
 import styles from "./ledger.module.css";
 import screens from "./screens.module.css";
 
@@ -140,6 +138,9 @@ function ReviewSet({
         </tbody>
       </table>
       {error && <p className={styles.error}>{error}</p>}
+      <p className={styles.note}>
+        入れると、建物データと3Dも更新します。読み取り済みのページは読み直しません（費用は多くても約 {proposal.model_usd} ドル）。
+      </p>
       <button
         className={screens.action}
         disabled={busy || pending.length > 0}
@@ -328,191 +329,87 @@ function MemberChanges({ ledger }: { ledger: Ledger }) {
   );
 }
 
-const dateText = (iso: string) =>
-  new Intl.DateTimeFormat("ja-JP", {
-    year: "numeric",
-    month: "numeric",
-    day: "numeric",
-    hour: "2-digit",
-    minute: "2-digit",
-    timeZone: "Asia/Tokyo",
-  }).format(new Date(iso));
-
-// 状態を変える操作。確定は取り消せないので、名前を入れてから押す
-function StateActions({ version }: { version: ShopVersion }) {
+// 建物データと3Dの更新の進み具合。止められる
+function ModelUpdate({
+  slug,
+  initial,
+}: {
+  slug: string;
+  initial: { status: ModelStatus | null; changes: ModelChanges | null };
+}) {
   const router = useRouter();
-  const [naming, setNaming] = useState(false);
-  const [by, setBy] = useState("");
-  const [error, setError] = useState("");
-  if (version.page === null || version.state === "確定") return null;
-  const send = async (state: string) => {
-    setError("");
-    const response = await fetch(`/api/check/${version.job}/status`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ page: version.page, state, by }),
-    });
-    if (response.ok) router.refresh();
-    else setError((await response.json()).error);
-  };
+  const [state, setState] = useState(initial);
+  const running = state.status?.state === "running";
+  useEffect(() => {
+    if (!running) return;
+    const timer = setInterval(async () => {
+      const response = await fetch(`/api/projects/${slug}/ledger/model`);
+      if (!response.ok) return;
+      const next = await response.json();
+      setState(next);
+      if (next.status?.state !== "running") router.refresh();
+    }, 2000);
+    return () => clearInterval(timer);
+  }, [running, slug, router]);
+  if (!state.status) return null;
+  const { changes } = state;
+  const total = changes
+    ? changes.added.length + changes.removed.length + changes.changed.length
+    : 0;
   return (
-    <div className={styles.actions}>
-      {version.state === "チェック中" && (
-        <button className={styles.secondary} onClick={() => send("チェックバック済み")}>
-          チェックバック済みにする
+    <div className={styles.modelUpdate} role="status">
+      <b>建物データと3D：</b>
+      {state.status.message}
+      {running && state.status.seconds !== undefined && (
+        <span className="mono"> {state.status.seconds} 秒</span>
+      )}
+      {running && (
+        <button
+          className={styles.secondary}
+          onClick={() => fetch(`/api/projects/${slug}/ledger/model`, { method: "POST" })}
+        >
+          止める
         </button>
       )}
-      {naming ? (
-        <>
-          <input
-            aria-label="担当者の名前"
-            placeholder="担当者の名前"
-            value={by}
-            onChange={(e) => setBy(e.target.value)}
-          />
-          <button
-            className={styles.secondary}
-            disabled={!by.trim()}
-            onClick={() => send("確定")}
-          >
-            確定する（取り消せません）
-          </button>
-        </>
-      ) : (
-        <button className={styles.secondary} onClick={() => setNaming(true)}>
-          確定へ
-        </button>
+      {state.status.state === "done" && changes && (
+        <details>
+          <summary>3Dで変わった部材（{total}）</summary>
+          {[
+            ["増えた部材", changes.added],
+            ["なくなった部材", changes.removed],
+            ["符号が変わった部材", changes.changed],
+          ].map(([label, rows]) =>
+            (rows as string[]).length > 0 ? (
+              <p key={label as string} className={styles.note}>
+                <b>{label as string}：</b>
+                {(rows as string[]).join("、")}
+              </p>
+            ) : null,
+          )}
+        </details>
       )}
-      {error && <span className={styles.error}>{error}</span>}
     </div>
   );
 }
 
-function ShopTable({ slug, shop }: { slug: string; shop: ShopSheet[] }) {
-  if (shop.length === 0) {
-    return <p className={styles.note}>施工図はまだありません。</p>;
-  }
-  return (
-    <table className={styles.table}>
-      <thead>
-        <tr>
-          <th>図名</th>
-          <th>版</th>
-          <th>状態</th>
-          <th />
-        </tr>
-      </thead>
-      <tbody>
-        {shop.flatMap((sheet) =>
-          sheet.versions.map((version) => (
-            <tr key={`${sheet.key}-${version.version}`} data-state={version.state}>
-              <td>{version.version === 1 ? sheet.title : ""}</td>
-              <td>
-                {version.page === null ? (
-                  `第${version.version}版`
-                ) : (
-                  <Link href={`/projects/${slug}/check/${version.job}`}>
-                    第{version.version}版
-                  </Link>
-                )}
-                <small className={styles.note}>
-                  {" "}
-                  {dateText(version.uploaded_at)}
-                  {version.rejudged > 0 && `・判定し直し ${version.rejudged} 回`}
-                </small>
-              </td>
-              <td>
-                <b>{version.state}</b>
-                {version.confirmed && (
-                  <small className={styles.note}>
-                    {" "}
-                    {version.confirmed.by}・{dateText(version.confirmed.at)}
-                  </small>
-                )}
-                {version.stale.length > 0 && (
-                  <small className={styles.error}>
-                    <br />
-                    設計図書が更新されました。再チェックが必要です
-                  </small>
-                )}
-              </td>
-              <td>
-                <StateActions version={version} />
-              </td>
-            </tr>
-          )),
-        )}
-      </tbody>
-    </table>
-  );
-}
-
-// 確定版の一覧
-function ConfirmedList({ slug, shop }: { slug: string; shop: ShopSheet[] }) {
-  const finals = shop.flatMap((sheet) =>
-    sheet.versions
-      .filter((version) => version.confirmed)
-      .slice(-1)
-      .map((version) => ({ sheet, version })),
-  );
-  if (finals.length === 0) {
-    return <p className={styles.note}>確定した施工図はまだありません。</p>;
-  }
-  return (
-    <ul className={styles.finals}>
-      {finals.map(({ sheet, version }) => (
-        <li key={sheet.key}>
-          <Link href={`/projects/${slug}/check/${version.job}`}>{sheet.title}</Link>
-          <small className={styles.note}>
-            {" "}
-            第{version.version}版・{version.confirmed?.by}・
-            {version.confirmed && dateText(version.confirmed.at)}
-          </small>
-        </li>
-      ))}
-    </ul>
-  );
-}
-
-// 図面台帳
-export default function LedgerScreen({
+// 設計図書のタブ。一覧（版・最新／旧）。追加すると建物データと3Dを更新する
+export default function DesignTab({
   slug,
-  name,
   ledger,
   canAdd,
-  shop,
+  model,
 }: {
   slug: string;
-  name: string;
   ledger: Ledger;
   canAdd: boolean;
-  shop: ShopSheet[];
+  model: { status: ModelStatus | null; changes: ModelChanges | null };
 }) {
   return (
-    <AppFrame
-      crumbs={[
-        { label: "現場を選ぶ", href: "/" },
-        { label: name, href: `/projects/${slug}` },
-        { label: "図面台帳" },
-      ]}
-    >
-      <div className={screens.page}>
-        <div className={screens.pageHead}>
-          <h1>図面台帳</h1>
-        </div>
-        {canAdd && (
-          <>
-            <h2 className={styles.heading}>確定版の一覧</h2>
-            <ConfirmedList slug={slug} shop={shop} />
-            <h2 className={styles.heading}>施工図</h2>
-            <ShopTable slug={slug} shop={shop} />
-          </>
-        )}
-        <h2 className={styles.heading}>設計図書</h2>
-        {canAdd && <AddSet slug={slug} />}
-        <MemberChanges ledger={ledger} />
-        <DesignTable ledger={ledger} />
-      </div>
-    </AppFrame>
+    <div className={screens.page}>
+      {canAdd && <AddSet slug={slug} />}
+      <ModelUpdate slug={slug} initial={model} />
+      <MemberChanges ledger={ledger} />
+      <DesignTable ledger={ledger} />
+    </div>
   );
 }

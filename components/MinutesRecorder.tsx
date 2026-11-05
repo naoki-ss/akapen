@@ -44,10 +44,15 @@ type Stage = "input" | "organizing" | "edit" | "saved";
 // ⑤の議事録づくり。音声（Web Speech API）または貼り付けの文章をClaudeで整理し、直して保存する
 export default function MinutesRecorder({
   slug,
+  inline = false,
   onClose,
+  onSaved,
 }: {
   slug: string;
+  // 議事録のタブでは、画面の中に置く（⑤では3Dの上に重ねる）
+  inline?: boolean;
   onClose: () => void;
+  onSaved?: () => void;
 }) {
   const [stage, setStage] = useState<Stage>("input");
   // 音声認識が使えないブラウザでは、最初から貼り付けにする
@@ -154,7 +159,10 @@ export default function MinutesRecorder({
   const voiceText = finalText.trim();
 
   return (
-    <aside className={styles.recorder} aria-label="議事録を作る">
+    <aside
+      className={inline ? styles.recorderInline : styles.recorder}
+      aria-label="議事録を作る"
+    >
       <header>
         <b>議事録を作る</b>
         <button type="button" className={styles.remove} aria-label="閉じる" onClick={onClose}>
@@ -265,14 +273,17 @@ export default function MinutesRecorder({
               body: JSON.stringify(edited),
             });
             setSaving(false);
-            if (response.ok) setStage("saved");
+            if (response.ok) {
+              setStage("saved");
+              onSaved?.();
+            }
             else setError((await response.json()).error);
           }}
         />
       )}
       {stage === "saved" && (
         <p>
-          保存しました。これからの施工図のチェックで、この議事録と照らし合わせます。③の「資料」の議事録の履歴から見られます。
+          保存しました。これからの施工図のチェックで、この議事録と照らし合わせます。議事録のタブの履歴から見られます。
         </p>
       )}
     </aside>

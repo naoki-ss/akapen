@@ -1,8 +1,8 @@
 // 図面台帳。台帳と入れたPDFはリポジトリの外に置く
 
-import { execFile } from "node:child_process";
+import { execFile, spawn } from "node:child_process";
 import { randomUUID } from "node:crypto";
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, openSync, readFileSync, writeFileSync } from "node:fs";
 import { homedir } from "node:os";
 import path from "node:path";
 
@@ -64,6 +64,7 @@ export type Proposal = {
   pages: ProposedPage[];
   unread: number;
   ai_usd: number;
+  model_usd: number;
   sheets: { id: string; title: string; versions: number }[];
 };
 
@@ -132,4 +133,63 @@ export function staleSheets(ledger: Ledger, jobSets?: string[]) {
         !used.includes(sheet.versions[sheet.versions.length - 1].set),
     )
     .map((sheet) => sheet.title);
+}
+
+export type ModelStatus = {
+  state: "running" | "done" | "stopped" | "error";
+  message: string;
+  done?: number;
+  total?: number;
+  seconds?: number;
+};
+
+export type ModelChanges = { added: string[]; removed: string[]; changed: string[] };
+
+// 設計図書が新しくなったら、建物データと3Dを作り直す。読み取り済みのページは読み直さない
+export function startModelUpdate(slug: string) {
+  const folder = path.join(ROOT, slug);
+  mkdirSync(folder, { recursive: true });
+  const log = openSync(path.join(folder, "model-update.log"), "a");
+  const child = spawn(python(), ["-u", fromRoot("scripts", "check", "update_model.py"), slug], {
+    cwd: cwd(),
+    detached: true,
+    stdio: ["ignore", log, log],
+  });
+  writeFileSync(
+    path.join(folder, "model-status.json"),
+    JSON.stringify({ state: "running", message: "準備中です", pid: child.pid }),
+  );
+  child.unref();
+}
+
+export function stopModelUpdate(slug: string) {
+  writeFileSync(path.join(ROOT, slug, "model-stop.flag"), "");
+}
+
+export function modelStatus(slug: string): {
+  status: ModelStatus | null;
+  changes: ModelChanges | null;
+} {
+  const read = (name: string) => {
+    const file = path.join(ROOT, slug, name);
+    return existsSync(file) ? JSON.parse(readFileSync(file, "utf8")) : null;
+  };
+  const status = read("model-status.json");
+  if (status?.state === "running") {
+    try {
+      process.kill(status.pid, 0);
+    } catch {
+      status.state = "error";
+      status.message = "建物データの更新が途中で止まりました。今の3Dはそのままです";
+    }
+  }
+  return { status, changes: read("model-changes.json") };
+}
+
+// 新しい版から作り直した建物データ。なければ null
+export function updatedModel(slug: string) {
+  const file = path.join(ROOT, slug, "model.json");
+  return SLUG.test(slug) && existsSync(file)
+    ? JSON.parse(readFileSync(file, "utf8"))
+    : null;
 }

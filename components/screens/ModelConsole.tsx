@@ -13,18 +13,13 @@ import {
 import { floorsOf, type Member } from "@/lib/model";
 import type { DrawingResult } from "@/lib/buildings";
 import type { Finding } from "@/lib/check";
-import type { MinutesSummary } from "@/lib/minutes";
 import type { ConfirmedSheet } from "@/lib/sheetStatus";
-import type { KnowledgeApp, ProjectDocument } from "@/lib/projects";
 import { ALL_LAYERS, titleKey, type LayerKey, type SheetTarget } from "@/lib/sheets";
-import { useUploadJob } from "@/lib/useUploadJob";
-import { Logo } from "../AppFrame";
 import BuildingScene from "../BuildingSceneLazy";
 import Hint from "../Hint";
 import MemberCard from "../MemberCard";
 import { ChecksList } from "../RegisterView";
 import SheetViewer from "../SheetViewer";
-import UploadPanel from "../UploadPanel";
 import appStyles from "../App.module.css";
 import panel from "../console/console.module.css";
 import styles from "./screens.module.css";
@@ -48,19 +43,23 @@ function sourceText(finding: Finding) {
   return [card.checklist, file].filter(Boolean).join("・");
 }
 
-// 赤か青の並び。項目を押すと、そのまま④に移る
+// 赤か青の並び。項目を押すと、3Dで位置を示す
 function FindingItems({
   color,
   drawing,
   findings,
   source,
   slug,
+  activeKey,
+  onSelect,
 }: {
   color: "red" | "blue";
   drawing: DrawingResult;
   findings: DrawingResult["findings"];
   source: boolean;
   slug: string;
+  activeKey: string | null;
+  onSelect: (key: string | null) => void;
 }) {
   if (findings.length === 0) return null;
   return (
@@ -69,24 +68,36 @@ function FindingItems({
         {color === "red" ? "赤" : "青"} {findings.length}
       </h4>
       <ul>
-        {findings.map((finding) => (
-          <li key={finding.id}>
-            <Link
-              className={panel.findingLink}
-              href={`/projects/${slug}/check/${drawing.job}?finding=${finding.id}`}
-            >
-              <i className="mono" data-color={color}>
-                {finding.number}
-              </i>
-              <span>
-                {finding.title}
-                {source && sourceText(finding) && (
-                  <small className={panel.itemNote}>{sourceText(finding)}</small>
-                )}
-              </span>
-            </Link>
-          </li>
-        ))}
+        {findings.map((finding) => {
+          const key = `${drawing.job}:${finding.id}`;
+          const isActive = key === activeKey;
+          return (
+            <li key={finding.id}>
+              <button
+                className={panel.findingLink}
+                data-active={isActive}
+                onClick={() => onSelect(isActive ? null : key)}
+              >
+                <i className="mono" data-color={color}>
+                  {finding.number}
+                </i>
+                <span>
+                  {finding.title}
+                  {source && sourceText(finding) && (
+                    <small className={panel.itemNote}>{sourceText(finding)}</small>
+                  )}
+                </span>
+              </button>
+              {isActive && (
+                <div className={panel.findingOpen}>
+                  <Link href={`/projects/${slug}/check/${drawing.job}?finding=${finding.id}`}>
+                    なぜ問題かを見る →
+                  </Link>
+                </div>
+              )}
+            </li>
+          );
+        })}
       </ul>
     </>
   );
@@ -97,10 +108,14 @@ function DrawingGroup({
   drawing,
   open,
   slug,
+  activeKey,
+  onSelect,
 }: {
   drawing: DrawingResult;
   open: boolean;
   slug: string;
+  activeKey: string | null;
+  onSelect: (key: string | null) => void;
 }) {
   const blue = drawing.findings.filter(isBlue);
   return (
@@ -118,8 +133,18 @@ function DrawingGroup({
         findings={drawing.findings.filter((finding) => !isBlue(finding))}
         source={false}
         slug={slug}
+        activeKey={activeKey}
+        onSelect={onSelect}
       />
-      <FindingItems color="blue" drawing={drawing} findings={blue} source slug={slug} />
+      <FindingItems
+        color="blue"
+        drawing={drawing}
+        findings={blue}
+        source
+        slug={slug}
+        activeKey={activeKey}
+        onSelect={onSelect}
+      />
     </details>
   );
 }
@@ -129,29 +154,17 @@ export default function ModelConsole({
   model,
   sheets,
   summary,
-  projects,
-  canUpload,
-  knowledge,
   confirmedSheets,
-  minutes,
   drawings,
-  documents,
 }: Building & {
-  projects: { slug: string; name: string }[];
-  // 公開先では施工図を入れられない（APIの費用が掛かるため）
-  canUpload: boolean;
-  knowledge: KnowledgeApp[];
   confirmedSheets: ConfirmedSheet[];
-  minutes: MinutesSummary[];
   drawings: DrawingResult[];
-  documents: ProjectDocument[];
 }) {
   const router = useRouter();
   const params = useSearchParams();
   const hasModel = model.members.length > 0;
   const floors = floorsOf(model);
 
-  const [adding, setAdding] = useState(params.get("add") === "1");
   const [roofOff, setRoofOff] = useState(false);
   const [floorLimit, setFloorLimit] = useState("all");
   const [selected, setSelected] = useState<Member | null>(null);
@@ -169,11 +182,6 @@ export default function ModelConsole({
       return next;
     });
   }, []);
-  const showResult = useCallback(
-    (jobId: string) => router.push(`/projects/${slug}/check/${jobId}`),
-    [router, slug],
-  );
-  const job = useUploadJob(slug, showResult);
 
   // 別の画面で変わった件数を、戻ってきたときに読み直す
   useEffect(() => router.refresh(), [router]);
@@ -188,17 +196,21 @@ export default function ModelConsole({
     [drawing, drawings],
   );
   const staleCount = new Set(shown.flatMap((item) => item.stale)).size;
-  // ④から戻ったときに、その指摘の部材を3Dで示す
+  // 選んだ指摘。④から来たときは、その指摘を選んでおく
+  const [activeKey, setActiveKey] = useState<string | null>(
+    params.get("finding") ? `${params.get("job") ?? "saved"}:${params.get("finding")}` : null,
+  );
   const active = useMemo(() => {
-    const id = params.get("finding");
-    if (!id) return null;
-    const job = params.get("job") ?? "saved";
-    return (
-      drawings
-        .find((item) => item.job === job && item.findings.some((f) => f.id === id))
-        ?.findings.find((f) => f.id === id) ?? null
-    );
-  }, [params, drawings]);
+    for (const item of drawings) {
+      const found = item.findings.find((f) => `${item.job}:${f.id}` === activeKey);
+      if (found) return found;
+    }
+    return null;
+  }, [drawings, activeKey]);
+  const selectFinding = (key: string | null) => {
+    setActiveKey(key);
+    setSelected(null);
+  };
   const highlighted = useMemo(
     () => new Set(active ? memberKeysOf(active, model) : []),
     [active, model],
@@ -215,12 +227,11 @@ export default function ModelConsole({
   const columns = model.members.filter((m) => m.type === "column").length;
   const beams = model.members.filter((m) => m.type === "beam").length;
   const storeys = floors.filter((f) => /^\d+F$/.test(f)).length;
-  const imported = knowledge.filter((app) => app.imported_at).length;
   const checksCount =
     summary?.checks.filter((c) => c.result === "要確認").length ?? 0;
 
   return (
-    <div className={styles.full}>
+    <div className={styles.fullTab}>
       <div className={styles.scene}>
         {hasModel ? (
           <BuildingScene
@@ -253,19 +264,6 @@ export default function ModelConsole({
       </div>
 
       <aside className={`${styles.panel} ${styles.panelLeft}`}>
-        <Logo />
-        <select
-          className={panel.select}
-          aria-label="現場"
-          value={slug}
-          onChange={(e) => router.push(`/projects/${e.target.value}`)}
-        >
-          {projects.map((project) => (
-            <option key={project.slug} value={project.slug}>
-              {project.name}
-            </option>
-          ))}
-        </select>
         <p className={panel.summaryLine}>
           {hasModel ? (
             <span className="mono">
@@ -275,7 +273,9 @@ export default function ModelConsole({
             "3Dなし"
           )}
           {hasModel && (
-            <Link href={`/projects/${slug}/meeting`}>打ち合わせで見せる</Link>
+            <Link className={panel.meetingLink} href={`/projects/${slug}/meeting`}>
+              打ち合わせで見せる
+            </Link>
           )}
         </p>
         <Hint id="model" text="指摘を選ぶと、なぜ問題かと3Dの位置を見られます。" />
@@ -289,6 +289,7 @@ export default function ModelConsole({
               value={drawing}
               onChange={(e) => {
                 setDrawing(e.target.value);
+                selectFinding(null);
               }}
             >
               <option value={ALL_DRAWINGS}>
@@ -300,19 +301,8 @@ export default function ModelConsole({
                 </option>
               ))}
             </select>
-            {canUpload && (
-              <button
-                type="button"
-                className={panel.add}
-                aria-expanded={adding}
-                onClick={() => setAdding(!adding)}
-              >
-                ＋ 施工図
-              </button>
-            )}
           </div>
         </label>
-        {canUpload && adding && <UploadPanel job={job} />}
         {staleCount > 0 && (
           <p className={panel.stale} role="status">
             設計図書が更新されました。再チェックが必要です。
@@ -327,100 +317,26 @@ export default function ModelConsole({
             <DrawingGroup
               key={item.title}
               drawing={item}
-              open={drawing !== ALL_DRAWINGS}
+              open={drawing !== ALL_DRAWINGS || item.findings.some((f) => activeKey === `${item.job}:${f.id}`)}
               slug={slug}
+              activeKey={activeKey}
+              onSelect={selectFinding}
             />
           ))}
         </div>
 
-        <details className={panel.sources}>
-          <summary>資料</summary>
-          <div>
-            <Link className={panel.addKnowledge} href={`/projects/${slug}/drawings`}>
-              図面台帳を開く
-            </Link>
-            <h3>設計図書</h3>
-            {documents.length === 0 ? (
-              <p className={panel.empty}>登録済みの設計図書はありません。</p>
-            ) : (
-              <ul className={panel.rows}>
-                {documents.filter((document) => document.kind !== "議事録").map((document) => (
-                  <li key={document.kind} data-on>
-                    <span>{document.kind}</span>
-                    <small>{document.count} 件</small>
-                  </li>
-                ))}
-              </ul>
-            )}
-            <h3>議事録の履歴</h3>
-            {minutes.length === 0 ? (
-              <p className={panel.empty}>
-                議事録はまだありません。「打ち合わせで見せる」から作れます。
-              </p>
-            ) : (
-              <ul className={panel.rows}>
-                {minutes.map((row) => (
-                  <li key={row.id} data-on>
-                    <Link href={`/projects/${slug}/minutes/${row.id}`}>
-                      {row.date} {row.title}
-                    </Link>
-                    <small>
-                      決定事項 {row.decisionCount} 件・{row.method}
-                    </small>
-                  </li>
-                ))}
-              </ul>
-            )}
-            <h3>
-              ナレッジ
-              {knowledge.length > 0 && (
-                <small>
-                  {" "}
-                  {knowledge.length} アプリ中 {imported} 取り込み済み
-                </small>
-              )}
-            </h3>
-            {canUpload && (
-              <Link className={panel.addKnowledge} href="/knowledge">
-                ナレッジを開く（全物件で共通）
-              </Link>
-            )}
-            {knowledge.length === 0 ? (
-              <p className={panel.empty}>
-                チェックリストがありません。青の指摘は「該当なし」になります。
-              </p>
-            ) : (
-              <ul className={panel.rows}>
-                {knowledge.map((app) => (
-                  <li key={app.id} data-on={Boolean(app.imported_at)}>
-                    <span>{app.name}</span>
-                    <small>
-                      {app.imported_at
-                        ? `kintoneから取り込み済み（${app.imported_at.slice(5).replace("-", "/")}）・${app.items}項目`
-                        : "未取り込み"}
-                    </small>
-                  </li>
-                ))}
-              </ul>
-            )}
-            {summary && (
-              <button
-                className={panel.clear}
-                onClick={() => setDialog("summary")}
-              >
-                読み取りの要確認 {checksCount} 件
-              </button>
-            )}
-            {model.architecture && (
-              <button
-                className={panel.clear}
-                onClick={() => setDialog("architecture")}
-              >
-                外観の要確認 {model.architecture.checks.length} 件
-              </button>
-            )}
-          </div>
-        </details>
+        <div className={panel.checkButtons}>
+          {summary && (
+            <button className={panel.clear} onClick={() => setDialog("summary")}>
+              読み取りの要確認 {checksCount} 件
+            </button>
+          )}
+          {model.architecture && (
+            <button className={panel.clear} onClick={() => setDialog("architecture")}>
+              外観の要確認 {model.architecture.checks.length} 件
+            </button>
+          )}
+        </div>
       </aside>
 
       {hasModel && (

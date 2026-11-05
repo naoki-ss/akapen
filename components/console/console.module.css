@@ -334,3 +334,34 @@
   color: var(--muted);
   font-size: 11px;
 }
+
+.checkButtons {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+button.findingLink {
+  width: 100%;
+  border: 0;
+  background: none;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.findings button.findingLink[data-active="true"] {
+  outline: 2px solid var(--ink);
+  outline-offset: -2px;
+  background: var(--tint, #eee);
+  font-weight: 700;
+}
+
+.summaryLine a.meetingLink {
+  padding: 4px 10px;
+  border-radius: 6px;
+  background: var(--ink);
+  color: #fff;
+  font-size: 12px;
+  text-decoration: none;
+}

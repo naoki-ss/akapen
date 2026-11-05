@@ -27,7 +27,8 @@ export default function MinutesScreen({
   const crumbs = [
     { label: "現場を選ぶ", href: "/" },
     { label: name, href: `/projects/${slug}` },
-    { label: "議事録" },
+    { label: "議事録", href: `/projects/${slug}/minutes` },
+    { label: minutes.title },
   ];
   return (
     <AppFrame crumbs={crumbs}>
@@ -44,7 +45,7 @@ export default function MinutesScreen({
                   className={styles.stop}
                   onClick={async () => {
                     await fetch(url, { method: "DELETE" });
-                    router.push(`/projects/${slug}`);
+                    router.push(`/projects/${slug}/minutes`);
                     router.refresh();
                   }}
                 >

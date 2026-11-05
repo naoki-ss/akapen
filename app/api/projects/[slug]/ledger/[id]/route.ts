@@ -1,6 +1,12 @@
 import type { NextRequest } from "next/server";
 import { crossSite, uploadEnabled } from "@/lib/jobs";
-import { commitSet, proposeSet, readTitles, validIds } from "@/lib/ledger";
+import {
+  commitSet,
+  proposeSet,
+  readTitles,
+  startModelUpdate,
+  validIds,
+} from "@/lib/ledger";
 
 const error = (message: string, status: number) =>
   Response.json({ error: message }, { status });
@@ -20,6 +26,8 @@ export async function POST(
       return Response.json({ proposal: await proposeSet(slug, id) });
     }
     await commitSet(slug, id, { label: body.label, date: body.date, assign: body.assign });
+    // 入れたら建物データと3Dを更新する
+    startModelUpdate(slug);
     return Response.json({ ok: true });
   } catch (failure) {
     return error((failure as Error).message, 400);

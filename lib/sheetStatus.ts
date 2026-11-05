@@ -37,6 +37,9 @@ export type ShopVersion = {
   // 同じ内容を判定し直した回数
   rejudged: number;
   stale: string[];
+  // 朱書きから消した指摘を除いた件数
+  red: number;
+  blue: number;
 };
 
 export type ShopSheet = { key: string; title: string; versions: ShopVersion[] };
@@ -145,6 +148,8 @@ type Row = {
   state: SheetState;
   confirmed?: Confirmation;
   stale: string[];
+  red: number;
+  blue: number;
 };
 
 function jobRows(project: string): Row[] {
@@ -173,14 +178,26 @@ function jobRows(project: string): Row[] {
         title: "判定の前の施工図",
         state: state === "selecting" ? "提出" : "チェック中",
         stale: [],
+        red: 0,
+        blue: 0,
       });
       continue;
     }
     const result = JSON.parse(readFileSync(resultFile, "utf8"));
     const { pages } = readStatusFile(folder);
+    const decisions = path.join(folder, "decisions.json");
+    const excluded = new Set<number>(
+      existsSync(decisions) ? JSON.parse(readFileSync(decisions, "utf8")).excluded : [],
+    );
     for (const page of result.pages as { number: number; title?: string }[]) {
       const status = pages[page.number] ?? {};
+      const kept = (
+        result.findings as { number: number; source_type: string; drawing: { page: number } }[]
+      ).filter((f) => f.drawing.page === page.number && !excluded.has(f.number));
+      const blue = kept.filter((f) => f.source_type === "knowledge").length;
       rows.push({
+        red: kept.length - blue,
+        blue,
         ...base,
         hash: pageHash(folder, page.number),
         page: page.number,
@@ -223,6 +240,8 @@ export function shopSheets(project: string): ShopSheet[] {
         confirmed: chosen.confirmed,
         rejudged: same.length - 1,
         stale: chosen.stale,
+        red: chosen.red,
+        blue: chosen.blue,
       };
     });
     return { key, title: rows[rows.length - 1].title, versions };

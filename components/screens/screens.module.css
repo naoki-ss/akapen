@@ -383,3 +383,45 @@
   font-size: 12px;
   cursor: pointer;
 }
+
+.fullTab {
+  position: relative;
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+}
+
+.tabs {
+  display: flex;
+  gap: 2px;
+  padding: 0 16px;
+  border-bottom: 1px solid var(--line);
+  background: var(--panel);
+}
+
+.tabs a {
+  padding: 9px 18px;
+  border-bottom: 3px solid transparent;
+  color: var(--muted);
+  font-size: 14px;
+  text-decoration: none;
+}
+
+.tabs a[aria-current="page"] {
+  border-bottom-color: var(--ink);
+  color: var(--ink);
+  font-weight: 700;
+}
+
+.tabBody {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.tabBody > * {
+  flex: 1;
+  min-height: 0;
+}

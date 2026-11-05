@@ -151,3 +151,39 @@
   padding-left: 18px;
   font-size: 13px;
 }
+
+.red {
+  color: #c62d23;
+  font-weight: 700;
+}
+
+.blue {
+  color: #1d5bb8;
+  font-weight: 700;
+}
+
+.resultLink {
+  white-space: nowrap;
+  font-weight: 700;
+}
+
+.table tr[data-old="true"] td {
+  color: var(--muted);
+}
+
+.modelUpdate {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 14px;
+  padding: 10px 12px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--panel);
+  font-size: 13px;
+}
+
+.modelUpdate details {
+  flex-basis: 100%;
+}

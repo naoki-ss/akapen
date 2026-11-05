@@ -1,12 +1,12 @@
-import { Suspense } from "react";
 import { notFound } from "next/navigation";
 import { connection } from "next/server";
-import ModelConsole from "@/components/screens/ModelConsole";
-import { drawingResults, getBuilding, listBuildings } from "@/lib/buildings";
+import { Suspense } from "react";
+import ProjectFrame from "@/components/ProjectFrame";
+import SheetsTab from "@/components/screens/SheetsTab";
+import { drawingResults, getBuilding } from "@/lib/buildings";
+import { isBlue } from "@/lib/findings";
 import { uploadEnabled } from "@/lib/jobs";
-import { listMinutes } from "@/lib/minutes";
-import { confirmedSheets } from "@/lib/sheetStatus";
-import { knowledgeApps, projectDocuments } from "@/lib/projects";
+import { shopSheets } from "@/lib/sheetStatus";
 
 async function Content({ params }: PageProps<"/projects/[slug]">) {
   await connection();
@@ -14,24 +14,23 @@ async function Content({ params }: PageProps<"/projects/[slug]">) {
   const building = getBuilding(slug);
   if (!building) notFound();
   const enabled = uploadEnabled();
+  const saved = drawingResults(building).map((item) => {
+    const blue = item.findings.filter(isBlue).length;
+    return { title: item.title, job: item.job, red: item.findings.length - blue, blue };
+  });
   return (
-    <ModelConsole
-      {...building}
-      projects={listBuildings().map((b) => ({
-        slug: b.slug,
-        name: b.model.name,
-      }))}
-      canUpload={enabled}
-      drawings={drawingResults(building)}
-      knowledge={enabled ? knowledgeApps() : []}
-      confirmedSheets={enabled ? confirmedSheets(slug) : []}
-      minutes={enabled ? listMinutes(slug) : []}
-      documents={enabled ? projectDocuments(slug) : []}
-    />
+    <ProjectFrame slug={slug} name={building.model.name} tab="sheets">
+      <SheetsTab
+        slug={slug}
+        shop={enabled ? shopSheets(slug) : []}
+        saved={saved}
+        canUpload={enabled}
+      />
+    </ProjectFrame>
   );
 }
 
-// ③ 3Dモデル＋コンソール
+// 現場トップ：施工図のタブ
 export default function Page(props: PageProps<"/projects/[slug]">) {
   return (
     <Suspense>
