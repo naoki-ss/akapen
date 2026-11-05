@@ -78,6 +78,14 @@ function makePattern(pattern: Pattern) {
     ctx.fillRect(x, y, w, h);
   };
   switch (pattern) {
+    case "lap":
+      // 横張りのサイディング。継ぎ目の細い線だけ
+      ctx.fillStyle = "#ffffff";
+      ctx.fillRect(0, 0, size, size);
+      ctx.fillStyle = "#a8a8a8";
+      ctx.fillRect(0, 0, size, 5);
+      ctx.fillRect(0, 128, size, 5);
+      break;
     case "ribs":
       // 横張の山。影の帯を2本
       for (const y of [0, 128]) {

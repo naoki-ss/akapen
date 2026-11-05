@@ -661,7 +661,7 @@ function wallMaterial(
   return hits[0]?.material ?? "standard_wall";
 }
 
-const CURTAIN_RATIO = 0.6;
+const CURTAIN_RATIO = 0.72;
 
 function floorPieces(floor: ArchFloor, architecture: Architecture): Pieces {
   const pieces: Pieces = new Map();
