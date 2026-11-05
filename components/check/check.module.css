@@ -1132,13 +1132,17 @@
   font-weight: 700;
 }
 
-/* 操作はスクロールしても見えるようにする */
-.compare .basisActions {
+/* 判定の一文と操作は、スクロールしても見えるようにする */
+.compareFoot {
   position: sticky;
   z-index: 2;
   bottom: -12px;
   margin: 8px -16px -12px;
-  padding: 8px 16px;
+  padding: 6px 16px 8px;
   border-top: 1px solid var(--line);
   background: var(--panel);
+}
+
+.compareFoot .reason {
+  margin: 0 0 4px;
 }

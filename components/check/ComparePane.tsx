@@ -2,7 +2,13 @@
 
 import { useState } from "react";
 import type { Finding } from "@/lib/check";
-import { colorName, detailOf, reasonOf, regionsOf, sourceLabel } from "@/lib/findings";
+import {
+  colorName,
+  detailOf,
+  reasonOf,
+  regionsOf,
+  sourceLabel,
+} from "@/lib/findings";
 import type { Box, Sheet } from "@/lib/sheets";
 import { REMOVE_REASONS, type RemoveReason } from "@/lib/useDecisions";
 import BasisDocument from "./BasisDocument";
@@ -29,7 +35,11 @@ function SheetCrop({
 }) {
   const ratio = sheet.width / sheet.height;
   const [x0, y0, x1, y1] = region;
-  let high = Math.max((y1 - y0) * CROP_PADDING, ((x1 - x0) * CROP_PADDING * ratio) / CROP_ASPECT, MIN_WINDOW);
+  let high = Math.max(
+    (y1 - y0) * CROP_PADDING,
+    ((x1 - x0) * CROP_PADDING * ratio) / CROP_ASPECT,
+    MIN_WINDOW,
+  );
   let wide = (high * CROP_ASPECT) / ratio;
   if (wide > 1) {
     high /= wide;
@@ -120,41 +130,52 @@ export default function ComparePane({
           {finding.sheet_value && (
             <p className={styles.sheetReading}>{finding.sheet_value}</p>
           )}
-          <SheetCrop sheet={sheet} base={base} region={regionsOf(finding)[0]} color={color} />
+          <SheetCrop
+            sheet={sheet}
+            base={base}
+            region={regionsOf(finding)[0]}
+            color={color}
+          />
         </div>
         <div className={styles.compareCard} data-side="basis">
           <h3>根拠（{sourceLabel(finding)}）</h3>
-          <BasisDocument finding={finding} base={base} publicView={publicView} />
+          <BasisDocument
+            finding={finding}
+            base={base}
+            publicView={publicView}
+          />
           {finding.design_value && (
             <p className={styles.compareValue}>{finding.design_value}</p>
           )}
         </div>
       </div>
-      <p className={styles.reason}>{reasonOf(finding)}</p>
-      {(finding.needs_confirmation || finding.severity === "要確認") && (
-        <small className={styles.confirm}>
-          図面だけでは言い切れません。人の確認が必要です。
-        </small>
-      )}
-      <div className={styles.basisActions}>
-        {!locked && (
-          <button
-            className={styles.btn}
-            aria-expanded={removingFor === finding.id}
-            onClick={() =>
-              setRemovingFor(removingFor === finding.id ? null : finding.id)
-            }
-          >
-            この指摘を朱書きから外す
-          </button>
+      <div className={styles.compareFoot}>
+        <p className={styles.reason}>{reasonOf(finding)}</p>
+        {(finding.needs_confirmation || finding.severity === "要確認") && (
+          <small className={styles.confirm}>
+            図面だけでは言い切れません。人の確認が必要です。
+          </small>
         )}
-        <button
-          className={styles.ghost}
-          aria-expanded={opened}
-          onClick={() => setOpenedFor(opened ? null : finding.id)}
-        >
-          根拠資料を{opened ? "閉じる" : "開く"}
-        </button>
+        <div className={styles.basisActions}>
+          {!locked && (
+            <button
+              className={styles.btn}
+              aria-expanded={removingFor === finding.id}
+              onClick={() =>
+                setRemovingFor(removingFor === finding.id ? null : finding.id)
+              }
+            >
+              この指摘を朱書きから外す
+            </button>
+          )}
+          <button
+            className={styles.ghost}
+            aria-expanded={opened}
+            onClick={() => setOpenedFor(opened ? null : finding.id)}
+          >
+            根拠資料を{opened ? "閉じる" : "開く"}
+          </button>
+        </div>
       </div>
       {removingFor === finding.id && (
         <fieldset className={styles.removeForm}>
