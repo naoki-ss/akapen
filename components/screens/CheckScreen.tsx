@@ -2,20 +2,17 @@
 
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import type { Building } from "@/lib/buildings";
-import { inkOf, memberKeysOf, NOT_IN_MODEL, numbered } from "@/lib/findings";
+import { inkOf, isBlue, memberKeysOf, NOT_IN_MODEL, numbered } from "@/lib/findings";
 import { floorsOf } from "@/lib/model";
-import { ALL_LAYERS, type LayerKey } from "@/lib/sheets";
-import { useDecisions } from "@/lib/useDecisions";
+import { useDecisions, type RemoveReason } from "@/lib/useDecisions";
 import { useJobResult } from "@/lib/useJobResult";
 import AppFrame from "../AppFrame";
 import BuildingScene from "../BuildingSceneLazy";
-import Hint from "../Hint";
-import LayerToggles from "../LayerToggles";
 import AnnotatedSheet from "../check/AnnotatedSheet";
-import BasisCard from "../check/BasisCard";
-import FindingList from "../check/FindingList";
+import ComparePane from "../check/ComparePane";
+import FindingList, { type DrawingGroup } from "../check/FindingList";
 import styles from "../check/check.module.css";
 
 const ignore = () => {};
@@ -27,11 +24,30 @@ export default function CheckScreen({
   check,
   sheets,
   job,
-}: Building & { job: string }) {
+  stale,
+  confirmed,
+  drawings,
+  versions,
+}: Building & {
+  job: string;
+  stale: string[];
+  confirmed: { page: number; by: string; at: string }[];
+  // ほかの図面の件数（図面ごとの最新の結果）
+  drawings: { title: string; job: string; red: number; blue: number }[];
+  // この結果の図面の版（図名 → 第何版）
+  versions: Record<string, number>;
+}) {
   const isSaved = job === "saved";
   const jobId = isSaved ? null : job;
   const { result: uploaded, missing } = useJobResult(jobId);
-  const { excluded, setKept } = useDecisions(jobId);
+  const { excluded, remove, restore } = useDecisions(jobId);
+  // 消したあとの案内。数秒で消える
+  const [justRemoved, setJustRemoved] = useState<number | null>(null);
+  useEffect(() => {
+    if (justRemoved === null) return;
+    const timer = setTimeout(() => setJustRemoved(null), 6000);
+    return () => clearTimeout(timer);
+  }, [justRemoved]);
   const saved = isSaved ? check : undefined;
   const jobBase = `/api/check/${jobId}/files`;
   const hasModel = model.members.length > 0;
@@ -42,11 +58,8 @@ export default function CheckScreen({
     useSearchParams().get("finding"),
   );
   const [sheetId, setSheetId] = useState<string | null>(null);
-  const [zoom, setZoom] = useState<"auto" | "full" | "large">("auto");
+  const [mode, setMode] = useState<"sheet" | "3d">("sheet");
   const [menuOpen, setMenuOpen] = useState(false);
-  const [visibleLayers, setVisibleLayers] = useState<ReadonlySet<LayerKey>>(
-    () => new Set(ALL_LAYERS),
-  );
   // 公開・デモ用の表示。読み込み直すと必ず塗りつぶしありに戻す
   const [publicView, setPublicView] = useState(true);
 
@@ -79,21 +92,19 @@ export default function CheckScreen({
     return [];
   }, [uploaded, saved, sheets]);
 
-  const shownFindings = allFindings.filter((f) =>
-    visibleLayers.has(f.source_type ?? "design"),
+  const remaining = useMemo(
+    () => allFindings.filter((f) => !excluded.has(f.number)),
+    [allFindings, excluded],
   );
-  const active = allFindings.find((f) => f.id === activeId) ?? null;
+  const removedFindings = allFindings.filter((f) => excluded.has(f.number));
+  const active = useMemo(
+    () => remaining.find((f) => f.id === activeId) ?? null,
+    [remaining, activeId],
+  );
   const currentSheet =
     pageSheets.find(
       (sheet) => sheet.id === (sheetId ?? active?.drawing.sheet),
     ) ?? pageSheets[0];
-
-  const counts = {
-    design: allFindings.filter((f) => (f.source_type ?? "design") === "design")
-      .length,
-    minutes: allFindings.filter((f) => f.source_type === "minutes").length,
-    knowledge: allFindings.filter((f) => f.source_type === "knowledge").length,
-  };
 
   const highlighted = useMemo(
     () => new Set(active ? memberKeysOf(active, model) : []),
@@ -101,15 +112,7 @@ export default function CheckScreen({
   );
   const select = (finding: (typeof allFindings)[number]) => {
     setActiveId(finding.id);
-    setZoom("auto");
     if (finding.drawing.sheet) setSheetId(finding.drawing.sheet);
-  };
-
-  const toggleLayer = (key: LayerKey) => {
-    const next = new Set(visibleLayers);
-    if (next.has(key)) next.delete(key);
-    else next.add(key);
-    setVisibleLayers(next);
   };
 
   const crumbs = [
@@ -128,40 +131,39 @@ export default function CheckScreen({
     );
   }
 
-  const scaled = zoom === "large" || (zoom === "auto" && Boolean(active));
-  const modelHref = `/projects/${slug}?job=${job}${active ? `&finding=${active.id}` : ""}`;
+  // 図面ごとのまとまり。この結果の図面は開けて、ほかの図面は別の結果へのリンクにする
+  const here: DrawingGroup[] = pageSheets.map((sheet) => {
+    const findings = remaining.filter((f) => f.drawing.sheet === sheet.id);
+    const blue = findings.filter(isBlue).length;
+    return {
+      key: sheet.id,
+      title: sheet.title,
+      findings,
+      href: null,
+      red: findings.length - blue,
+      blue,
+    };
+  });
+  const titles = new Set(pageSheets.map((sheet) => sheet.title));
+  const others: DrawingGroup[] = drawings
+    .filter((item) => !titles.has(item.title))
+    .map((item) => ({
+      key: `${item.job}:${item.title}`,
+      title: item.title,
+      findings: null,
+      href: `/projects/${slug}/check/${item.job}`,
+      red: item.red,
+      blue: item.blue,
+    }));
+
+  const version = versions[currentSheet.title];
 
   return (
     <AppFrame crumbs={crumbs}>
       <div className={styles.screen}>
-        <div className={styles.topBar}>
-          {pageSheets.length > 1 ? (
-            <select
-              className={styles.pageSelect}
-              aria-label="図面のページ"
-              value={currentSheet.id}
-              onChange={(e) => {
-                setSheetId(e.target.value);
-                setActiveId(null);
-              }}
-            >
-              {pageSheets.map((sheet) => (
-                <option key={sheet.id} value={sheet.id}>
-                  p.{sheet.page} {sheet.title}
-                </option>
-              ))}
-            </select>
-          ) : (
-            <b>{currentSheet.title}</b>
-          )}
-          <LayerToggles
-            counts={counts}
-            visible={visibleLayers}
-            onToggle={toggleLayer}
-            noKnowledge={!uploaded?.checklist && counts.knowledge === 0}
-          />
-          <div className={styles.barActions}>
-            {uploaded && !noMaskedFiles && (
+        {uploaded && !noMaskedFiles && (
+          <div className={styles.topBar}>
+            <div className={styles.barActions}>
               <a
                 className={styles.btnPrimary}
                 href={`/api/check/${jobId}/export?public=${publicView ? 1 : 0}`}
@@ -169,34 +171,23 @@ export default function CheckScreen({
               >
                 朱書きPDFをダウンロード
               </a>
-            )}
-            <div className={styles.menu}>
-              <button
-                className={styles.btn}
-                aria-expanded={menuOpen}
-                aria-label="メニュー"
-                onClick={() => setMenuOpen(!menuOpen)}
-              >
-                ⋯
-              </button>
-              {menuOpen && (
-                <>
-                  <button
-                    className={styles.menuBack}
-                    aria-label="メニューを閉じる"
-                    onClick={() => setMenuOpen(false)}
-                  />
-                  <div className={styles.menuItems} role="menu">
+              <div className={styles.menu}>
+                <button
+                  className={styles.btn}
+                  aria-expanded={menuOpen}
+                  aria-label="メニュー"
+                  onClick={() => setMenuOpen(!menuOpen)}
+                >
+                  ⋯
+                </button>
+                {menuOpen && (
+                  <>
                     <button
-                      role="menuitem"
-                      onClick={() => {
-                        setZoom(scaled ? "full" : "large");
-                        setMenuOpen(false);
-                      }}
-                    >
-                      {scaled ? "図面の全体を見る" : "図面を拡大"}
-                    </button>
-                    {uploaded && (
+                      className={styles.menuBack}
+                      aria-label="メニューを閉じる"
+                      onClick={() => setMenuOpen(false)}
+                    />
+                    <div className={styles.menuItems} role="menu">
                       <label
                         className={styles.publicToggle}
                         data-public={publicView}
@@ -211,27 +202,52 @@ export default function CheckScreen({
                           ? "公開・デモ用の表示"
                           : "社内用（名前が見えます）"}
                       </label>
-                    )}
-                    {uploaded && (
-                      <Link
-                        role="menuitem"
-                        href={`/projects/${slug}?add=1`}
-                      >
+                      <Link role="menuitem" href={`/projects/${slug}?add=1`}>
                         施工図を追加
                       </Link>
-                    )}
-                  </div>
-                </>
-              )}
+                    </div>
+                  </>
+                )}
+              </div>
             </div>
           </div>
-        </div>
-
-        {!publicView && (
-          <p className={styles.internalBanner}>
-            社内用の表示です。名前が見えます。
-          </p>
         )}
+
+        <div className={styles.banners}>
+          {justRemoved !== null && (
+            <p className={styles.removedToast} role="status">
+              朱書きから消しました
+              <button
+                onClick={() => {
+                  restore(justRemoved);
+                  setJustRemoved(null);
+                }}
+              >
+                元に戻す
+              </button>
+            </p>
+          )}
+          {confirmed.some((item) => item.page === currentSheet.page) && (
+            <p className={styles.confirmedBanner} role="status">
+              この図面は確定しています。変更できません。
+            </p>
+          )}
+          {stale.length > 0 && (
+            <p className={styles.internalBanner} role="status">
+              設計図書が更新されました。再チェックが必要です（{stale.join("、")}）。
+            </p>
+          )}
+          {!publicView && (
+            <p className={styles.internalBanner}>
+              社内用の表示です。名前が見えます。
+            </p>
+          )}
+          {(uploaded?.suppressed?.length ?? 0) > 0 && (
+            <p className={styles.suppressed} role="status">
+              過去の判断により {uploaded?.suppressed?.length} 件を除外しました。
+            </p>
+          )}
+        </div>
 
         {noMaskedFiles ? (
           <p className={styles.noMasked}>
@@ -239,44 +255,54 @@ export default function CheckScreen({
           </p>
         ) : (
           <>
-            <Hint
-              id="check"
-              text="指摘を選ぶと理由が分かります。確認したら朱書きPDFを持ち帰ります。"
-            />
             <FindingList
-              findings={shownFindings}
-              excluded={excluded}
+              groups={[...here, ...others]}
+              openKey={currentSheet.id}
+              removed={removedFindings}
+              onRestore={restore}
               activeId={activeId}
               notes={uploaded?.notes}
               changes={saved?.changes}
               minutes={uploaded?.minutes}
               checklist={uploaded?.checklist}
               onSelect={select}
+              onOpenGroup={(key) => {
+                setSheetId(key);
+                setActiveId(null);
+              }}
             />
-            <section className={styles.sheetPane} aria-label="朱書きの図面">
-              <AnnotatedSheet
-                sheet={currentSheet}
-                base={resultBase}
-                findings={shownFindings.filter(
-                  (f) => f.drawing.sheet === currentSheet.id,
-                )}
-                excluded={excluded}
-                activeId={activeId}
-                zoom={zoom}
-                onSelect={select}
-                onClear={() => setActiveId(null)}
-              />
-            </section>
-            <aside className={styles.side}>
-              <BasisCard
-                finding={active}
-                kept={!active || !excluded.has(active.number)}
-                base={resultBase}
-                onKeep={(kept) => active && setKept(active.number, kept)}
-              />
-              <div className={styles.mini}>
-                {hasModel ? (
-                  <>
+            <div className={styles.workspace}>
+              <section className={styles.viewer} aria-label="図面ビューア">
+                <p className={styles.viewerLabel}>
+                  {mode === "sheet"
+                    ? `施工図：${currentSheet.title}${version ? ` 第${version}版` : ""}`
+                    : `3D：${active ? `指摘 ${active.number} の位置` : "建物全体"}`}
+                </p>
+                <div className={styles.viewerMode} role="group" aria-label="表示の切り替え">
+                  <button aria-pressed={mode === "sheet"} onClick={() => setMode("sheet")}>
+                    施工図
+                  </button>
+                  <button
+                    aria-pressed={mode === "3d"}
+                    disabled={!hasModel}
+                    onClick={() => setMode("3d")}
+                  >
+                    3D
+                  </button>
+                </div>
+                {mode === "sheet" ? (
+                  <AnnotatedSheet
+                    sheet={currentSheet}
+                    base={resultBase}
+                    findings={remaining.filter(
+                      (f) => f.drawing.sheet === currentSheet.id,
+                    )}
+                    activeId={activeId}
+                    onSelect={select}
+                    onClear={() => setActiveId(null)}
+                  />
+                ) : (
+                  <div className={styles.viewer3d}>
                     <BuildingScene
                       model={model}
                       topFloorIndex={floors.length - 1}
@@ -287,25 +313,30 @@ export default function CheckScreen({
                       highlightColor={active ? inkOf(active) : undefined}
                       onSelect={ignore}
                     />
-                    <Link
-                      className={`${styles.btn} ${styles.miniAction}`}
-                      href={modelHref}
-                    >
-                      3Dで大きく見る
-                    </Link>
                     {active && highlighted.size === 0 && (
-                      <span className={styles.miniNote}>
-                        {NOT_IN_MODEL}
-                      </span>
+                      <span className={styles.miniNote}>{NOT_IN_MODEL}</span>
                     )}
-                  </>
-                ) : (
-                  <p className={styles.noModel}>
-                    この現場は3Dなしで登録しています。
-                  </p>
+                  </div>
                 )}
-              </div>
-            </aside>
+              </section>
+              <ComparePane
+                finding={active}
+                sheet={currentSheet}
+                locked={
+                  !jobId ||
+                  confirmed.some((item) => item.page === active?.drawing.page)
+                }
+                base={resultBase}
+                publicView={uploaded ? publicView : true}
+                onRemove={(why: RemoveReason) => {
+                  if (!active) return;
+                  remove(active.number, why);
+                  setJustRemoved(active.number);
+                  // 一覧の画面に戻る
+                  setActiveId(null);
+                }}
+              />
+            </div>
           </>
         )}
       </div>

@@ -37,8 +37,6 @@ Thumbs.db
 __pycache__/
 *.pyc
 
-# prototype の生成物（実図面からの抽出結果）
-prototype/model.json
 
 # Python 仮想環境
 .venv/

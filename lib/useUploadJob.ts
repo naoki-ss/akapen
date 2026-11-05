@@ -32,6 +32,8 @@ export type JobResult = CheckResult & {
   // 塗りつぶした図面（masked/）があるか
   masked?: boolean;
   notes: string[];
+  // 過去の判断で除外した指摘
+  suppressed?: { title: string; reason: string }[];
   checklist?: ResultRow[] | null;
   minutes?: ResultRow[] | null;
   pages?: { number: number; title?: string | null }[];
@@ -48,6 +50,7 @@ export type JobSummary = {
   open: { title: string; red: number; blue: number }[];
   masked: boolean;
   stopped: boolean;
+  stale: string[];
 };
 
 // 物件を切り替えて戻っても、走っているチェックを見失わないようにする

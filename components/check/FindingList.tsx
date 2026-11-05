@@ -1,8 +1,9 @@
 "use client";
 
+import Link from "next/link";
 import { useCallback } from "react";
 import type { CheckResult, Finding } from "@/lib/check";
-import { colorName } from "@/lib/findings";
+import { isBlue } from "@/lib/findings";
 import type { ResultRow } from "@/lib/useUploadJob";
 import styles from "./check.module.css";
 
@@ -26,25 +27,82 @@ function ResultRows({ rows }: { rows: ResultRow[] }) {
   );
 }
 
-// 左の指摘の一覧。題名だけを並べ、そのほかは下にたたむ
-export default function FindingList({
+export type DrawingGroup = {
+  key: string;
+  title: string;
+  // この結果の図面なら指摘と選ぶ操作がある。別の結果の図面は開くリンクにする
+  findings: Numbered[] | null;
+  href: string | null;
+  red: number;
+  blue: number;
+};
+
+function Items({
+  label,
+  color,
   findings,
-  excluded,
+  activeId,
+  showActive,
+  onSelect,
+}: {
+  label: string;
+  color: "red" | "blue";
+  findings: Numbered[];
+  activeId: string | null;
+  showActive: (item: HTMLLIElement | null) => void;
+  onSelect: (finding: Numbered) => void;
+}) {
+  if (findings.length === 0) return null;
+  return (
+    <>
+      <h4 className={styles.colorHead} data-color={color}>
+        {label} {findings.length}
+      </h4>
+      <ul className={styles.items}>
+        {findings.map((finding) => {
+          const active = finding.id === activeId;
+          return (
+            <li key={finding.id} ref={active ? showActive : undefined}>
+              <button data-active={active} onClick={() => onSelect(finding)}>
+                <i className={`${styles.number} mono`} data-color={color}>
+                  {finding.number}
+                </i>
+                <span className={styles.itemBody}>{finding.title}</span>
+              </button>
+            </li>
+          );
+        })}
+      </ul>
+    </>
+  );
+}
+
+// 左の指摘の一覧。図面ごとにまとめ、開くと赤と青に分かれて並ぶ
+export default function FindingList({
+  groups,
+  openKey,
+  removed,
+  onRestore,
   activeId,
   notes,
   changes,
   minutes,
   checklist,
   onSelect,
+  onOpenGroup,
 }: {
-  findings: Numbered[];
-  excluded: ReadonlySet<number>;
+  groups: DrawingGroup[];
+  openKey: string | null;
+  // 朱書きから消した指摘。たたんで見せ、元に戻せる
+  removed: Numbered[];
+  onRestore: (number: number) => void;
   activeId: string | null;
   notes?: string[];
   changes?: CheckResult["changes"];
   minutes?: ResultRow[] | null;
   checklist?: ResultRow[] | null;
   onSelect: (finding: Numbered) => void;
+  onOpenGroup: (key: string) => void;
 }) {
   // 枠から選んだときも、一覧の中で見えるようにする
   const showActive = useCallback((item: HTMLLIElement | null) => {
@@ -53,29 +111,69 @@ export default function FindingList({
   return (
     <div className={styles.list}>
       <div className={styles.listBody}>
-        <ul className={styles.items}>
-          {findings.map((finding) => {
-            const active = finding.id === activeId;
-            return (
-              <li key={finding.id} ref={active ? showActive : undefined}>
+        {groups.map((group) =>
+          group.findings ? (
+            <details
+              key={group.key}
+              className={styles.drawingGroup}
+              open={group.key === openKey}
+            >
+              <summary
+                onClick={(event) => {
+                  event.preventDefault();
+                  onOpenGroup(group.key);
+                }}
+              >
+                <b>{group.title}</b>
+                <span className="mono">
+                  <i data-color="red">赤{group.red}</i>・<i data-color="blue">青{group.blue}</i>
+                </span>
+              </summary>
+              <Items
+                label="赤"
+                color="red"
+                findings={group.findings.filter((f) => !isBlue(f))}
+                activeId={activeId}
+                showActive={showActive}
+                onSelect={onSelect}
+              />
+              <Items
+                label="青"
+                color="blue"
+                findings={group.findings.filter(isBlue)}
+                activeId={activeId}
+                showActive={showActive}
+                onSelect={onSelect}
+              />
+            </details>
+          ) : (
+            <Link key={group.key} href={group.href ?? "#"} className={styles.drawingLink}>
+              <b>{group.title}</b>
+              <span className="mono">
+                <i data-color="red">赤{group.red}</i>・<i data-color="blue">青{group.blue}</i>
+              </span>
+            </Link>
+          ),
+        )}
+      </div>
+      {removed.length > 0 && (
+        <details className={styles.more}>
+          <summary>消した指摘（{removed.length}）</summary>
+          <ul className={styles.removedList}>
+            {removed.map((finding) => (
+              <li key={finding.id}>
+                <span>{finding.title}</span>
                 <button
-                  data-active={active}
-                  data-off={excluded.has(finding.number)}
-                  onClick={() => onSelect(finding)}
+                  className={styles.ghost}
+                  onClick={() => onRestore(finding.number)}
                 >
-                  <i
-                    className={`${styles.number} mono`}
-                    data-color={colorName(finding)}
-                  >
-                    {finding.number}
-                  </i>
-                  <span className={styles.itemBody}>{finding.title}</span>
+                  元に戻す
                 </button>
               </li>
-            );
-          })}
-        </ul>
-      </div>
+            ))}
+          </ul>
+        </details>
+      )}
       <details className={styles.more}>
         <summary>このチェックについて</summary>
         <div>

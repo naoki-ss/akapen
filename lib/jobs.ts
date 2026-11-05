@@ -16,6 +16,8 @@ import { homedir } from "node:os";
 import path from "node:path";
 import { promisify } from "node:util";
 
+import { readLedger, staleSheets } from "./ledger";
+
 const UPLOADS = path.join(homedir(), "sekozu-data", "uploads");
 const PROJECTS = path.join(homedir(), "sekozu-data", "projects.json");
 // ビルドツールにパスを追跡させない（.venv のシンボリックリンクで止まるため、実行時に組み立てる）
@@ -24,7 +26,7 @@ const fromRoot = (...parts: string[]) =>
 const JOB_ID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
 // 返してよいファイルだけを通す（図面の場所や生の応答は返さない）
 const PUBLIC_FILE =
-  /^(result\.json|thumbs\/p\d+\.png|(masked\/)?(marked\.pdf|pages\/p\d+(-(base|design|minutes|knowledge))?\.png|findings\/\d+\.png))$/;
+  /^(result\.json|thumbs\/p\d+\.png|(masked\/)?(marked\.pdf|pages\/p\d+(-(base|design|minutes|knowledge))?\.png|findings\/\d+\.png|design\/[\w-]+\.png))$/;
 
 // 別のサイトから勝手に判定（API の費用）を走らせられないようにする
 export function crossSite(request: Request) {
@@ -59,12 +61,15 @@ export type JobSummary = {
   open: { title: string; red: number; blue: number }[];
   masked: boolean;
   stopped: boolean;
+  // 照合したあとに新しくなった設計図書のページの図名
+  stale: string[];
 };
 
 // 物件の過去の結果。元のファイル名は社名が入ることがあるので返さない
 export function listJobs(project: string): JobSummary[] {
   if (!existsSync(UPLOADS)) return [];
   const jobs: JobSummary[] = [];
+  const ledger = readLedger(project);
   for (const id of readdirSync(UPLOADS)) {
     const folder = jobFolder(id);
     if (!folder || !existsSync(path.join(folder, "result.json"))) continue;
@@ -116,6 +121,7 @@ export function listJobs(project: string): JobSummary[] {
       open,
       masked: Boolean(result.masked),
       stopped: Boolean(result.stopped_pages?.length),
+      stale: staleSheets(ledger, meta.design_sets),
     });
   }
   const rank = (job: JobSummary) => job.pin ?? Number.MAX_SAFE_INTEGER;
@@ -124,14 +130,39 @@ export function listJobs(project: string): JobSummary[] {
   );
 }
 
+// 判定の結果の、再チェックが必要な設計図書のページ
+export function jobStale(project: string, id: string) {
+  const folder = jobFolder(id);
+  if (!folder) return [];
+  const meta = JSON.parse(readFileSync(path.join(folder, "job.json"), "utf8"));
+  return staleSheets(readLedger(project), meta.design_sets);
+}
+
 export function readDecisions(folder: string): number[] {
   const file = path.join(folder, "decisions.json");
   return existsSync(file) ? JSON.parse(readFileSync(file, "utf8")).excluded : [];
 }
 
-// 朱書きから外した指摘の番号を残す
-export function saveDecisions(folder: string, excluded: number[]) {
-  writeFileSync(path.join(folder, "decisions.json"), JSON.stringify({ excluded }));
+// 消した指摘の理由
+export type RemovedReason = { reason: string; note: string; at: string };
+
+export function readDecisionReasons(folder: string): Record<string, RemovedReason> {
+  const file = path.join(folder, "decisions.json");
+  return existsSync(file)
+    ? (JSON.parse(readFileSync(file, "utf8")).reasons ?? {})
+    : {};
+}
+
+// 朱書きから消した指摘の番号と理由を残す
+export function saveDecisions(
+  folder: string,
+  excluded: number[],
+  reasons: Record<string, RemovedReason>,
+) {
+  writeFileSync(
+    path.join(folder, "decisions.json"),
+    JSON.stringify({ excluded, reasons, renumbered: true }),
+  );
 }
 
 // 朱書きPDFのパス。外した指摘があれば、その分を除いて作り直す（AIは呼ばない）

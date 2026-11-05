@@ -23,9 +23,9 @@ from pathlib import Path
 import anthropic
 import pymupdf
 
-from ai_review import MODEL, call_claude, load_env
+from claude_api import MODEL, call_claude, load_env
 from common import RUNS, write_json
-from repeat_runs import PRICE_INPUT, PRICE_OUTPUT
+from claude_api import PRICE_INPUT, PRICE_OUTPUT
 
 # API の画像の上限（長辺 2576px、3.75MP）に収める。文字が小さいので全体図と分割図を送る
 MAX_PIXELS = 3_700_000

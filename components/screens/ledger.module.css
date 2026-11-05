@@ -1,0 +1,189 @@
+.heading {
+  margin: 0 0 10px;
+  font-size: 15px;
+}
+
+.add {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: 12px;
+  margin-bottom: 16px;
+  padding: 12px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--panel);
+}
+
+.add label {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.add input,
+.table input,
+.table select {
+  padding: 5px 8px;
+  border: 1px solid var(--line-strong);
+  border-radius: 6px;
+  background: #fff;
+  color: var(--ink);
+  font: inherit;
+  font-size: 13px;
+}
+
+.table {
+  width: 100%;
+  margin-bottom: 14px;
+  border-collapse: collapse;
+  background: var(--panel);
+  font-size: 13px;
+}
+
+.table th,
+.table td {
+  padding: 7px 10px;
+  border-bottom: 1px solid var(--line);
+  text-align: left;
+  vertical-align: top;
+}
+
+.table th {
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 500;
+}
+
+.table td input {
+  width: 100%;
+  min-width: 260px;
+}
+
+.table tr[data-bad="true"] td {
+  background: #c62d2312;
+}
+
+.versions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 10px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.versions li {
+  color: var(--muted);
+  text-decoration: line-through;
+}
+
+.versions li small {
+  font-size: 11px;
+}
+
+.versions li[data-latest="true"] {
+  color: var(--ink);
+  font-weight: 700;
+  text-decoration: none;
+}
+
+.review h2 {
+  margin: 0 0 8px;
+  font-size: 15px;
+}
+
+.review {
+  margin-bottom: 20px;
+}
+
+.note {
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.error {
+  color: var(--red);
+  font-size: 13px;
+}
+
+.secondary {
+  padding: 4px 10px;
+  border: 1px solid var(--line-strong);
+  border-radius: 6px;
+  background: var(--panel);
+  color: var(--ink);
+  font: inherit;
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.changes {
+  margin-bottom: 16px;
+  padding: 10px 12px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--panel);
+  font-size: 13px;
+}
+
+.changes summary {
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.changes h3 {
+  margin: 10px 0 4px;
+  font-size: 13px;
+}
+
+.actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+}
+
+.finals {
+  margin: 0 0 16px;
+  padding-left: 18px;
+  font-size: 13px;
+}
+
+.red {
+  color: #c62d23;
+  font-weight: 700;
+}
+
+.blue {
+  color: #1d5bb8;
+  font-weight: 700;
+}
+
+.resultLink {
+  white-space: nowrap;
+  font-weight: 700;
+}
+
+.table tr[data-old="true"] td {
+  color: var(--muted);
+}
+
+.modelUpdate {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 14px;
+  padding: 10px 12px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--panel);
+  font-size: 13px;
+}
+
+.modelUpdate details {
+  flex-basis: 100%;
+}

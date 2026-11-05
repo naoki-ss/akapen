@@ -1,14 +1,15 @@
-// 物件の一覧（サーバー側）。デモの2物件と、画面から登録した物件をまとめて扱う
+// 物件の一覧（サーバー側）。デモの本社屋と、画面から登録した物件をまとめて扱う
 
-import type { CheckResult } from "./check";
-import { listJobs, uploadEnabled } from "./jobs";
+import { readFileSync } from "node:fs";
+import path from "node:path";
+import type { CheckResult, Finding } from "./check";
+import { isBlue, numbered } from "./findings";
+import { jobFolder, listJobs, readDecisions, uploadEnabled } from "./jobs";
+import { updatedModel } from "./ledger";
 import type { BuildingModel } from "./model";
 import { listProjects, projectInfo } from "./projects";
 import { thumbnailOf, type Thumbnail } from "./thumbnail";
 import type { SheetIndex } from "./sheets";
-import resultA from "@/demo-data/sample-x/check-result.json";
-import modelA from "@/demo-data/sample-x/model.json";
-import sheetsA from "@/demo-data/sample-x/sheets.json";
 import resultB from "@/demo-data/sample-b/check-result.json";
 import modelB from "@/demo-data/sample-b/model.json";
 import sheetsB from "@/demo-data/sample-b/sheets.json";
@@ -33,12 +34,6 @@ export type Building = {
 };
 
 const DEMOS: Building[] = [
-  {
-    slug: "sample-x",
-    model: modelA as BuildingModel,
-    sheets: sheetsA as unknown as SheetIndex,
-    check: resultA as CheckResult,
-  },
   {
     slug: "sample-b",
     model: modelB as unknown as BuildingModel,
@@ -82,9 +77,11 @@ export function getBuilding(slug: string) {
     (info?.site
       ? { lat: info.site.lat, lon: info.site.lon, north_deg: info.north_deg ?? 0 }
       : undefined);
+  // 設計図書の新しい版から作り直した建物データがあれば、それを使う
+  const model = uploadEnabled() ? (updatedModel(slug) ?? building.model) : building.model;
   return {
     ...building,
-    model: { ...building.model, site, structure: info?.structure },
+    model: { ...model, site: model.site ?? site, structure: info?.structure },
   };
 }
 
@@ -100,31 +97,58 @@ export type ProjectCard = {
   thumbnail: Thumbnail | null;
 };
 
-// ① の1枚分。未対応の数は、図面ごとの最新の結果だけで数える（同じ図面を何度もチェックしても増えない）
-export function cardOf({ slug, model, check, sheets }: Building): ProjectCard {
+// 図面ごとの最新の結果。同じ図面を何度もチェックしても、一番新しい結果だけを使う（朱書きから消した指摘は除く）。
+// 固定の結果は、同じ図面の判定があればそちらを優先する。③の一覧と①の件数は、どちらもここから数える
+export type DrawingResult = {
+  title: string;
+  job: string;
+  findings: (Finding & { number: number })[];
+  // 照合したあとに新しくなった設計図書のページ
+  stale: string[];
+};
+
+export function drawingResults({ slug, check, sheets }: Building): DrawingResult[] {
+  const latest = new Map<string, DrawingResult & { at: string }>();
+  const fixed = numbered(check?.findings ?? []);
+  for (const sheet of sheets?.sheets ?? []) {
+    const here = fixed.filter((f) => f.drawing.sheet === sheet.id);
+    if (here.length > 0) {
+      latest.set(sheet.title, { title: sheet.title, job: "saved", findings: here, stale: [], at: "" });
+    }
+  }
+  if (uploadEnabled()) {
+    for (const job of listJobs(slug)) {
+      const folder = jobFolder(job.id);
+      if (!folder) continue;
+      const result = JSON.parse(readFileSync(path.join(folder, "result.json"), "utf8"));
+      const excluded = new Set(readDecisions(folder));
+      for (const page of job.pages) {
+        const title = page.title ?? `p.${page.number}`;
+        const known = latest.get(title);
+        if (known && known.at > job.uploaded_at) continue;
+        const findings = numbered(result.findings as Finding[]).filter(
+          (f) => f.drawing.page === page.number && !excluded.has(f.number),
+        );
+        latest.set(title, { title, job: job.id, findings, stale: job.stale, at: job.uploaded_at });
+      }
+    }
+  }
+  return [...latest.values()].map((item) => ({
+    title: item.title,
+    job: item.job,
+    findings: item.findings,
+    stale: item.stale,
+  }));
+}
+
+// ① の1枚分
+export function cardOf(building: Building): ProjectCard {
+  const { slug, model } = building;
   const enabled = uploadEnabled();
   const jobs = enabled ? listJobs(slug) : [];
   const info = enabled ? projectInfo(slug) : null;
-  const latest = new Map<string, { at: string; red: number; blue: number }>();
-  const put = (title: string, at: string, red: number, blue: number) => {
-    const known = latest.get(title);
-    if (!known || at >= known.at) latest.set(title, { at, red, blue });
-  };
-  // 固定の結果は、同じ図面の判定があればそちらを優先する（日時を空にして一番古い扱い）
-  for (const sheet of sheets?.sheets ?? []) {
-    const here = (check?.findings ?? []).filter(
-      (f) => f.drawing.sheet === sheet.id,
-    );
-    if (here.length === 0) continue;
-    const blue = here.filter((f) => f.source_type === "knowledge").length;
-    put(sheet.title, "", here.length - blue, blue);
-  }
-  for (const job of jobs) {
-    for (const page of job.open) {
-      put(page.title, job.uploaded_at, page.red, page.blue);
-    }
-  }
-  const counted = [...latest.values()];
+  const all = drawingResults(building).flatMap((item) => item.findings);
+  const blue = all.filter(isBlue).length;
   const dates = jobs.map((job) => job.uploaded_at).sort();
   return {
     slug,
@@ -136,8 +160,8 @@ export function cardOf({ slug, model, check, sheets }: Building): ProjectCard {
       /^\d+F$/.test(floor),
     ).length,
     updatedAt: dates.at(-1) ?? null,
-    red: counted.reduce((sum, row) => sum + row.red, 0),
-    blue: counted.reduce((sum, row) => sum + row.blue, 0),
+    red: all.length - blue,
+    blue,
     thumbnail: thumbnailOf(model),
   };
 }

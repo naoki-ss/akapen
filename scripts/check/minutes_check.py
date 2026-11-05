@@ -70,8 +70,8 @@ def parse_items(text):
     return items
 
 
-def load_minutes(project):
-    """[{name, text, items}]。登録がないかファイルがなければ空（議事録の照合をせず、そのことを一覧に書く）"""
+def load_minutes(project, slug=None):
+    """[{name, text, items}]。その物件の議事録だけを返す。なければ空（議事録の照合をせず、そのことを一覧に書く）"""
     documents = []
     for path in project.get("minutes", []):
         path = Path(path)
@@ -81,7 +81,23 @@ def load_minutes(project):
         items = parse_items(text)
         if items:
             documents.append({"name": path.stem, "text": text, "items": items})
+    if slug:
+        from minutes_store import as_document, stored
+
+        documents += [document for document in map(as_document, stored(slug)) if document["items"]]
     return documents
+
+
+# デモから外した議事録。外す前の判定の番号を保つためだけに読む
+REMOVED_MINUTES = Path.home() / "sekozu-data" / "archive" / "2020-10-14-steel.md"
+
+
+def numbering_minutes(folder, project, slug):
+    """結果を作り直すときの議事録。議事録を外した結果は、番号が変わらないよう外す前のもので読み、あとで指摘を除く"""
+    if (folder / "drop_minutes.flag").exists():
+        text = strip_notice(REMOVED_MINUTES.read_text())
+        return [{"name": REMOVED_MINUTES.stem, "text": text, "items": parse_items(text)}]
+    return load_minutes(project, slug)
 
 
 def all_items(documents):

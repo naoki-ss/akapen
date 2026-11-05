@@ -9,6 +9,7 @@
 """
 import argparse
 import fcntl
+import hashlib
 import json
 import os
 import re
@@ -22,18 +23,19 @@ import pymupdf
 
 import building_pages
 import minutes_check
-from ai_review import call_claude, load_env
+from claude_api import call_claude, load_env
 from check_upload import message_cost
 from common import PRIVATE, write_json
 from register_project import Register
 
 PROJECTS = PRIVATE / "projects.json"
 ROOT = PRIVATE / "projects"
-# 実績（物件B、別の物件）からの見込み
+# 実績からの見込み
 USD_PER_PAGE = {"伏図": 0.21, "軸組図": 0.22, "リスト": 0.29}
 USD_UNKNOWN_PAGE = 0.021
 SECONDS_PER_PAGE = 13
 COMMON_FALLBACK_PAGES = 10
+PRESET_SECONDS_PER_PAGE = 0.5
 
 MINUTES_SYSTEM = """打合せの議事録の文章を、番号付きの項目に分けます。
 - 議事録に書かれている決定事項、変更、宿題を、1項目1行で items に書きます。言い換えず、元の文章のとおりに書きます。
@@ -184,6 +186,19 @@ def save_project(slug, entry):
         file.truncate()
 
 
+def file_digest(path):
+    return hashlib.sha256(Path(path).read_bytes()).hexdigest()
+
+
+def demo_preset(meta):
+    """デモ用の切り替え。SEKOZU_DEMO_PRESET に物件を指定し、入れた構造図がその物件のものと同じなら、その物件名を返す"""
+    slug = os.environ.get("SEKOZU_DEMO_PRESET")
+    project = json.loads(PROJECTS.read_text()).get(slug) if slug else None
+    if not project or file_digest(meta["inputs"]["design"]) != file_digest(project["design"]):
+        return None
+    return slug
+
+
 def run(folder):
     status = Status(folder)
     stop = lambda: (folder / "stop.flag").exists()
@@ -202,6 +217,9 @@ def run(folder):
 
         def on_page(entry, total):
             done[0] += 1
+            # デモ用：読み取り済みでも進み具合が見えるようにする
+            if demo_preset(meta):
+                time.sleep(PRESET_SECONDS_PER_PAGE)
             status.update(pages_done=done[0], usd=round(usd + total, 3), message=f"{done[0]} / {len(targets)} ページ読みました")
 
         read_usd, failed, stopped = reg.read_many(targets, on_page, stop)
@@ -224,6 +242,11 @@ def run(folder):
         minutes, minutes_usd = minutes_files(folder, meta, status)
         usd += minutes_usd
         reg.spend("minutes", minutes_usd) if minutes_usd else None
+        preset = demo_preset(meta)
+        if preset:
+            # デモ用：事前に作った現場（外観つき）を完成の状態として見せる。新しい現場は増やさない
+            status.update(state="done", stage="完了", message="登録しました", usd=round(usd, 3), model_status="作成済み" if model else "3Dなし", preset_slug=preset)
+            os._exit(0)
         save_project(folder.name, project_entry(folder, meta, reg, pages, model, minutes))
         status.update(state="done", stage="完了", message="登録しました", usd=round(usd, 3), model_status="作成済み" if model else "3Dなし")
     except (Exception, SystemExit):

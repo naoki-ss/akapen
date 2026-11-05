@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { useState } from "react";
+import MinutesRecorder from "../MinutesRecorder";
 import { floorsOf, type BuildingModel } from "@/lib/model";
 import { sunDirection, sunPosition } from "@/lib/sun";
 import { Logo } from "../AppFrame";
@@ -23,9 +24,11 @@ const DISPLAYS: { key: Display; label: string }[] = [
 export default function MeetingScreen({
   slug,
   model,
+  canRecord,
 }: {
   slug: string;
   model: BuildingModel;
+  canRecord: boolean;
 }) {
   const floors = floorsOf(model);
   const [view, setView] = useState<ViewName>("oblique");
@@ -34,6 +37,7 @@ export default function MeetingScreen({
   const [sunOn, setSunOn] = useState(true);
   const [sun, setSun] = useState<SunState>(DEFAULT_SUN);
   const [showRooms, setShowRooms] = useState(false);
+  const [recording, setRecording] = useState(false);
   const site = model.site ?? TOKYO;
   const hasModel = model.members.length > 0;
 
@@ -68,8 +72,21 @@ export default function MeetingScreen({
       <header className={`${styles.panel} ${styles.meetingHead}`}>
         <Logo />
         <b>{model.name}</b>
-        <Link href={`/projects/${slug}`}>コンソールに戻る</Link>
+        <Link href={`/projects/${slug}/model`}>建物3Dに戻る</Link>
+        {canRecord && (
+          <button
+            type="button"
+            className={styles.meetingAction}
+            aria-expanded={recording}
+            onClick={() => setRecording(!recording)}
+          >
+            議事録を作る
+          </button>
+        )}
       </header>
+      {recording && (
+        <MinutesRecorder slug={slug} onClose={() => setRecording(false)} />
+      )}
       {hasModel && (
         <SceneControls
           displays={DISPLAYS}

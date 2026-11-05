@@ -46,6 +46,44 @@ export type Finding = {
   sheet_value?: string | null;
   design_value?: string | null;
   sources?: { doc: string; page: string; where: string }[];
+  // ④で施工図の隣に並べる根拠の資料
+  design_refs?: DesignRef[];
+  design_refs_more?: number;
+  minutes_context?: MinutesBlock[];
+  checklist_card?: ChecklistCard | null;
+};
+
+export type DesignRef = {
+  doc: string;
+  page: number;
+  where: string;
+  image: string;
+  width: number;
+  height: number;
+  // 切り抜きに対する 0〜1 の枠。ページ全体を出すときはない
+  box: Box | null;
+  // ai：判定が返した位置、text：文面の符号や数値をPDFの文字から探した位置、page：見つからずページ全体
+  // known：公開用に作った画像で、枠は画像に描いてある
+  located: "ai" | "text" | "page" | "known";
+  // 図面枠を塗りつぶせたか。false のものは公開用の表示に出さない
+  masked: boolean;
+};
+
+export type MinutesBlock = {
+  doc: string;
+  heading: string;
+  lines: { id: string; text: string; hit: boolean }[];
+};
+
+export type ChecklistCard = {
+  checklist: string;
+  id: string;
+  section: string;
+  item: string;
+  lines: string[];
+  note: string;
+  // 元のファイル名とページ
+  source?: { file: string; page: string } | null;
 };
 
 export type OrderChange = {

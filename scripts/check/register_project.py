@@ -26,7 +26,7 @@ import pymupdf
 import building_data
 import building_pages
 import building_read
-from ai_review import call_claude, load_env
+from claude_api import call_claude, load_env
 from check_upload import message_cost
 from common import PRIVATE, write_json
 from review_steel_sheet import render

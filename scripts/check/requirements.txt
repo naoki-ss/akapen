@@ -2,3 +2,5 @@ pymupdf
 anthropic
 fonttools
 numpy
+openpyxl
+python-docx

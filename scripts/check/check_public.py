@@ -17,9 +17,9 @@ from common import PRIVATE, REPO
 config = json.loads((PRIVATE / "dummy_map.json").read_text())
 names = config["forbidden_words"]
 numbers = config["forbidden_numbers"]
-# 公開してよい物件名。単独の社名は別の物件の手がかりになるので禁止語のまま残す
+# 公開してよい物件名。単独の社名は非公開の物件の手がかりになるので禁止語のまま残す
 phrases = config.get("allowed_phrases", [])
-# 別の物件の実寸法は、公開を認めた物件のフォルダでは調べない（同じ数値が別の意味で出てくる）
+# 非公開の物件の実寸法は、公開を認めた物件のフォルダでは調べない（同じ数値が別の意味で出てくる）
 numbers_exempt = tuple(config.get("numbers_exempt_paths", []))
 # 利用者が公開してよいと判断した語（ファイルごと）
 allowed = config.get("allowed_in_file", {})
@@ -42,12 +42,20 @@ if uploads.exists():
     for item in uploads.rglob("*"):
         if item.is_file():
             upload_hashes[hashlib.sha256(item.read_bytes()).hexdigest()] = item.name
-# 登録した物件の建物データと3D（別の物件の寸法を含む）も、リポジトリの外にだけ置く
+# 登録した物件の建物データと3D（非公開の物件の寸法を含む）も、リポジトリの外にだけ置く
 registered = PRIVATE / "projects"
 if registered.resolve().is_relative_to(REPO.resolve()):
     problems.append("登録した物件の保存先がリポジトリの中です")
 if registered.exists():
     for item in registered.rglob("*"):
+        if item.is_file():
+            upload_hashes[hashlib.sha256(item.read_bytes()).hexdigest()] = item.name
+# ナレッジの取り込みで入れた元のファイルも、リポジトリの外にだけ置く
+imports = PRIVATE / "knowledge-imports"
+if imports.resolve().is_relative_to(REPO.resolve()):
+    problems.append("ナレッジの取り込みの保存先がリポジトリの中です")
+if imports.exists():
+    for item in imports.rglob("*"):
         if item.is_file():
             upload_hashes[hashlib.sha256(item.read_bytes()).hexdigest()] = item.name
 print(f"アップロードと登録のファイル {len(upload_hashes)} 種類と照合")
@@ -76,7 +84,7 @@ def checklist_texts(value, inside=False):
             yield from checklist_texts(child, True)
 
 
-for source in sorted(knowledge.iterdir()) if knowledge.exists() else []:
+for source in sorted(item for item in knowledge.rglob("*") if item.is_file()) if knowledge.exists() else []:
     checklist_hashes.add(hashlib.sha256(source.read_bytes()).hexdigest())
     if source.suffix != ".json":
         continue
@@ -90,7 +98,9 @@ def check_file(name, data, label=""):
     """1ファイルの中身を調べる。data はファイルの内容（バイト列）"""
     path = REPO / name
     digest = hashlib.sha256(data).hexdigest()
-    if digest in upload_hashes:
+    # 根拠の設計図の切り抜きは、判定の結果の画像と同じ内容になる。目で確認した記録があるものだけ認める
+    confirmed_basis = "/design/" in name and name.startswith("demo-data/") and reviewed.get(name) == digest
+    if digest in upload_hashes and not confirmed_basis:
         problems.append(f"{label}{name}: アップロードされたファイルと同じ内容です")
     if digest in checklist_hashes:
         problems.append(f"{label}{name}: チェックリストの本体と同じ内容です")
@@ -128,6 +138,9 @@ def check_file(name, data, label=""):
 
 for name in filter(None, files):
     path = REPO / name
+    # 公開するのは本社屋だけ。別の物件の置き場が戻ってこないようにする
+    if "sample-x" in name or "sample_x" in name:
+        problems.append(f"{name}: 別の物件のファイルです")
     if path.is_file():
         check_file(name, path.read_bytes())
 

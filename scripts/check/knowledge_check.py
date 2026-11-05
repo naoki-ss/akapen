@@ -53,29 +53,14 @@ SYSTEM = """あなたは建設会社の施工図チェック担当です。提�
 
 KNOWLEDGE = Path.home() / "sekozu-data" / "knowledge"
 BUNDLE = KNOWLEDGE / "sekozu-checklist-knowledge.json"
+# 画面から追加したナレッジ。項目ごとに対象の図面の種類を持つ
+ADDED = KNOWLEDGE / "added"
 STEEL = "鉄骨図"
-# 施工図の題名からチェックリストを選ぶ語。細かい種類を先に見る
-KINDS = [
-    ("鉄骨胴縁図", ["胴縁"]),
-    ("アンカー図", ["アンカー"]),
-    ("杭伏図", ["杭伏"]),
-    ("基礎伏図", ["基礎伏"]),
-    ("土間伏図", ["土間"]),
-    ("根伐図", ["根伐", "根切"]),
-    ("山留図", ["山留"]),
-    ("足場計画図", ["足場"]),
-    ("総合仮設計画図", ["仮設"]),
-    ("カットオフ図", ["カットオフ"]),
-    ("インサート図", ["インサート"]),
-    ("ALC・アスロック図", ["ALC", "アスロック"]),
-    ("外壁割付図", ["外壁割付"]),
-    ("AW図", ["AW", "サッシ"]),
-    ("建具図", ["建具"]),
-    ("シャッター図", ["シャッター"]),
-    ("平面詳細図", ["平面詳細"]),
-    ("天井伏図", ["天井伏"]),
-    ("外構図", ["外構"]),
-]
+# 対象の図面の種類を問わない項目
+ALL_DRAWINGS = "すべての図面"
+# 施工図の題名からチェックリストを選ぶ語。細かい種類を先に見る。画面の選択肢と同じファイルを使う
+DRAWING_KINDS = json.loads((Path(__file__).parent / "drawing_kinds.json").read_text())
+KINDS = [(kind["name"], kind["words"]) for kind in DRAWING_KINDS["kinds"]]
 # 鉄骨の物件の、梁伏図や軸組図など
 STEEL_WORDS = ["梁伏", "軸組", "鉄骨", "継手", "ブレース", "部材リスト", "仕口", "階段"]
 
@@ -124,7 +109,51 @@ def load_library():
         single = json.loads(source.read_text())
         if source != BUNDLE and isinstance(single, dict) and single.get("items"):
             library[STEEL] = single["items"]
-    return library
+    added = added_items()
+    general = added.pop(ALL_DRAWINGS, [])
+    for name, items in added.items():
+        library.setdefault(name, []).extend(items)
+    # すべての図面が対象の項目は、どの種類のチェックリストでも使う
+    for items in library.values():
+        items.extend(general)
+    if general:
+        library[ALL_DRAWINGS] = list(general)
+    return apply_overrides(library)
+
+
+def load_overrides():
+    path = KNOWLEDGE / "overrides.json"
+    return json.loads(path.read_text()) if path.exists() else {"deleted": [], "edited": {}}
+
+
+def apply_overrides(library):
+    """ナレッジ画面で直した内容と消した項目を反映する"""
+    overrides = load_overrides()
+    deleted = set(overrides["deleted"])
+    done = {}
+    for name, items in library.items():
+        kept = [{**item, **overrides["edited"].get(item["id"], {})} for item in items if item["id"] not in deleted]
+        if kept:
+            done[name] = kept
+    return done
+
+
+def added_entries():
+    """画面から追加した項目の一覧"""
+    entries = []
+    for source in sorted(ADDED.glob("*.json")) if ADDED.exists() else []:
+        entries += json.loads(source.read_text())["items"]
+    return entries
+
+
+def added_items():
+    """{図面の種類: 項目}。画面から追加したナレッジを、対象の図面の種類ごとに判定で使う形にする"""
+    kinds = {}
+    for entry in added_entries():
+        row = {key: entry[key] for key in ("id", "section", "item", "content", "note", "type", "drawing_checkable", "source")}
+        for kind in entry["drawing_types"]:
+            kinds.setdefault(kind, []).append(row)
+    return kinds
 
 
 def choose_name(title, kind=None):
@@ -135,13 +164,25 @@ def choose_name(title, kind=None):
             return name
     if kind == "steel" and any(word in text for word in STEEL_WORDS):
         return STEEL
-    return None
+    # 画面から追加した、決まった種類にない図面の種類は、題名にその語があれば使う
+    added = added_items()
+    for name in added:
+        if name != ALL_DRAWINGS and name in text:
+            return name
+    return ALL_DRAWINGS if ALL_DRAWINGS in added else None
 
 
 def checklist_for(library, title, kind=None):
     """(名前, 項目)。その種類のチェックリストがなければ (名前, None)"""
     name = choose_name(title, kind)
-    return name, library.get(name) if name else None
+    items = list(library.get(name) or []) if name else []
+    # 画面から追加した、決まった種類にない図面の種類は、題名にその語があれば合わせて使う
+    known = {item["id"] for item in items}
+    for extra in added_items():
+        if extra != name and extra != ALL_DRAWINGS and extra in (title or ""):
+            items += [item for item in library.get(extra, []) if item["id"] not in known]
+            known = {item["id"] for item in items}
+    return name or (title if items else None), items or None
 
 
 def used_name(raw_dir, library, title, kind=None):
@@ -234,14 +275,16 @@ def to_findings(reply, targets, page_number, floor_level):
             dropped += 1
             continue
         checklist_id = item["id"]
+        # 画面から追加した項目のIDは内部の番号なので、題名に出さない
+        label = "" if item.get("source") else f"[{checklist_id}] "
         findings.append({
             **copy.deepcopy(found),
             "source_type": "knowledge",
             "page": page_number,
             "floor_level": floor_level,
             "category": item["section"],
-            "title": f"[{checklist_id}] {found['title']}",
-            "comment": f"{checklist_id} {found['comment'] or found['title']}",
+            "title": f"{label}{found['title']}",
+            "comment": f"{label}{found['comment'] or found['title']}",
             "checklist": {"id": checklist_id, "basis": basis_text(item)},
             "evidence": [{"drawing": "チェックリスト", "page": checklist_id, "where": basis_text(item)}],
         })

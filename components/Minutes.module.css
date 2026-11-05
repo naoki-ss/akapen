@@ -1,0 +1,244 @@
+.recorder {
+  position: absolute;
+  z-index: 3;
+  top: 76px;
+  bottom: 84px;
+  left: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  width: 460px;
+  padding: 14px;
+  overflow-y: auto;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: var(--panel);
+  font-size: 13px;
+}
+
+.recorder header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.tabs {
+  display: flex;
+  gap: 6px;
+}
+
+.tabs button,
+.secondary,
+.primary,
+.stop {
+  padding: 6px 12px;
+  border: 1px solid var(--line-strong);
+  border-radius: 6px;
+  background: var(--panel);
+  color: var(--ink);
+  font: inherit;
+  font-size: 13px;
+  cursor: pointer;
+}
+
+.tabs button[aria-pressed="true"],
+.primary {
+  border-color: var(--ink);
+  background: var(--ink);
+  color: #fff;
+}
+
+.primary:disabled,
+.tabs button:disabled {
+  opacity: 0.45;
+  cursor: default;
+}
+
+.stop {
+  border-color: var(--red);
+  color: var(--red);
+}
+
+.transcript {
+  min-height: 220px;
+  max-height: 46vh;
+  padding: 10px;
+  overflow-y: auto;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: #fff;
+  white-space: pre-wrap;
+}
+
+.interim {
+  color: var(--muted);
+}
+
+.paste {
+  width: 100%;
+  padding: 8px;
+  border: 1px solid var(--line-strong);
+  border-radius: 6px;
+  font: inherit;
+  font-size: 13px;
+}
+
+.actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+
+.note {
+  margin: 0;
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.error {
+  margin: 0;
+  color: var(--red);
+}
+
+.editor h3 {
+  margin: 12px 0 6px;
+  font-size: 13px;
+}
+
+.editor label {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.editor input,
+.editor textarea {
+  width: 100%;
+  padding: 5px 7px;
+  border: 1px solid var(--line-strong);
+  border-radius: 6px;
+  background: #fff;
+  color: var(--ink);
+  font: inherit;
+  font-size: 13px;
+}
+
+.head,
+.row {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.row {
+  position: relative;
+  padding: 8px 26px 8px 8px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+}
+
+.wide {
+  grid-column: 1 / -1;
+}
+
+.head .wide {
+  grid-column: 1 / 3;
+}
+
+.list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin: 0 0 8px;
+  padding: 0;
+  list-style: none;
+}
+
+.todo {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.remove {
+  border: 0;
+  background: none;
+  color: var(--muted);
+  font-size: 16px;
+  cursor: pointer;
+}
+
+.row .remove {
+  position: absolute;
+  top: 4px;
+  right: 4px;
+}
+
+.editor .actions {
+  margin-top: 12px;
+}
+
+.page {
+  max-width: 920px;
+}
+
+.summary {
+  margin: 0 0 8px;
+  padding-left: 18px;
+}
+
+.fulltext {
+  padding: 10px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: #fff;
+  font-size: 13px;
+  white-space: pre-wrap;
+}
+
+.title {
+  margin: 16px 0 6px;
+  font-size: 14px;
+}
+
+.recorderInline {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  max-width: 760px;
+  margin-bottom: 16px;
+  padding: 14px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: var(--panel);
+  font-size: 13px;
+}
+
+.recorderInline header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.table {
+  width: 100%;
+  border-collapse: collapse;
+  background: var(--panel);
+  font-size: 13px;
+}
+
+.table th,
+.table td {
+  padding: 8px 10px;
+  border-bottom: 1px solid var(--line);
+  text-align: left;
+}
+
+.table th {
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 500;
+}

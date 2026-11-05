@@ -2,56 +2,169 @@
 
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
-import { useCallback, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import type { Building } from "@/lib/buildings";
 import {
-  colorName,
+  isBlue,
   inkOf,
   memberKeysOf,
   NOT_IN_MODEL,
-  numbered,
 } from "@/lib/findings";
-import { jobOption } from "@/lib/jobNames";
 import { floorsOf, type Member } from "@/lib/model";
-import type { KnowledgeApp, ProjectDocument } from "@/lib/projects";
-import { ALL_LAYERS, type LayerKey, type SheetTarget } from "@/lib/sheets";
-import { useJobResult } from "@/lib/useJobResult";
-import { useUploadJob } from "@/lib/useUploadJob";
-import { Logo } from "../AppFrame";
+import type { DrawingResult } from "@/lib/buildings";
+import type { Finding } from "@/lib/check";
+import type { ConfirmedSheet } from "@/lib/sheetStatus";
+import { ALL_LAYERS, titleKey, type LayerKey, type SheetTarget } from "@/lib/sheets";
 import BuildingScene from "../BuildingSceneLazy";
 import Hint from "../Hint";
 import MemberCard from "../MemberCard";
 import { ChecksList } from "../RegisterView";
 import SheetViewer from "../SheetViewer";
-import UploadPanel from "../UploadPanel";
 import appStyles from "../App.module.css";
 import panel from "../console/console.module.css";
 import styles from "./screens.module.css";
 
 // ③ どこに問題があるかを見る
+const ALL_DRAWINGS = "__all__";
+
+const countText = (items: DrawingResult[]) => {
+  const all = items.flatMap((item) => item.findings);
+  const blue = all.filter(isBlue).length;
+  return `赤${all.length - blue}・青${blue}`;
+};
+
+// 青の出典。ナレッジの名前と、元のファイルとページ
+function sourceText(finding: Finding) {
+  const card = finding.checklist_card;
+  if (!card) return finding.sources?.[0]?.doc ?? null;
+  const file = card.source?.file
+    ? `${card.source.file}${card.source.page ? ` ${card.source.page}` : ""}`
+    : null;
+  return [card.checklist, file].filter(Boolean).join("・");
+}
+
+// 赤か青の並び。項目を押すと、3Dで位置を示す
+function FindingItems({
+  color,
+  drawing,
+  findings,
+  source,
+  slug,
+  activeKey,
+  onSelect,
+}: {
+  color: "red" | "blue";
+  drawing: DrawingResult;
+  findings: DrawingResult["findings"];
+  source: boolean;
+  slug: string;
+  activeKey: string | null;
+  onSelect: (key: string | null) => void;
+}) {
+  if (findings.length === 0) return null;
+  return (
+    <>
+      <h4 className={panel.colorHead} data-color={color}>
+        {color === "red" ? "赤" : "青"} {findings.length}
+      </h4>
+      <ul>
+        {findings.map((finding) => {
+          const key = `${drawing.job}:${finding.id}`;
+          const isActive = key === activeKey;
+          return (
+            <li key={finding.id}>
+              <button
+                className={panel.findingLink}
+                data-active={isActive}
+                onClick={() => onSelect(isActive ? null : key)}
+              >
+                <i className="mono" data-color={color}>
+                  {finding.number}
+                </i>
+                <span>
+                  {finding.title}
+                  {source && sourceText(finding) && (
+                    <small className={panel.itemNote}>{sourceText(finding)}</small>
+                  )}
+                </span>
+              </button>
+              {isActive && (
+                <div className={panel.findingOpen}>
+                  <Link href={`/projects/${slug}/check/${drawing.job}?finding=${finding.id}`}>
+                    なぜ問題かを見る →
+                  </Link>
+                </div>
+              )}
+            </li>
+          );
+        })}
+      </ul>
+    </>
+  );
+}
+
+// 図面ごとのまとまり。見出しに赤と青の件数を出し、開くと赤と青に分かれて並ぶ
+function DrawingGroup({
+  drawing,
+  open,
+  slug,
+  activeKey,
+  onSelect,
+}: {
+  drawing: DrawingResult;
+  open: boolean;
+  slug: string;
+  activeKey: string | null;
+  onSelect: (key: string | null) => void;
+}) {
+  const blue = drawing.findings.filter(isBlue);
+  return (
+    <details className={panel.group} open={open}>
+      <summary>
+        <b>{drawing.title}</b>
+        <span className="mono">
+          <em data-color="red">赤{drawing.findings.length - blue.length}</em>・
+          <em data-color="blue">青{blue.length}</em>
+        </span>
+      </summary>
+      <FindingItems
+        color="red"
+        drawing={drawing}
+        findings={drawing.findings.filter((finding) => !isBlue(finding))}
+        source={false}
+        slug={slug}
+        activeKey={activeKey}
+        onSelect={onSelect}
+      />
+      <FindingItems
+        color="blue"
+        drawing={drawing}
+        findings={blue}
+        source
+        slug={slug}
+        activeKey={activeKey}
+        onSelect={onSelect}
+      />
+    </details>
+  );
+}
+
 export default function ModelConsole({
   slug,
   model,
-  check,
   sheets,
   summary,
-  projects,
-  canUpload,
-  knowledge,
-  documents,
+  confirmedSheets,
+  drawings,
 }: Building & {
-  projects: { slug: string; name: string }[];
-  // 公開先では施工図を入れられない（APIの費用が掛かるため）
-  canUpload: boolean;
-  knowledge: KnowledgeApp[];
-  documents: ProjectDocument[];
+  confirmedSheets: ConfirmedSheet[];
+  drawings: DrawingResult[];
 }) {
   const router = useRouter();
   const params = useSearchParams();
   const hasModel = model.members.length > 0;
   const floors = floorsOf(model);
 
-  const [adding, setAdding] = useState(params.get("add") === "1");
   const [roofOff, setRoofOff] = useState(false);
   const [floorLimit, setFloorLimit] = useState("all");
   const [selected, setSelected] = useState<Member | null>(null);
@@ -69,27 +182,35 @@ export default function ModelConsole({
       return next;
     });
   }, []);
-  const showResult = useCallback(
-    (jobId: string) => router.push(`/projects/${slug}/check/${jobId}`),
-    [router, slug],
-  );
-  const job = useUploadJob(slug, showResult);
 
-  // 開いている図面。選ばれていなければ先頭の結果を開く
-  const [chosen, setChosen] = useState<string | null>(params.get("job"));
-  const rowKey =
-    chosen ?? job.history[0]?.id ?? (check ? "saved" : null);
-  const jobId = rowKey && rowKey !== "saved" ? rowKey : null;
-  const { result, missing } = useJobResult(jobId);
-  const findings = useMemo(
+  // 別の画面で変わった件数を、戻ってきたときに読み直す
+  useEffect(() => router.refresh(), [router]);
+
+  // 見ている施工図。「全図面」か、図面の名前
+  const [drawing, setDrawing] = useState(ALL_DRAWINGS);
+  const shown = useMemo(
     () =>
-      numbered(
-        rowKey === "saved" ? (check?.findings ?? []) : (result?.findings ?? []),
-      ),
-    [rowKey, check, result],
+      drawing === ALL_DRAWINGS
+        ? drawings
+        : drawings.filter((item) => item.title === drawing),
+    [drawing, drawings],
   );
-  const [activeId, setActiveId] = useState<string | null>(params.get("finding"));
-  const active = findings.find((f) => f.id === activeId) ?? null;
+  const staleCount = new Set(shown.flatMap((item) => item.stale)).size;
+  // 選んだ指摘。④から来たときは、その指摘を選んでおく
+  const [activeKey, setActiveKey] = useState<string | null>(
+    params.get("finding") ? `${params.get("job") ?? "saved"}:${params.get("finding")}` : null,
+  );
+  const active = useMemo(() => {
+    for (const item of drawings) {
+      const found = item.findings.find((f) => `${item.job}:${f.id}` === activeKey);
+      if (found) return found;
+    }
+    return null;
+  }, [drawings, activeKey]);
+  const selectFinding = (key: string | null) => {
+    setActiveKey(key);
+    setSelected(null);
+  };
   const highlighted = useMemo(
     () => new Set(active ? memberKeysOf(active, model) : []),
     [active, model],
@@ -102,21 +223,15 @@ export default function ModelConsole({
       : floors.indexOf(floorLimit);
   const display = active ? "xray" : roofOff ? "noRoof" : "normal";
 
-  const selectFinding = (id: string | null) => {
-    setActiveId(id);
-    setSelected(null);
-  };
 
   const columns = model.members.filter((m) => m.type === "column").length;
   const beams = model.members.filter((m) => m.type === "beam").length;
   const storeys = floors.filter((f) => /^\d+F$/.test(f)).length;
-  const imported = knowledge.filter((app) => app.imported_at).length;
   const checksCount =
     summary?.checks.filter((c) => c.result === "要確認").length ?? 0;
-  const loading = Boolean(jobId && !result && !missing);
 
   return (
-    <div className={styles.full}>
+    <div className={styles.fullTab}>
       <div className={styles.scene}>
         {hasModel ? (
           <BuildingScene
@@ -149,19 +264,6 @@ export default function ModelConsole({
       </div>
 
       <aside className={`${styles.panel} ${styles.panelLeft}`}>
-        <Logo />
-        <select
-          className={panel.select}
-          aria-label="現場"
-          value={slug}
-          onChange={(e) => router.push(`/projects/${e.target.value}`)}
-        >
-          {projects.map((project) => (
-            <option key={project.slug} value={project.slug}>
-              {project.name}
-            </option>
-          ))}
-        </select>
         <p className={panel.summaryLine}>
           {hasModel ? (
             <span className="mono">
@@ -171,141 +273,70 @@ export default function ModelConsole({
             "3Dなし"
           )}
           {hasModel && (
-            <Link href={`/projects/${slug}/meeting`}>打ち合わせで見せる</Link>
+            <Link className={panel.meetingLink} href={`/projects/${slug}/meeting`}>
+              打ち合わせで見せる
+            </Link>
           )}
         </p>
-        <Hint id="model" text="指摘を選ぶと、3Dで場所を示します。" />
+        <Hint id="model" text="指摘を選ぶと、なぜ問題かと3Dの位置を見られます。" />
 
-        <div className={panel.drawingRow}>
-          {rowKey ? (
+        <label className={panel.viewing}>
+          <span>見ている施工図</span>
+          <div className={panel.drawingRow}>
             <select
               className={panel.drawing}
-              aria-label="図面"
-              value={rowKey}
+              aria-label="見ている施工図"
+              value={drawing}
               onChange={(e) => {
-                setChosen(e.target.value);
+                setDrawing(e.target.value);
                 selectFinding(null);
               }}
             >
-              {job.history.map((item) => (
-                <option key={item.id} value={item.id}>
-                  {jobOption(item)}
+              <option value={ALL_DRAWINGS}>
+                全図面（{drawings.length}枚）{countText(drawings)}
+              </option>
+              {drawings.map((item) => (
+                <option key={item.title} value={item.title}>
+                  {item.title} {countText([item])}
                 </option>
               ))}
-              {check && <option value="saved">チェック済みの施工図</option>}
             </select>
-          ) : (
-            <span className={panel.empty}>指摘はまだありません。</span>
+          </div>
+        </label>
+        {staleCount > 0 && (
+          <p className={panel.stale} role="status">
+            設計図書が更新されました。再チェックが必要です。
+          </p>
+        )}
+
+        <div className={panel.findings}>
+          {drawings.length === 0 && (
+            <p className={panel.empty}>指摘はまだありません。</p>
           )}
-          {canUpload && (
-            <button
-              className={panel.add}
-              aria-expanded={adding}
-              onClick={() => setAdding(!adding)}
-            >
-              ＋ 施工図
+          {shown.map((item) => (
+            <DrawingGroup
+              key={item.title}
+              drawing={item}
+              open={drawing !== ALL_DRAWINGS || item.findings.some((f) => activeKey === `${item.job}:${f.id}`)}
+              slug={slug}
+              activeKey={activeKey}
+              onSelect={selectFinding}
+            />
+          ))}
+        </div>
+
+        <div className={panel.checkButtons}>
+          {summary && (
+            <button className={panel.clear} onClick={() => setDialog("summary")}>
+              読み取りの要確認 {checksCount} 件
+            </button>
+          )}
+          {model.architecture && (
+            <button className={panel.clear} onClick={() => setDialog("architecture")}>
+              外観の要確認 {model.architecture.checks.length} 件
             </button>
           )}
         </div>
-        {canUpload && adding && <UploadPanel job={job} />}
-
-        <div className={panel.findings}>
-          {loading && <p className={panel.empty}>読み込み中…</p>}
-          <ul>
-            {findings.map((finding) => {
-              const isActive = finding.id === activeId;
-              return (
-                <li key={finding.id}>
-                  <button
-                    data-active={isActive}
-                    onClick={() =>
-                      selectFinding(isActive ? null : finding.id)
-                    }
-                  >
-                    <i className="mono" data-color={colorName(finding)}>
-                      {finding.number}
-                    </i>
-                    <span>{finding.title}</span>
-                  </button>
-                  {isActive && (
-                    <div className={panel.findingOpen}>
-                      {highlighted.size === 0 && (
-                        <p className={panel.empty}>{NOT_IN_MODEL}</p>
-                      )}
-                      <Link
-                        href={`/projects/${slug}/check/${rowKey}?finding=${finding.id}`}
-                      >
-                        なぜ問題かを見る →
-                      </Link>
-                    </div>
-                  )}
-                </li>
-              );
-            })}
-          </ul>
-        </div>
-
-        <details className={panel.sources}>
-          <summary>資料</summary>
-          <div>
-            <h3>設計図書</h3>
-            {documents.length === 0 ? (
-              <p className={panel.empty}>登録済みの設計図書はありません。</p>
-            ) : (
-              <ul className={panel.rows}>
-                {documents.map((document) => (
-                  <li key={document.kind} data-on>
-                    <span>{document.kind}</span>
-                    <small>{document.count} 件</small>
-                  </li>
-                ))}
-              </ul>
-            )}
-            <h3>
-              ナレッジ
-              {knowledge.length > 0 && (
-                <small>
-                  {" "}
-                  {knowledge.length} アプリ中 {imported} 取り込み済み
-                </small>
-              )}
-            </h3>
-            {knowledge.length === 0 ? (
-              <p className={panel.empty}>
-                チェックリストがありません。青の指摘は「該当なし」になります。
-              </p>
-            ) : (
-              <ul className={panel.rows}>
-                {knowledge.map((app) => (
-                  <li key={app.id} data-on={Boolean(app.imported_at)}>
-                    <span>{app.name}</span>
-                    <small>
-                      {app.imported_at
-                        ? `kintoneから取り込み済み（${app.imported_at.slice(5).replace("-", "/")}）・${app.items}項目`
-                        : "未取り込み"}
-                    </small>
-                  </li>
-                ))}
-              </ul>
-            )}
-            {summary && (
-              <button
-                className={panel.clear}
-                onClick={() => setDialog("summary")}
-              >
-                読み取りの要確認 {checksCount} 件
-              </button>
-            )}
-            {model.architecture && (
-              <button
-                className={panel.clear}
-                onClick={() => setDialog("architecture")}
-              >
-                外観の要確認 {model.architecture.checks.length} 件
-              </button>
-            )}
-          </div>
-        </details>
       </aside>
 
       {hasModel && (
@@ -359,10 +390,19 @@ export default function ModelConsole({
           <MemberCard
             member={selected}
             index={sheets}
+            confirmed={new Set(confirmedSheets.map((item) => titleKey(item.title)))}
             onClose={() => setSelected(null)}
-            onOpen={(sheet, bbox, label) =>
-              setOpenSheet({ sheet, bbox, label, base: `/demo-data/${slug}` })
-            }
+            onOpen={(sheet, bbox, label) => {
+              // 確定版があれば、それを開く
+              const final = confirmedSheets.find(
+                (item) => titleKey(item.title) === titleKey(sheet.title),
+              );
+              setOpenSheet(
+                final
+                  ? { sheet: final.sheet, bbox, label, base: final.base }
+                  : { sheet, bbox, label, base: `/demo-data/${slug}` },
+              );
+            }}
           />
         </div>
       )}
