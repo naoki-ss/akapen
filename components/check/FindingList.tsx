@@ -45,7 +45,9 @@ function Items({
   activeId,
   showActive,
   onSelect,
+  newId,
 }: {
+  newId?: string | null;
   label: string;
   color: "red" | "blue";
   findings: Numbered[];
@@ -64,11 +66,15 @@ function Items({
           const active = finding.id === activeId;
           return (
             <li key={finding.id} ref={active ? showActive : undefined}>
-              <button data-active={active} onClick={() => onSelect(finding)}>
+              <button data-active={active} data-new={finding.id === newId} onClick={() => onSelect(finding)}>
                 <i className={`${styles.number} mono`} data-color={color}>
                   {finding.number}
                 </i>
-                <span className={styles.itemBody}>{finding.title}</span>
+                <span className={styles.itemBody}>
+                  {finding.title}
+                  {finding.manual && <em className={styles.badge}>手書き</em>}
+                  {finding.edited && <em className={styles.badge}>編集済み</em>}
+                </span>
               </button>
             </li>
           );
@@ -91,7 +97,10 @@ export default function FindingList({
   checklist,
   onSelect,
   onOpenGroup,
+  newId,
 }: {
+  // 書き足した直後の朱書き。一覧で少し光らせる
+  newId?: string | null;
   groups: DrawingGroup[];
   openKey: string | null;
   // 朱書きから消した指摘。たたんで見せ、元に戻せる
@@ -135,6 +144,7 @@ export default function FindingList({
                 color="red"
                 findings={group.findings.filter((f) => !isBlue(f))}
                 activeId={activeId}
+                newId={newId}
                 showActive={showActive}
                 onSelect={onSelect}
               />
@@ -143,6 +153,7 @@ export default function FindingList({
                 color="blue"
                 findings={group.findings.filter(isBlue)}
                 activeId={activeId}
+                newId={newId}
                 showActive={showActive}
                 onSelect={onSelect}
               />

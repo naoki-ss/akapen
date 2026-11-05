@@ -11,6 +11,7 @@ import {
   sourceLabel,
 } from "@/lib/findings";
 import type { Sheet } from "@/lib/sheets";
+import { MAX_COMMENT, MAX_TITLE } from "@/lib/markup";
 import { REMOVE_REASONS, type RemoveReason } from "@/lib/useDecisions";
 import BasisDocument from "./BasisDocument";
 import styles from "./check.module.css";
@@ -26,7 +27,13 @@ export default function ComparePane({
   base,
   publicView,
   onRemove,
+  onEdit,
+  onDelete,
 }: {
+  // 文面を直す（AI の指摘は null で元に戻す）。書き足した朱書きは題名と文を変える
+  onEdit?: (edit: { title: string; comment: string } | null) => void;
+  // 書き足した朱書きを消す
+  onDelete?: () => void;
   finding: Numbered | null;
   // その指摘の図面
   sheet: Sheet;
@@ -42,6 +49,14 @@ export default function ComparePane({
   const [note, setNote] = useState("");
   // 施工図と根拠を並べたまま全画面で見る
   const [big, setBig] = useState(false);
+  const [editingFor, setEditingFor] = useState<string | null>(null);
+  const [editTitle, setEditTitle] = useState("");
+  const [editComment, setEditComment] = useState("");
+  const startEdit = (target: Numbered) => {
+    setEditingFor(target.id);
+    setEditTitle(target.title);
+    setEditComment(target.manual ? target.content : (target.comment ?? reasonOf(target)));
+  };
   useEffect(() => {
     if (!big) return;
     const close = (event: KeyboardEvent) => {
@@ -61,6 +76,98 @@ export default function ComparePane({
   }
   const color = colorName(finding);
   const opened = openedFor === finding.id;
+  const editing = editingFor === finding.id;
+  const editForm = (
+    <form
+      className={styles.markupEdit}
+      onSubmit={(event) => {
+        event.preventDefault();
+        onEdit?.({ title: editTitle.trim(), comment: editComment.trim() });
+        setEditingFor(null);
+      }}
+      onKeyDown={(event) => {
+        if (event.key === "Escape") {
+          event.stopPropagation();
+          setEditingFor(null);
+        }
+      }}
+    >
+      <label>
+        題名
+        <input autoFocus maxLength={MAX_TITLE * (finding.manual ? 1 : 2)} value={editTitle} onChange={(e) => setEditTitle(e.target.value)} />
+      </label>
+      <label>
+        {finding.manual ? "コメント" : "朱書きの文"}
+        <textarea rows={3} maxLength={MAX_COMMENT} value={editComment} onChange={(e) => setEditComment(e.target.value)} />
+      </label>
+      <div>
+        {!finding.manual && finding.edited && (
+          <button
+            type="button"
+            className={styles.ghost}
+            onClick={() => {
+              onEdit?.(null);
+              setEditingFor(null);
+            }}
+          >
+            AI の文に戻す
+          </button>
+        )}
+        <button type="button" className={styles.btn} onClick={() => setEditingFor(null)}>
+          やめる
+        </button>
+        <button type="submit" className={styles.btnPrimary} disabled={!editTitle.trim() && !editComment.trim()}>
+          保存
+        </button>
+      </div>
+    </form>
+  );
+  if (finding.manual) {
+    return (
+      <section className={styles.compare} aria-label="書き足した朱書き">
+        <header className={styles.compareHead} data-color={color}>
+          <i className={`${styles.number} mono`} data-color={color}>
+            {finding.number}
+          </i>
+          <h2>{finding.title}</h2>
+          <span className={styles.colorTag} data-color={color}>
+            {color === "red" ? "赤" : "青"}：手書き
+          </span>
+        </header>
+        <div key={finding.id} className={styles.compareColumns}>
+          <div className={styles.compareCard} data-side="sheet">
+            <h3>施工図（書き足した場所）</h3>
+            <ZoomCrop
+              src={`${base}/${sheet.base_image ?? sheet.image}`}
+              width={sheet.width}
+              height={sheet.height}
+              box={regionsOf(finding)[0]}
+              color={color}
+              alt="施工図の該当箇所"
+              manual={finding.manual}
+            />
+          </div>
+          <div className={styles.compareCard} data-side="basis">
+            <h3>コメント</h3>
+            {editing ? editForm : <p className={`${styles.reason} hand`}>{finding.content || "（コメントなし）"}</p>}
+            <p className={styles.manualNote}>人が書き足した朱書きです。根拠の資料と 3D の位置は持ちません。</p>
+          </div>
+        </div>
+        {!locked && !editing && (
+          <div className={styles.compareFoot}>
+            <div className={styles.basisActions}>
+              <button className={styles.btn} onClick={() => startEdit(finding)}>
+                題名とコメントを直す
+              </button>
+              <button className={styles.btn} onClick={onDelete}>
+                この朱書きを消す
+              </button>
+            </div>
+          </div>
+        )}
+      </section>
+    );
+  }
   const fileSource = finding.minutes_context
     ?.flatMap((block) => block.lines)
     .find((line) => line.hit && line.source)?.source;
@@ -75,6 +182,7 @@ export default function ComparePane({
           {color === "red" ? "赤：" : "青："}
           {sourceLabel(finding)}
         </span>
+        {finding.edited && <em className={styles.badge}>編集済み</em>}
       </header>
       <div key={finding.id} className={styles.compareColumns} data-big={big}>
         {big && (
@@ -135,7 +243,13 @@ export default function ComparePane({
             図面だけでは言い切れません。人の確認が必要です。
           </small>
         )}
+        {editing && editForm}
         <div className={styles.basisActions}>
+          {!locked && onEdit && !editing && (
+            <button className={styles.btn} onClick={() => startEdit(finding)}>
+              文面を直す
+            </button>
+          )}
           {!locked && (
             <button
               className={styles.btn}

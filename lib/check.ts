@@ -51,6 +51,10 @@ export type Finding = {
   design_refs_more?: number;
   minutes_context?: MinutesBlock[];
   checklist_card?: ChecklistCard | null;
+  // 人が書き足した朱書き（形と色と、形を描く範囲）。AI の指摘にはない
+  manual?: { shape: "arrow" | "ellipse" | "rect" | "cloud" | "text"; color: "red" | "blue"; box: Box };
+  // AI の指摘の題名か文を人が直した
+  edited?: boolean;
 };
 
 export type DesignRef = {

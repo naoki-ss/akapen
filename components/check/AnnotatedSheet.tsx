@@ -5,8 +5,12 @@ import Image from "next/image";
 import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties } from "react";
 import type { Finding } from "@/lib/check";
 import { colorName, noteOf, regionsOf } from "@/lib/findings";
+import { boundsOf, MAX_COMMENT, MAX_TITLE, type Ink, type Shape } from "@/lib/markup";
 import type { Box, Sheet } from "@/lib/sheets";
 import styles from "./check.module.css";
+import ManualMarks, { ShapeLines } from "./ManualMarks";
+
+export type Drawn = { shape: Shape; color: Ink; box: Box; title: string; comment: string };
 
 type Numbered = Finding & { number: number };
 type NoteSpot = { left: number; top: number; width: number };
@@ -98,6 +102,11 @@ export default function AnnotatedSheet({
   activeId,
   onSelect,
   onClear,
+  tool = null,
+  ink = "red",
+  editable = false,
+  onCreate,
+  onMove,
 }: {
   sheet: Sheet;
   base: string;
@@ -105,12 +114,25 @@ export default function AnnotatedSheet({
   activeId: string | null;
   onSelect: (finding: Numbered) => void;
   onClear: () => void;
+  // 朱書きを追加するときの形と色。null のときは、ドラッグで図面を動かす
+  tool?: Shape | null;
+  ink?: Ink;
+  editable?: boolean;
+  onCreate?: (drawn: Drawn) => void;
+  onMove?: (id: string, box: Box) => void;
 }) {
   const ratio = sheet.width / sheet.height;
+  const manualItems = useMemo(() => findings.filter((f) => f.manual), [findings]);
+  const aiFindings = useMemo(() => findings.filter((f) => !f.manual), [findings]);
   const notes = useMemo(
-    () => placeNotes(findings, activeId, ratio),
-    [findings, activeId, ratio],
+    () => placeNotes(aiFindings, activeId, ratio),
+    [aiFindings, activeId, ratio],
   );
+  // 描いている途中の形と、文を待っている形
+  const [sketch, setSketch] = useState<{ shape: Shape; color: Ink; box: Box } | null>(null);
+  const [pending, setPending] = useState<{ shape: Shape; color: Ink; box: Box } | null>(null);
+  const [draftTitle, setDraftTitle] = useState("");
+  const [draftComment, setDraftComment] = useState("");
   const frameRef = useRef<HTMLDivElement>(null);
   const [frame, setFrame] = useState({ width: 0, height: 0 });
   const [view, setView] = useState<View>({ scale: 1, x: 0, y: 0 });
@@ -139,7 +161,16 @@ export default function AnnotatedSheet({
 
   const active = findings.find((finding) => finding.id === activeId);
   // 指摘が離れた場所を複数指すときは、最初の場所に寄る（全部を収めると寄れない）
-  const regionsKey = active ? JSON.stringify(regionsOf(active).slice(0, 1)) : "";
+  // 書き足した朱書きは、動かしても寄り直さない（選んだときだけ寄る）
+  const [manualFocus, setManualFocus] = useState<{ id: string; key: string } | null>(null);
+  if (active?.manual && manualFocus?.id !== active.id) {
+    setManualFocus({ id: active.id, key: JSON.stringify([boundsOf(active.manual.box)]) });
+  }
+  const regionsKey = active
+    ? active.manual
+      ? (manualFocus?.id === active.id ? manualFocus.key : JSON.stringify([boundsOf(active.manual.box)]))
+      : JSON.stringify(regionsOf(active).slice(0, 1))
+    : "";
 
   // 枠の大きさを見張る
   useEffect(() => {
@@ -197,6 +228,27 @@ export default function AnnotatedSheet({
     return () => node.removeEventListener("wheel", onWheel);
   }, [zoomAt]);
 
+  // 画面の位置を、図面の上の位置（0〜1）にする
+  const toPage = (clientX: number, clientY: number): [number, number] => {
+    const rect = frameRef.current?.getBoundingClientRect();
+    if (!rect || !page.width) return [0, 0];
+    return [
+      Math.min(1, Math.max(0, (clientX - rect.left - view.x) / (page.width * view.scale))),
+      Math.min(1, Math.max(0, (clientY - rect.top - view.y) / (page.height * view.scale))),
+    ];
+  };
+  const toScreen = (x: number, y: number) => ({
+    x: view.x + x * page.width * view.scale,
+    y: view.y + y * page.height * view.scale,
+  });
+
+  const finishDraft = () => {
+    if (!pending || !onCreate) return;
+    if (!draftTitle.trim() && !draftComment.trim()) return;
+    onCreate({ ...pending, title: draftTitle.trim(), comment: draftComment.trim() });
+    setPending(null);
+  };
+
   // 図面の上の位置（0〜1）を、枠の中の位置（px）にする
   const onScreen = ([x0, y0, x1, y1]: Box) => ({
     left: view.x + x0 * page.width * view.scale,
@@ -209,7 +261,14 @@ export default function AnnotatedSheet({
     <div
       ref={frameRef}
       className={styles.sheetFrame}
+      data-tool={tool ?? undefined}
       onPointerDown={(event) => {
+        if (tool && editable && !pending) {
+          event.currentTarget.setPointerCapture(event.pointerId);
+          const [x, y] = toPage(event.clientX, event.clientY);
+          setSketch({ shape: tool, color: ink, box: [x, y, x, y] });
+          return;
+        }
         drag.current = {
           x: event.clientX - view.x,
           y: event.clientY - view.y,
@@ -219,6 +278,11 @@ export default function AnnotatedSheet({
         };
       }}
       onPointerMove={(event) => {
+        if (sketch) {
+          const [x, y] = toPage(event.clientX, event.clientY);
+          setSketch({ ...sketch, box: [sketch.box[0], sketch.box[1], x, y] });
+          return;
+        }
         const state = drag.current;
         if (!state) return;
         if (
@@ -235,6 +299,25 @@ export default function AnnotatedSheet({
         }
       }}
       onPointerUp={() => {
+        if (sketch) {
+          const [x0, y0, x1, y1] = sketch.box;
+          const small = Math.abs(x1 - x0) * page.width * view.scale < 8 && Math.abs(y1 - y0) * page.height * view.scale < 8;
+          if (small && sketch.shape !== "text") {
+            setSketch(null);
+            return;
+          }
+          // テキストだけは押しただけでも置ける。決まった大きさの箱にする
+          const box: Box = small
+            ? [x0, y0, Math.min(1, x0 + 160 / (page.width * view.scale)), Math.min(1, y0 + 40 / (page.height * view.scale))]
+            : sketch.shape === "arrow"
+              ? sketch.box
+              : boundsOf(sketch.box);
+          setPending({ ...sketch, box });
+          setDraftTitle("");
+          setDraftComment("");
+          setSketch(null);
+          return;
+        }
         setDragging(false);
         // クリックの判定のあとで消す
         requestAnimationFrame(() => {
@@ -242,6 +325,7 @@ export default function AnnotatedSheet({
         });
       }}
       onPointerLeave={() => {
+        if (sketch) return;
         setDragging(false);
         drag.current = null;
       }}
@@ -276,11 +360,12 @@ export default function AnnotatedSheet({
       <div
         className={styles.sheetMarks}
         data-focus={Boolean(active)}
+        data-tool={Boolean(tool)}
         data-ready={loadedImage === sheetImage}
         data-dragging={dragging}
       >
         {/* 大きな枠を下に置く。重なっていても、小さな枠を押せる */}
-        {[...findings].sort((a, b) => boxArea(regionsOf(b)[0]) - boxArea(regionsOf(a)[0])).map((finding, order) => {
+        {[...aiFindings].sort((a, b) => boxArea(regionsOf(b)[0]) - boxArea(regionsOf(a)[0])).map((finding, order) => {
           const active = finding.id === activeId;
           const color = colorName(finding);
           return regionsOf(finding).map((region, index) => (
@@ -312,7 +397,7 @@ export default function AnnotatedSheet({
             </button>
           ));
         })}
-        {findings.map((finding) => {
+        {aiFindings.map((finding) => {
           const spot = notes.get(finding.id);
           // 指摘を見ている間は、選んだ指摘の注記だけを出す
           if (!spot || (activeId && finding.id !== activeId)) return null;
@@ -336,7 +421,85 @@ export default function AnnotatedSheet({
             </button>
           );
         })}
+        <ManualMarks
+          items={manualItems}
+          activeId={activeId}
+          editable={editable && !tool}
+          toScreen={toScreen}
+          toPage={toPage}
+          onSelect={onSelect}
+          onChange={(id, box) => onMove?.(id, box)}
+        />
+        {(sketch ?? pending) && (
+          <svg className={styles.manualLayer} aria-hidden>
+            <g className={styles.manualShape} data-color={(sketch ?? pending)!.color} data-active="true">
+              <ShapeLines
+                shape={(sketch ?? pending)!.shape}
+                a={toScreen((sketch ?? pending)!.box[0], (sketch ?? pending)!.box[1])}
+                b={toScreen((sketch ?? pending)!.box[2], (sketch ?? pending)!.box[3])}
+                width={2.4}
+              />
+            </g>
+          </svg>
+        )}
       </div>
+      {pending && (
+        <form
+          className={styles.draftForm}
+          style={(() => {
+            const [, , bx1, by1] = boundsOf(pending.box);
+            const [bx0] = boundsOf(pending.box);
+            const p = toScreen(bx0, by1);
+            const right = toScreen(bx1, by1);
+            return {
+              left: Math.max(8, Math.min(frame.width - 288, p.x)),
+              top: Math.max(8, Math.min(frame.height - 190, right.y + 10)),
+            };
+          })()}
+          onPointerDown={(event) => event.stopPropagation()}
+          onKeyDown={(event) => {
+            if (event.key === "Escape") {
+              event.stopPropagation();
+              setPending(null);
+            }
+          }}
+          onSubmit={(event) => {
+            event.preventDefault();
+            finishDraft();
+          }}
+        >
+          <input
+            autoFocus
+            aria-label="題名"
+            placeholder="題名（短く）"
+            maxLength={MAX_TITLE}
+            value={draftTitle}
+            onChange={(event) => setDraftTitle(event.target.value)}
+          />
+          <textarea
+            aria-label="コメント"
+            placeholder="コメント"
+            rows={2}
+            maxLength={MAX_COMMENT}
+            value={draftComment}
+            onChange={(event) => setDraftComment(event.target.value)}
+            onKeyDown={(event) => {
+              if (event.key === "Enter" && (event.ctrlKey || event.metaKey)) {
+                event.preventDefault();
+                finishDraft();
+              }
+            }}
+          />
+          <div>
+            <button type="button" className={styles.btn} onClick={() => setPending(null)}>
+              やめる
+            </button>
+            <button type="submit" className={styles.btnPrimary} disabled={!draftTitle.trim() && !draftComment.trim()}>
+              朱書きに追加
+            </button>
+          </div>
+        </form>
+      )}
       <div className={styles.zoomButtons} onPointerDown={(event) => event.stopPropagation()}>
         <button aria-label="拡大" onClick={() => zoomAt(1.4, frame.width / 2, frame.height / 2)}><Plus size={15} /></button>
         <button aria-label="縮小" onClick={() => zoomAt(1 / 1.4, frame.width / 2, frame.height / 2)}><Minus size={15} /></button>

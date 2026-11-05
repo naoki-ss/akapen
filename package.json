@@ -6,7 +6,8 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "eslint"
+    "lint": "eslint",
+    "check:markup": "node scripts/e2e/markup.mjs"
   },
   "dependencies": {
     "@react-three/drei": "^10.7.9",
@@ -24,6 +25,7 @@
     "@types/three": "^0.187.0",
     "eslint": "^9",
     "eslint-config-next": "16.4.3",
+    "playwright-core": "^1.65.0",
     "typescript": "^5"
   }
 }

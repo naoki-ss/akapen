@@ -2,23 +2,33 @@
 
 import { flushSync } from "react-dom";
 import Skeleton from "../Skeleton";
-import { ChevronDown, ChevronUp, Maximize, MoreHorizontal } from "lucide-react";
+import { ChevronDown, ChevronUp, Cloud, Circle, Maximize, MoreHorizontal, MoveUpRight, Square, Type, Undo2 } from "lucide-react";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
 import type { Building } from "@/lib/buildings";
-import { inkOf, isBlue, memberKeysOf, NOT_IN_MODEL, numbered } from "@/lib/findings";
+import { inkOf, isBlue, memberKeysOf, NO_3D_POSITION, NOT_IN_MODEL, numbered } from "@/lib/findings";
+import { applyEdit, manualFinding, SHAPE_LABELS, type Ink, type ManualMark, type Shape } from "@/lib/markup";
+import { useMarkup } from "@/lib/useMarkup";
 import { floorsOf, memberKey } from "@/lib/model";
 import { useDecisions, type RemoveReason } from "@/lib/useDecisions";
 import { useJobResult } from "@/lib/useJobResult";
 import AppFrame from "../AppFrame";
 import BuildingScene from "../BuildingSceneLazy";
-import AnnotatedSheet from "../check/AnnotatedSheet";
+import AnnotatedSheet, { type Drawn } from "../check/AnnotatedSheet";
 import ComparePane from "../check/ComparePane";
 import FindingList, { type DrawingGroup } from "../check/FindingList";
 import styles from "../check/check.module.css";
 
 const ignore = () => {};
+
+const TOOL_ICONS: Record<Shape, typeof Circle> = {
+  arrow: MoveUpRight,
+  ellipse: Circle,
+  rect: Square,
+  cloud: Cloud,
+  text: Type,
+};
 
 // ④ 施工図の朱書きと根拠。一覧・朱書き・根拠・3D は同じ指摘を選んで一緒に切り替わる
 export default function CheckScreen({
@@ -44,6 +54,11 @@ export default function CheckScreen({
   const jobId = isSaved ? null : job;
   const { result: uploaded, missing } = useJobResult(jobId);
   const { excluded, remove, restore } = useDecisions(jobId);
+  // 人が書き足した朱書きと、AI の文面の直し
+  const { markup, update: updateMarkup, undo, canUndo, error: markupError } = useMarkup(jobId);
+  const [tool, setTool] = useState<Shape | null>(null);
+  const [ink, setInk] = useState<Ink>("red");
+  const [newId, setNewId] = useState<string | null>(null);
   // 消したあとの案内。数秒で消える
   const [justRemoved, setJustRemoved] = useState<number | null>(null);
   useEffect(() => {
@@ -69,8 +84,11 @@ export default function CheckScreen({
   const [publicView, setPublicView] = useState(true);
 
   const allFindings = useMemo(
-    () => numbered(uploaded?.findings ?? saved?.findings ?? []),
-    [uploaded, saved],
+    () => [
+      ...numbered(uploaded?.findings ?? saved?.findings ?? []).map((f) => applyEdit(f, markup)),
+      ...markup.items.map(manualFinding),
+    ],
+    [uploaded, saved, markup],
   );
   const noMaskedFiles = Boolean(uploaded && publicView && !uploaded.masked);
   const resultBase = uploaded
@@ -131,11 +149,30 @@ export default function CheckScreen({
   // 全体を見るへ戻す（Esc でも戻る）。比較を全画面で開いている間は、そちらを先に閉じる
   useEffect(() => {
     const back = (event: KeyboardEvent) => {
-      if (event.key === "Escape" && !document.querySelector('[data-big="true"]')) setActiveId(null);
+      if (event.key !== "Escape" || document.querySelector('[data-big="true"]')) return;
+      setTool(null);
+      setActiveId(null);
     };
     window.addEventListener("keydown", back);
     return () => window.removeEventListener("keydown", back);
   }, []);
+  // Ctrl+Z で1つ戻す。Delete で選んだ手書きの朱書きを消す（文の入力中は効かせない）
+  const activeManual = active?.manual ? active.id : null;
+  useEffect(() => {
+    const onKey = (event: KeyboardEvent) => {
+      const target = event.target as HTMLElement | null;
+      if (target?.closest("input, textarea, select, [contenteditable]")) return;
+      if ((event.ctrlKey || event.metaKey) && !event.shiftKey && event.key.toLowerCase() === "z") {
+        if (undo()) event.preventDefault();
+      } else if ((event.key === "Delete" || event.key === "Backspace") && activeManual) {
+        event.preventDefault();
+        updateMarkup((m) => ({ ...m, items: m.items.filter((item) => item.id !== activeManual) }));
+        setActiveId(null);
+      }
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [undo, updateMarkup, activeManual]);
   const select = (finding: (typeof allFindings)[number]) => {
     setActiveId(finding.id);
     if (finding.drawing.sheet) setSheetId(finding.drawing.sheet);
@@ -187,6 +224,28 @@ export default function CheckScreen({
     }));
 
   const version = versions[currentSheet.title];
+  // 朱書きを書き足せるのは、判定の結果で、確定していない図面だけ
+  const editable =
+    Boolean(jobId) && !confirmed.some((item) => item.page === currentSheet.page);
+
+  const addMark = (drawn: Drawn) => {
+    const number = Math.max(0, ...allFindings.map((f) => f.number)) + 1;
+    const mark: ManualMark = {
+      id: `m-${Date.now().toString(36)}`,
+      number,
+      sheet: currentSheet.id,
+      page: currentSheet.page,
+      ...drawn,
+      at: new Date().toISOString(),
+    };
+    updateMarkup((m) => ({ ...m, items: [...m.items, mark] }));
+    setTool(null);
+    setNewId(mark.id);
+  };
+  const deleteMark = (id: string) => {
+    updateMarkup((m) => ({ ...m, items: m.items.filter((item) => item.id !== id) }));
+    setActiveId(null);
+  };
 
   return (
     <AppFrame crumbs={crumbs}>
@@ -296,6 +355,7 @@ export default function CheckScreen({
               minutes={uploaded?.minutes}
               checklist={uploaded?.checklist}
               onSelect={select}
+              newId={newId}
               onOpenGroup={(key) => {
                 setSheetId(key);
                 setActiveId(null);
@@ -341,6 +401,45 @@ export default function CheckScreen({
                     </button>
                   )}
                 </div>
+                {mode === "sheet" && editable && (
+                  <div className={styles.markupTools} role="toolbar" aria-label="朱書きを追加">
+                    <b>朱書きを追加</b>
+                    {(Object.keys(TOOL_ICONS) as Shape[]).map((shape) => {
+                      const Icon = TOOL_ICONS[shape];
+                      return (
+                        <button
+                          key={shape}
+                          aria-pressed={tool === shape}
+                          title={SHAPE_LABELS[shape]}
+                          onClick={() => setTool(tool === shape ? null : shape)}
+                        >
+                          <Icon size={14} /> {SHAPE_LABELS[shape]}
+                        </button>
+                      );
+                    })}
+                    <span className={styles.sep} />
+                    {(["red", "blue"] as Ink[]).map((color) => (
+                      <button
+                        key={color}
+                        aria-pressed={ink === color}
+                        aria-label={color === "red" ? "赤" : "青"}
+                        title={color === "red" ? "赤" : "青"}
+                        onClick={() => setInk(color)}
+                      >
+                        <span className={styles.swatch} style={{ background: color === "red" ? "var(--red)" : "var(--blue)" }} />
+                        {color === "red" ? "赤" : "青"}
+                      </button>
+                    ))}
+                    <span className={styles.sep} />
+                    <button disabled={!canUndo} title="1つ戻す（Ctrl+Z）" aria-label="1つ戻す" onClick={() => undo()}>
+                      <Undo2 size={14} />
+                    </button>
+                  </div>
+                )}
+                {mode === "sheet" && tool && (
+                  <p className={styles.markupHint}>図面の上をドラッグして{SHAPE_LABELS[tool]}を描きます（Esc でやめる）</p>
+                )}
+                {markupError && <p className={styles.markupHint} role="alert">{markupError}</p>}
                 {mode === "sheet" ? (
                   <AnnotatedSheet
                     sheet={currentSheet}
@@ -351,6 +450,16 @@ export default function CheckScreen({
                     activeId={activeId}
                     onSelect={select}
                     onClear={ignore}
+                    tool={tool}
+                    ink={ink}
+                    editable={editable}
+                    onCreate={addMark}
+                    onMove={(id, box) =>
+                      updateMarkup((m) => ({
+                        ...m,
+                        items: m.items.map((item) => (item.id === id ? { ...item, box } : item)),
+                      }))
+                    }
                   />
                 ) : (
                   <div className={styles.viewer3d}>
@@ -370,7 +479,7 @@ export default function CheckScreen({
                       }}
                     />
                     {active && highlighted.size === 0 && (
-                      <span className={styles.miniNote}>{NOT_IN_MODEL}</span>
+                      <span className={styles.miniNote}>{active.manual ? NO_3D_POSITION : NOT_IN_MODEL}</span>
                     )}
                   </div>
                 )}
@@ -385,6 +494,27 @@ export default function CheckScreen({
                 }
                 base={resultBase}
                 publicView={uploaded ? publicView : true}
+                onEdit={(edit) => {
+                  if (!active) return;
+                  if (active.manual) {
+                    if (!edit) return;
+                    updateMarkup((m) => ({
+                      ...m,
+                      items: m.items.map((item) =>
+                        item.id === active.id ? { ...item, title: edit.title, comment: edit.comment } : item,
+                      ),
+                    }));
+                    return;
+                  }
+                  const key = String(active.number);
+                  updateMarkup((m) => {
+                    const edits = { ...m.edits };
+                    if (edit) edits[key] = edit;
+                    else delete edits[key];
+                    return { ...m, edits };
+                  });
+                }}
+                onDelete={() => active && deleteMark(active.id)}
                 onRemove={(why: RemoveReason) => {
                   if (!active) return;
                   const number = active.number;

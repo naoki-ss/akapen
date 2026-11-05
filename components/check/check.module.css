@@ -1588,3 +1588,268 @@
   font-size: 12px;
   transform: none;
 }
+
+/* 人が書き足した朱書き（#133） */
+.sheetFrame[data-tool] {
+  cursor: crosshair;
+}
+
+.sheetMarks[data-tool="true"] .frame,
+.sheetMarks[data-tool="true"] .note {
+  pointer-events: none;
+}
+
+.manualLayer {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  overflow: visible;
+  pointer-events: none;
+}
+
+.manualShape {
+  fill: none;
+  stroke: var(--ink-frame);
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.manualShape[data-color="red"],
+.manualItem[data-color="red"] {
+  --ink-frame: var(--red);
+}
+
+.manualShape[data-color="blue"],
+.manualItem[data-color="blue"] {
+  --ink-frame: var(--blue);
+}
+
+.manualShape .manualHead {
+  fill: var(--ink-frame);
+  stroke: none;
+}
+
+.manualShape[data-dim="true"],
+.manualItem[data-dim="true"] {
+  opacity: 0.45;
+}
+
+.manualHit {
+  position: absolute;
+  pointer-events: auto;
+  cursor: pointer;
+  border-radius: 4px;
+}
+
+.manualHit:hover {
+  background: color-mix(in srgb, var(--ink-frame) 6%, transparent);
+}
+
+.manualItem[data-active="true"] .manualHit {
+  outline: 1px dashed var(--ink-frame);
+  outline-offset: 2px;
+}
+
+.manualItem[data-active="true"] .manualHit[data-editable="true"] {
+  cursor: move;
+}
+
+.sheetMarks[data-tool="true"] .manualHit {
+  pointer-events: none;
+}
+
+.manualNumber {
+  position: absolute;
+  min-width: 1.5em;
+  padding: 0 0.25em;
+  background: var(--ink-frame);
+  color: #fff;
+  font-size: 11px;
+  font-style: normal;
+  font-weight: 700;
+  line-height: 1.4;
+  text-align: center;
+  pointer-events: none;
+}
+
+.manualText {
+  position: absolute;
+  max-width: 320px;
+  padding: 0 3px;
+  background: rgb(255 255 255 / 75%);
+  color: var(--ink-frame);
+  font-size: 14px;
+  line-height: 1.3;
+  white-space: pre-wrap;
+  pointer-events: none;
+}
+
+.manualText[data-shape="text"] {
+  max-width: none;
+  background: none;
+  font-size: 15px;
+}
+
+.manualHandle {
+  position: absolute;
+  width: 10px;
+  height: 10px;
+  border: 1.5px solid var(--ink-frame);
+  border-radius: 2px;
+  background: #fff;
+  pointer-events: auto;
+  cursor: nwse-resize;
+}
+
+.draftForm {
+  position: absolute;
+  z-index: 8;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  width: 280px;
+  padding: 10px;
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius);
+  background: var(--panel);
+  box-shadow: 0 6px 20px rgb(0 0 0 / 18%);
+  cursor: default;
+  user-select: text;
+}
+
+.draftForm input,
+.draftForm textarea,
+.markupEdit input,
+.markupEdit textarea {
+  width: 100%;
+  padding: 5px 8px;
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius);
+  font: inherit;
+  font-size: 13px;
+  resize: vertical;
+}
+
+.draftForm > div,
+.markupEdit > div {
+  display: flex;
+  justify-content: flex-end;
+  gap: 6px;
+}
+
+/* 上の「朱書きを追加」の道具 */
+.markupTools {
+  position: absolute;
+  z-index: 5;
+  top: 8px;
+  left: 50%;
+  transform: translateX(-50%);
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  padding: 3px;
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius);
+  background: var(--panel);
+  font-size: 12px;
+}
+
+.markupTools > b {
+  padding: 0 6px;
+  font-size: 12px;
+}
+
+.markupTools button {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 3px 8px;
+  border: 0;
+  border-radius: 3px;
+  background: none;
+  color: var(--ink);
+  font: inherit;
+  cursor: pointer;
+}
+
+.markupTools button[aria-pressed="true"] {
+  background: var(--ink);
+  color: #fff;
+}
+
+.markupTools button:disabled {
+  opacity: 0.35;
+  cursor: default;
+}
+
+.markupTools .sep {
+  width: 1px;
+  height: 18px;
+  margin: 0 4px;
+  background: var(--line-strong);
+}
+
+.markupTools .swatch {
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+}
+
+.markupHint {
+  position: absolute;
+  z-index: 5;
+  top: 44px;
+  left: 50%;
+  transform: translateX(-50%);
+  margin: 0;
+  padding: 2px 8px;
+  border-radius: var(--radius);
+  background: rgb(27 36 48 / 80%);
+  color: #fff;
+  font-size: 12px;
+  pointer-events: none;
+}
+
+.badge {
+  flex: none;
+  margin-left: 6px;
+  padding: 0 5px;
+  border: 1px solid currentColor;
+  border-radius: 3px;
+  color: var(--muted);
+  font-size: 10.5px;
+  font-style: normal;
+  line-height: 1.5;
+}
+
+.markupEdit {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-top: 6px;
+}
+
+.markupEdit label {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.manualNote {
+  margin: 0;
+  color: var(--muted);
+  font-size: 13px;
+}
+
+@keyframes justAdded {
+  from {
+    background: color-mix(in srgb, var(--red) 18%, transparent);
+  }
+}
+
+.items button[data-new="true"] {
+  animation: justAdded 1.6s ease-out;
+}

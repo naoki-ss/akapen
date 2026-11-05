@@ -10,6 +10,7 @@ PDFビューアで層を消すと元の図面に戻る。
 色は指摘の種類で決める。種類を足すときは SOURCE_TYPES に足す。
 """
 import io
+import math
 import os
 from pathlib import Path
 
@@ -27,6 +28,13 @@ SOURCE_TYPES = {
     "minutes": {"label": "議事録", "color": RED},
     "knowledge": {"label": "ナレッジ", "color": BLUE},
 }
+# 人が書き足した朱書き。形（矢印・丸・四角・雲・テキスト）を描き、文は AI の朱書きと同じ決まりで添える
+MANUAL_TYPES = {
+    "manual_red": {"label": "手書き・赤", "color": RED},
+    "manual_blue": {"label": "手書き・青", "color": BLUE},
+}
+ALL_TYPES = {**SOURCE_TYPES, **MANUAL_TYPES}
+MANUAL_EVIDENCE = "（人が書き足した朱書き）"
 FONT_FILES = [
     os.environ.get("SEKOZU_FONT", ""),
     "/usr/share/fonts/opentype/noto/NotoSansCJK-Regular.ttc",
@@ -156,6 +164,23 @@ class Canvas:
         self.shape.draw_line(pymupdf.Point(a) * self.matrix, pymupdf.Point(b) * self.matrix)
         self.shape.finish(color=color, width=width, oc=self.layer)
 
+    def _point(self, point):
+        return pymupdf.Point(point) * self.matrix
+
+    def oval(self, rect, color, width=1.0):
+        self.shape.draw_oval(self._rect(rect))
+        self.shape.finish(color=color, width=width, oc=self.layer)
+
+    def polygon(self, points, color, fill=None, width=1.0, close=True):
+        self.shape.draw_polyline([self._point(p) for p in points])
+        self.shape.finish(color=color, fill=fill, width=width, closePath=close, oc=self.layer)
+
+    def curves(self, segments, color, width=1.0):
+        """[(始点, 制御点, 終点)] の2次曲線をつないで描く"""
+        for a, c, b in segments:
+            self.shape.draw_curve(self._point(a), self._point(c), self._point(b))
+        self.shape.finish(color=color, width=width, closePath=False, oc=self.layer)
+
     def text(self, point, text, size, color=(0, 0, 0)):
         self.shape.insert_text(pymupdf.Point(point) * self.matrix, text, fontname=FONT_NAME, fontsize=size,
                                color=color, rotate=self.page.rotation, oc=self.layer)
@@ -266,25 +291,98 @@ def mark_page(doc, page, items, layers, font, font_buffer, legend_layer):
         if item["number"] in drawn:
             continue
         # まとめた指摘は1組で描く。赤を先にする
-        numbers = item.get("merged_numbers", [item["number"]])
+        numbers = item.get("merged_numbers") or [item["number"]]
         group = sorted((other for other in items if other["number"] in numbers), key=lambda other: other["source_type"] == "knowledge")
         drawn.update(numbers)
         draw_group(page, group, layers, font, scale, ink, taken, frames, tags)
     # 番号は最後に描く。あとから描く枠の線が数字にかからないようにする
     for tag, number, source_type in tags:
         canvas = Canvas(page, layers[source_type])
-        draw_tag(canvas, tag, number, SOURCE_TYPES[source_type]["color"], scale)
+        draw_tag(canvas, tag, number, ALL_TYPES[source_type]["color"], scale)
         canvas.commit()
     draw_legend(page, legend_layer, font)
 
 
+def manual_rect(page, item):
+    """書き足した朱書きの外枠（表示の向きの座標）"""
+    x0, y0, x1, y1 = item["box"]
+    return to_rect(page, [min(x0, x1), min(y0, y1), max(x0, x1), max(y0, y1)])
+
+
+def draw_manual_shape(canvas, page, item, color, scale):
+    """矢印・丸・四角・雲を描く。テキストは形を描かない"""
+    width = 1.6 * scale
+    shape = item["shape"]
+    rect = manual_rect(page, item)
+    if shape == "rect":
+        canvas.rect(rect, color=color, width=width)
+    elif shape == "ellipse":
+        canvas.oval(rect, color=color, width=width)
+    elif shape == "arrow":
+        W, H = page.rect.width, page.rect.height
+        x0, y0, x1, y1 = item["box"]
+        a, b = pymupdf.Point(x0 * W, y0 * H), pymupdf.Point(x1 * W, y1 * H)
+        canvas.line(a, b, color, width)
+        angle = math.atan2(b.y - a.y, b.x - a.x)
+        size = 9 * scale
+        head = [b, (b.x - size * math.cos(angle - 0.45), b.y - size * math.sin(angle - 0.45)),
+                (b.x - size * math.cos(angle + 0.45), b.y - size * math.sin(angle + 0.45))]
+        canvas.polygon(head, color, fill=color, width=0.5)
+    elif shape == "cloud":
+        step = max(6 * scale, min(14 * scale, min(rect.width, rect.height) / 3))
+        corners = [rect.tl, rect.tr, rect.br, rect.bl]
+        segments = []
+        for side in range(4):
+            a, b = corners[side], corners[(side + 1) % 4]
+            count = max(1, round(abs(b - a) / step))
+            # 外向きの法線（時計回りに回るので、進む向きを左へ 90 度）
+            dx, dy = (b.x - a.x) / count, (b.y - a.y) / count
+            nx, ny = dy, -dx
+            for i in range(count):
+                p = pymupdf.Point(a.x + dx * i, a.y + dy * i)
+                q = pymupdf.Point(a.x + dx * (i + 1), a.y + dy * (i + 1))
+                c = pymupdf.Point((p.x + q.x) / 2 + nx * 0.9, (p.y + q.y) / 2 + ny * 0.9)
+                segments.append((p, c, q))
+        canvas.curves(segments, color, width)
+    return rect
+
+
+def draw_manual_text(page, item, layers, font, scale, taken):
+    """テキストだけの朱書き。描いた箱の左上から書く"""
+    color = ALL_TYPES[item["source_type"]]["color"]
+    canvas = Canvas(page, layers[item["source_type"]])
+    rect = manual_rect(page, item)
+    size = COMMENT_SIZE * scale * 1.2
+    text = (item["comment"] or item["title"])[:MAX_COMMENT_CHARS * 2]
+    lines = wrap(f"{item['number']}. {text}", font, size, max(rect.width, 80 * scale))
+    widest = max(font.text_length(line, fontsize=size) for line in lines)
+    box = pymupdf.Rect(rect.x0, rect.y0, rect.x0 + widest + 8 * scale, rect.y0 + len(lines) * size * 1.3 + 6 * scale)
+    canvas.rect(box, color=None, fill=(1, 1, 1), opacity=0.8)
+    y = box.y0 + 3 * scale + size
+    for line in lines:
+        canvas.text((box.x0 + 4 * scale, y), line, size, color)
+        y += size * 1.3
+    canvas.commit()
+    taken.append(box)
+
+
 def draw_group(page, group, layers, font, scale, ink, taken, frames, tags):
     """1つの枠と1つのコメントを描く。色ごとに自分の層に描くので、層を消すとその色の枠と番号と文だけが消える"""
+    if group[0].get("shape") == "text":
+        draw_manual_text(page, group[0], layers, font, scale, taken)
+        return
     canvases = [Canvas(page, layers[item["source_type"]]) for item in group]
-    colors = [SOURCE_TYPES[item["source_type"]]["color"] for item in group]
+    colors = [ALL_TYPES[item["source_type"]]["color"] for item in group]
     rects = [to_rect(page, box) for box in group[0]["regions"]]
     outer = 2.2 * scale * (len(group) - 1)
-    for rect in rects:
+    if group[0].get("shape"):
+        # 書き足した朱書き：形を描き、番号札を外枠の近くに置く
+        rect = draw_manual_shape(canvases[0], page, group[0], colors[0], scale)
+        rects = [rect]
+        tag = place_tag(page, rect, group[0]["number"], scale, font, taken)
+        taken.append(tag)
+        tags.append((tag, group[0]["number"], group[0]["source_type"]))
+    for rect in rects if not group[0].get("shape") else []:
         for index, (item, canvas, color) in enumerate(zip(group, canvases, colors)):
             # 2色の枠は、内側に赤、外側に青を沿わせて1つの枠に見せる
             outset = index * 2.2 * scale
@@ -384,6 +482,8 @@ def result_cells(row):
 
 
 def evidence_text(item):
+    if item.get("shape"):
+        return MANUAL_EVIDENCE
     parts = [f"{e.get('drawing', '')} {e.get('page', '')} {e.get('where', '')}".strip() for e in item.get("evidence", [])]
     return "\n".join(parts) if parts else "（根拠の記載なし）"
 
@@ -394,9 +494,9 @@ def content_text(item):
 
 def collect_text(findings, title, notes, tables=()):
     text = [LEGEND_TITLE, NOTICE, title, "（番号は最後の一覧ページと対応）赤：設計図書・議事録との矛盾青：ナレッジ一覧0123456789.[要確認] 枠なし（根拠の記載なし）はいあり"]
-    text += [name for name, _ in ListPages.COLUMNS] + [spec["label"] for spec in SOURCE_TYPES.values()] + list(notes)
+    text += [name for name, _ in ListPages.COLUMNS] + [spec["label"] for spec in ALL_TYPES.values()] + list(notes) + [MANUAL_EVIDENCE]
     for item in findings:
-        text += [item["comment"] or "", content_text(item), evidence_text(item)]
+        text += [item["comment"] or "", item["title"], content_text(item), evidence_text(item)]
     for heading, rows in tables:
         text += [heading] + [name for name, _ in ListPages.RESULT_COLUMNS]
         for row in rows:
@@ -436,7 +536,9 @@ def make_marked_pdf(source_path, findings, out_path, title="施工図の朱書�
     doc = pymupdf.open(source_path)
     numbers = list(pages) if pages else list(range(1, doc.page_count + 1))
     sheet_count = len(numbers)
-    layers = {key: doc.add_ocg(f"朱書き（{spec['label']}）", on=True) for key, spec in SOURCE_TYPES.items()}
+    used = {item["source_type"] for item in findings}
+    layers = {key: doc.add_ocg(f"朱書き（{spec['label']}）", on=True)
+              for key, spec in ALL_TYPES.items() if key in SOURCE_TYPES or key in used}
     legend_layer = doc.add_ocg("凡例", on=True)
     for number in numbers:
         items = [item for item in findings if item["page"] == number]
@@ -446,7 +548,7 @@ def make_marked_pdf(source_path, findings, out_path, title="施工図の朱書�
     list_pages = ListPages(doc, font, font_buffer, title)
     list_pages.new_page()
     for item in findings:
-        spec = SOURCE_TYPES[item["source_type"]]
+        spec = ALL_TYPES[item["source_type"]]
         list_pages.row([item["number"], spec["label"], f"p.{item['page']}", content_text(item), evidence_text(item),
                    "はい" if item.get("needs_confirmation") else ""], color=spec["color"])
     for note in notes:

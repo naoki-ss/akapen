@@ -7,8 +7,9 @@ import type { Box } from "./sheets";
 export const INK_RED = "#C62D23";
 export const INK_BLUE = "#1D5BB8";
 
+// 書き足した朱書きは、人が選んだ色
 export const isBlue = (finding: Finding) =>
-  finding.source_type === "knowledge";
+  finding.manual ? finding.manual.color === "blue" : finding.source_type === "knowledge";
 
 export const colorName = (finding: Finding) =>
   isBlue(finding) ? "blue" : "red";
@@ -30,6 +31,7 @@ export const noteOf = (finding: Finding) =>
   (finding.comment || finding.title).replace(/^\[[^\]]+\]\s*/, "");
 
 export function sourceLabel(finding: Finding) {
+  if (finding.manual) return "手書き";
   if (finding.source_type === "minutes") return "議事録";
   if (finding.source_type === "knowledge") return "チェックリスト";
   return "設計図書";
@@ -50,6 +52,7 @@ export function reasonOf(finding: Finding) {
 export const detailOf = bodyOf;
 
 export const NOT_IN_MODEL = "この部材は3Dに表示していません";
+export const NO_3D_POSITION = "3D の位置なし（書き足した朱書き）";
 
 function floorMembers(finding: Finding, model: BuildingModel) {
   const { floor } = finding.members;

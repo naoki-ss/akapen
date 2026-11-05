@@ -2,6 +2,8 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { Box } from "@/lib/sheets";
+import type { Finding } from "@/lib/check";
+import { ShapeLines } from "./ManualMarks";
 import styles from "./check.module.css";
 
 type View = { x: number; y: number; scale: number };
@@ -22,7 +24,10 @@ export default function ZoomCrop({
   color,
   number,
   alt,
+  manual,
 }: {
+  // 書き足した朱書きは、枠の代わりにその形を描く
+  manual?: Finding["manual"];
   src: string;
   // 画像の大きさ（px）
   width: number;
@@ -140,7 +145,19 @@ export default function ZoomCrop({
           transform: view ? `translate(${view.x}px, ${view.y}px) scale(${view.scale})` : undefined,
         }}
       />
-      {mark && (
+      {manual && view && (
+        <svg className={styles.manualLayer} aria-hidden>
+          <g className={styles.manualShape} data-color={color} data-active="true">
+            <ShapeLines
+              shape={manual.shape}
+              a={{ x: view.x + manual.box[0] * width * view.scale, y: view.y + manual.box[1] * height * view.scale }}
+              b={{ x: view.x + manual.box[2] * width * view.scale, y: view.y + manual.box[3] * height * view.scale }}
+              width={2.4}
+            />
+          </g>
+        </svg>
+      )}
+      {mark && !manual && (
         <span className={styles.docBox} data-color={color} style={mark}>
           {number !== undefined && (
             <b className="mono" data-side={mark.left < 30 ? "right" : "left"}>
