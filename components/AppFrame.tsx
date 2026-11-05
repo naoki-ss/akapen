@@ -48,6 +48,9 @@ export default function AppFrame({
             ),
           )}
         </nav>
+        <Link href="/knowledge" className={styles.frameLink}>
+          ナレッジ
+        </Link>
       </header>
       <main className={styles.frameBody}>{children}</main>
     </div>

@@ -429,7 +429,8 @@ def checklist_card(finding, library):
         for item in items:
             if item["id"] == wanted:
                 return {"checklist": name, "section": item["section"], "item": item["item"],
-                        "lines": [line for line in item["content"].split("／") if line], "note": item["note"], "id": wanted}
+                        "lines": [line for line in item["content"].split("／") if line], "note": item["note"], "id": wanted,
+                        "source": item.get("source")}
     return None
 
 

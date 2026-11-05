@@ -137,6 +137,12 @@ export default function BasisDocument({
             ))}
           </ul>
           {card.note && <p className={styles.docNote}>補足：{card.note}</p>}
+          {card.source?.file && (
+            <p className={styles.docNote}>
+              出典：{card.source.file}
+              {card.source.page && ` ${card.source.page}`}
+            </p>
+          )}
         </section>
       )}
       {empty && (

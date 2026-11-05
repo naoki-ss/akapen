@@ -1,4 +1,4 @@
-// 画面からのナレッジの追加。入れたファイルと項目はリポジトリの外に置く
+// ナレッジ。環境で共通で、物件に紐づけない。入れたファイルと項目はリポジトリの外に置く
 
 import { execFile, spawn } from "node:child_process";
 import { randomUUID } from "node:crypto";
@@ -7,25 +7,24 @@ import {
   mkdirSync,
   openSync,
   readFileSync,
-  renameSync,
   writeFileSync,
 } from "node:fs";
 import { homedir } from "node:os";
 import path from "node:path";
-import { promisify } from "node:util";
 
 const IMPORTS = path.join(homedir(), "sekozu-data", "knowledge-imports");
-const ADDED = path.join(homedir(), "sekozu-data", "knowledge", "added");
-const MANUAL = path.join(ADDED, "manual.json");
 const ID = /^[0-9a-f-]{36}$/;
+const ITEM_ID = /^[\w\-ぁ-んァ-ヶ一-龠々・（）()、／ー]+$/;
+// ビルドツールにパスを追跡させない（.venv のシンボリックリンクで止まるため、実行時に組み立てる）
 const fromRoot = (...parts: string[]) =>
   path.join(/* turbopackIgnore: true */ process.cwd(), ...parts);
 const PYTHON = () => fromRoot(".venv", "bin", "python");
-const SCRIPT = () => fromRoot("scripts", "check", "knowledge_import.py");
-const runFile = promisify(execFile);
+const IMPORT_SCRIPT = () => fromRoot("scripts", "check", "knowledge_import.py");
+const STORE_SCRIPT = () => fromRoot("scripts", "check", "knowledge_store.py");
+const scriptsDir = () => fromRoot("scripts", "check");
 
 export const MAX_KNOWLEDGE_BYTES = 20 * 1024 * 1024;
-export const KNOWLEDGE_TYPES = [".xlsx", ".xlsm", ".csv", ".pdf", ".txt", ".md"];
+export const KNOWLEDGE_TYPES = [".xlsx", ".xlsm", ".csv", ".pdf", ".docx", ".txt", ".md"];
 const MAX_ITEMS = 3000;
 const MAX_TEXT = 2000;
 
@@ -36,6 +35,21 @@ export type KnowledgeItem = {
   criteria: string[];
   drawing_types: string[];
   note: string;
+  drawing_checkable: boolean;
+  source_page: string;
+};
+
+export type KnowledgeRow = {
+  id: string;
+  section: string;
+  item: string;
+  checks: string[];
+  criteria: string[];
+  note: string;
+  drawing_checkable: boolean;
+  drawing_types: string[];
+  source: { file: string; page: string };
+  added_at: string;
 };
 
 export type ImportEstimate = {
@@ -48,12 +62,31 @@ export type ImportEstimate = {
 
 const readJson = (file: string) => JSON.parse(readFileSync(file, "utf8"));
 
-function writeJsonSafely(file: string, data: unknown) {
-  mkdirSync(path.dirname(file), { recursive: true });
-  const temporary = `${file}.${randomUUID()}.tmp`;
-  writeFileSync(temporary, JSON.stringify(data, null, 1));
-  renameSync(temporary, file);
+function runStore(args: string[], input?: string) {
+  return new Promise<string>((resolve, reject) => {
+    const child = execFile(
+      PYTHON(),
+      [STORE_SCRIPT(), ...args],
+      { cwd: scriptsDir(), maxBuffer: 50 * 1024 * 1024 },
+      (error, stdout) =>
+        error ? reject(new Error("ナレッジの処理に失敗しました")) : resolve(stdout),
+    );
+    if (input !== undefined) child.stdin?.end(input);
+  });
 }
+
+export const listKnowledge = async () =>
+  JSON.parse(await runStore(["list"])) as KnowledgeRow[];
+
+export const addKnowledge = (sourceFile: string, items: KnowledgeItem[]) =>
+  runStore(["add", sourceFile], JSON.stringify(items));
+
+export const validItemId = (id: string) => ITEM_ID.test(id);
+
+export const editKnowledge = (id: string, item: KnowledgeItem) =>
+  runStore(["edit", id], JSON.stringify(item));
+
+export const deleteKnowledge = (id: string) => runStore(["delete", id]);
 
 export function importFolder(id: string) {
   if (!ID.test(id)) return null;
@@ -72,16 +105,24 @@ export async function prepareImport(data: Buffer, originalName: string) {
     path.join(folder, "meta.json"),
     JSON.stringify({ original_name: path.basename(originalName) }),
   );
-  try {
-    const { stdout } = await runFile(PYTHON(), [SCRIPT(), "prepare", folder], {
-      cwd: fromRoot("scripts", "check"),
-    });
-    return { id, estimate: JSON.parse(stdout) as ImportEstimate };
-  } catch (error) {
-    const stderr = String((error as { stderr?: string }).stderr ?? "").trim();
-    const known = stderr && !stderr.includes("Traceback");
-    throw new Error(known ? stderr : "ファイルを読み込めませんでした");
-  }
+  return new Promise<{ id: string; estimate: ImportEstimate }>((resolve, reject) => {
+    execFile(
+      PYTHON(),
+      [IMPORT_SCRIPT(), "prepare", folder],
+      { cwd: scriptsDir() },
+      (error, stdout, stderr) => {
+        if (!error) return resolve({ id, estimate: JSON.parse(stdout) });
+        const text = String(stderr).trim();
+        reject(
+          new Error(
+            text && !text.includes("Traceback")
+              ? text
+              : "ファイルを読み込めませんでした",
+          ),
+        );
+      },
+    );
+  });
 }
 
 // AIでの整理を始める。費用が掛かるのはここから
@@ -91,17 +132,35 @@ export function startImport(folder: string) {
   // 二度押しで二重に費用を掛けない
   if (status.state !== "ready") return false;
   const log = openSync(path.join(folder, "run.log"), "a");
-  const child = spawn(PYTHON(), ["-u", SCRIPT(), "run", folder], {
-    cwd: fromRoot("scripts", "check"),
+  const child = spawn(PYTHON(), ["-u", IMPORT_SCRIPT(), "run", folder], {
+    cwd: scriptsDir(),
     detached: true,
     stdio: ["ignore", log, log],
   });
   writeFileSync(
     file,
-    JSON.stringify({ ...status, state: "running", pid: child.pid }),
+    JSON.stringify({
+      ...status,
+      state: "running",
+      pid: child.pid,
+      started_at: new Date().toISOString(),
+    }),
   );
   child.unref();
   return true;
+}
+
+// 整理を止める。登録はされないので、費用はそこまでの分だけ
+export function stopImport(folder: string) {
+  const file = path.join(folder, "status.json");
+  const status = readJson(file);
+  if (status.state !== "running") return;
+  try {
+    process.kill(status.pid);
+  } catch {
+    // すでに終わっている
+  }
+  writeFileSync(file, JSON.stringify({ ...status, state: "stopped" }));
 }
 
 const alive = (pid: number) => {
@@ -125,6 +184,9 @@ export function importStatus(folder: string) {
   };
 }
 
+export const importSourceName = (folder: string) =>
+  String(readJson(path.join(folder, "meta.json")).original_name);
+
 const clean = (value: unknown) => String(value ?? "").trim().slice(0, MAX_TEXT);
 const cleanList = (value: unknown) =>
   (Array.isArray(value) ? value : []).map(clean).filter(Boolean);
@@ -141,34 +203,12 @@ export function cleanItems(value: unknown): KnowledgeItem[] | null {
     criteria: cleanList(raw.criteria),
     drawing_types: cleanList(raw.drawing_types),
     note: clean(raw.note),
+    drawing_checkable: raw.drawing_checkable !== false,
+    source_page: clean(raw.source_page),
   }));
   return items.every(
     (item) => item.item && item.checks.length && item.drawing_types.length,
   )
     ? items
     : null;
-}
-
-const numbered = (items: KnowledgeItem[], start = 1) =>
-  items.map((item, index) => ({ no: start + index, ...item }));
-
-// 確認画面で直した項目を登録する。これで判定に使われる
-export function registerImport(id: string, name: string, items: KnowledgeItem[]) {
-  writeJsonSafely(path.join(ADDED, `${id}.json`), {
-    name: clean(name) || "追加したナレッジ",
-    source: "file",
-    added_at: new Date().toISOString(),
-    items: numbered(items),
-  });
-}
-
-// 1項目ずつの追加。1つのファイルに足していく
-export function addManualItem(item: KnowledgeItem) {
-  const known = existsSync(MANUAL) ? readJson(MANUAL).items : [];
-  writeJsonSafely(MANUAL, {
-    name: "1項目ずつ追加した項目",
-    source: "form",
-    added_at: new Date().toISOString(),
-    items: [...known, ...numbered([item], known.length + 1)],
-  });
 }

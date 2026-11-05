@@ -82,6 +82,8 @@ export type ChecklistCard = {
   item: string;
   lines: string[];
   note: string;
+  // 元のファイル名とページ
+  source?: { file: string; page: string } | null;
 };
 
 export type OrderChange = {

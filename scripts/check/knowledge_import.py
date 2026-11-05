@@ -1,4 +1,4 @@
-"""社内のチェックリストやマニュアルを取り込む。Excel・CSV・PDF・テキストをAIで項目に整理し、確認画面に渡す。
+"""社内のチェックリストやマニュアルを取り込む。Excel・Word・CSV・PDF・テキストをAIで項目に整理し、確認画面に渡す。
 
   python knowledge_import.py prepare <フォルダ>   文字を取り出して費用の見込みを返す（AIを呼ばない）
   python knowledge_import.py run <フォルダ>       AIで整理して draft.json を書く
@@ -50,6 +50,8 @@ SYSTEM = f"""あなたは建設会社の施工図チェックの担当です。�
 - criteria：判断の基準（数値や条件。資料になければ空のリスト）
 - drawing_types：対象の施工図の種類（リスト）。次から選びます：{"、".join(KIND_NAMES)}。どれにも合わなければ、資料にある図面の呼び名をそのまま書きます。資料から分からなければ空のリスト
 - note：補足（なければ空）
+- drawing_checkable：施工図を見て確認できる項目なら true。現地や書類でないと確認できない項目は false
+- source_page：その項目が書かれていた場所。資料に【p.3】のような印があればその番号、Excel はシート名、なければ空
 
 守ること:
 - 資料に書いてあることだけを項目にします。書いてない基準や確認を足しません。
@@ -68,7 +70,7 @@ SCHEMA = {
             "items": {
                 "type": "object",
                 "additionalProperties": False,
-                "required": ["section", "item", "checks", "criteria", "drawing_types", "note"],
+                "required": ["section", "item", "checks", "criteria", "drawing_types", "note", "drawing_checkable", "source_page"],
                 "properties": {
                     "section": {"type": "string"},
                     "item": {"type": "string"},
@@ -76,6 +78,8 @@ SCHEMA = {
                     "criteria": {"type": "array", "items": {"type": "string"}},
                     "drawing_types": {"type": "array", "items": {"type": "string"}},
                     "note": {"type": "string"},
+                    "drawing_checkable": {"type": "boolean"},
+                    "source_page": {"type": "string"},
                 },
             },
         },
@@ -146,12 +150,21 @@ def extract(path):
         for index, page in enumerate(document):
             text = page.get_text().strip()
             if len(text) >= MIN_PAGE_CHARS:
-                texts.append(text)
+                texts.append(f"【p.{index + 1}】\n{text}")
             else:
                 images.append(index + 1)
         if len(images) > MAX_PDF_IMAGE_PAGES:
             sys.exit(f"文字のないページが多すぎます（{MAX_PDF_IMAGE_PAGES}ページまで）")
         return text_chunks("\n\n".join(texts)), images
+    if suffix == ".docx":
+        from docx import Document
+
+        word = Document(path)
+        lines = [paragraph.text for paragraph in word.paragraphs if paragraph.text.strip()]
+        for table in word.tables:
+            for row in table.rows:
+                lines.append(" | ".join(cell.text.strip() for cell in row.cells))
+        return text_chunks("\n".join(lines)), []
     return text_chunks(decode(data)), []
 
 
@@ -199,7 +212,7 @@ def run(folder):
             page = document[number - 1]
             zoom = PAGE_LONG_EDGE / max(page.rect.width, page.rect.height)
             png = page.get_pixmap(matrix=pymupdf.Matrix(zoom, zoom)).tobytes("png")
-            jobs.append((f"page{number}", [image_block(png), {"type": "text", "text": "このページを項目に整理してください。"}]))
+            jobs.append((f"page{number}", [image_block(png), {"type": "text", "text": f"このページ（p.{number}）を項目に整理してください。"}]))
     with ThreadPoolExecutor(PARALLEL) as pool:
         done = list(pool.map(lambda job: read_chunk(client, folder, *job), jobs))
     items, seen = [], set()

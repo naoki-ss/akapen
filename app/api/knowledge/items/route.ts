@@ -1,8 +1,8 @@
 import type { NextRequest } from "next/server";
 import { crossSite, uploadEnabled } from "@/lib/jobs";
-import { addManualItem, cleanItems } from "@/lib/knowledge";
+import { addKnowledge, cleanItems } from "@/lib/knowledge";
 
-// 1項目ずつの追加。AIは呼ばない
+// 1件ずつの追加。AIは呼ばない
 export async function POST(request: NextRequest) {
   if (!uploadEnabled() || crossSite(request))
     return Response.json({ error: "追加できません" }, { status: 403 });
@@ -13,6 +13,6 @@ export async function POST(request: NextRequest) {
       { status: 400 },
     );
   }
-  addManualItem(items[0]);
+  await addKnowledge("手入力", items);
   return Response.json({ ok: true });
 }

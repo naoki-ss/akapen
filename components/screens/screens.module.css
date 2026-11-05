@@ -366,3 +366,9 @@
   font-size: 12px;
   font-weight: 700;
 }
+
+.frameLink {
+  margin-left: auto;
+  color: var(--ink);
+  font-size: 13px;
+}

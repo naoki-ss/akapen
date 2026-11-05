@@ -14,7 +14,7 @@ import {
 import { jobOption } from "@/lib/jobNames";
 import { floorsOf, type Member } from "@/lib/model";
 import type { ConfirmedSheet } from "@/lib/sheetStatus";
-import type { AddedKnowledge, KnowledgeApp, ProjectDocument } from "@/lib/projects";
+import type { KnowledgeApp, ProjectDocument } from "@/lib/projects";
 import { ALL_LAYERS, titleKey, type LayerKey, type SheetTarget } from "@/lib/sheets";
 import { useJobResult } from "@/lib/useJobResult";
 import { useUploadJob } from "@/lib/useUploadJob";
@@ -39,7 +39,6 @@ export default function ModelConsole({
   projects,
   canUpload,
   knowledge,
-  addedKnowledge,
   confirmedSheets,
   documents,
 }: Building & {
@@ -47,7 +46,6 @@ export default function ModelConsole({
   // 公開先では施工図を入れられない（APIの費用が掛かるため）
   canUpload: boolean;
   knowledge: KnowledgeApp[];
-  addedKnowledge: AddedKnowledge[];
   confirmedSheets: ConfirmedSheet[];
   documents: ProjectDocument[];
 }) {
@@ -284,8 +282,8 @@ export default function ModelConsole({
               )}
             </h3>
             {canUpload && (
-              <Link className={panel.addKnowledge} href={`/knowledge/new?from=${slug}`}>
-                ＋ ナレッジを追加
+              <Link className={panel.addKnowledge} href="/knowledge">
+                ナレッジを開く（全物件で共通）
               </Link>
             )}
             {knowledge.length === 0 ? (
@@ -301,18 +299,6 @@ export default function ModelConsole({
                       {app.imported_at
                         ? `kintoneから取り込み済み（${app.imported_at.slice(5).replace("-", "/")}）・${app.items}項目`
                         : "未取り込み"}
-                    </small>
-                  </li>
-                ))}
-              </ul>
-            )}
-            {addedKnowledge.length > 0 && (
-              <ul className={panel.rows}>
-                {addedKnowledge.map((added) => (
-                  <li key={added.id} data-on>
-                    <span>{added.name}</span>
-                    <small>
-                      画面から追加・{added.items}項目・{added.types.join("、")}
                     </small>
                   </li>
                 ))}
