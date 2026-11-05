@@ -12,7 +12,7 @@ from concurrent.futures import ThreadPoolExecutor
 import anthropic
 import pymupdf
 
-from ai_review import call_claude, load_env
+from claude_api import call_claude, load_env
 from check_upload import EXPERIMENTS, message_cost
 from common import PRIVATE, write_json
 from review_steel_sheet import render

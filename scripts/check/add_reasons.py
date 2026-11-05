@@ -14,13 +14,13 @@ from pathlib import Path
 
 import anthropic
 
-from ai_review import MODEL, call_claude, load_env
+from claude_api import MODEL, call_claude, load_env
 from check_upload import EXPERIMENTS, PRICE_INPUT, PRICE_OUTPUT, message_cost
 from common import PRIVATE, REPO, write_json
 from steel_experiment import record_cost
 
 BATCH = 40
-FIXED = [REPO / "demo-data" / slug / "check-result.json" for slug in ("sample-x", "sample-b")]
+FIXED = [REPO / "demo-data" / slug / "check-result.json" for slug in ("sample-b",)]
 MAX_CHARS = 70
 # 低い思考量での1件あたりの出力の見込み（理由と番号、構造の分）
 OUTPUT_TOKENS_PER_FINDING = 90

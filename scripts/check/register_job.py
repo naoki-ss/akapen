@@ -22,14 +22,14 @@ import pymupdf
 
 import building_pages
 import minutes_check
-from ai_review import call_claude, load_env
+from claude_api import call_claude, load_env
 from check_upload import message_cost
 from common import PRIVATE, write_json
 from register_project import Register
 
 PROJECTS = PRIVATE / "projects.json"
 ROOT = PRIVATE / "projects"
-# 実績（物件B、別の物件）からの見込み
+# 実績からの見込み
 USD_PER_PAGE = {"伏図": 0.21, "軸組図": 0.22, "リスト": 0.29}
 USD_UNKNOWN_PAGE = 0.021
 SECONDS_PER_PAGE = 13

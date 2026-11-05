@@ -18,7 +18,7 @@ from pathlib import Path
 import pymupdf
 
 from common import PRIVATE, REPO, write_json
-from repeat_runs import PRICE_INPUT, PRICE_OUTPUT
+from claude_api import PRICE_INPUT, PRICE_OUTPUT
 
 CACHE = PRIVATE / "title-blocks"
 PROJECTS = PRIVATE / "projects.json"
@@ -260,7 +260,7 @@ def title_blocks(client, path, number, page):
     elif client is None:
         return None
     else:
-        from ai_review import call_claude
+        from claude_api import call_claude
         from steel_experiment import image_block
 
         zoom = DETECT_LONG_EDGE / max(page.rect.width, page.rect.height)
@@ -470,7 +470,7 @@ def pages_needed(findings_lists, documents):
 
 
 def main():
-    from ai_review import load_env
+    from claude_api import load_env
 
     command = sys.argv[1]
     projects = json.loads(PROJECTS.read_text())

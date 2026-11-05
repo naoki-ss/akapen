@@ -1,4 +1,4 @@
-// 物件の一覧（サーバー側）。デモの2物件と、画面から登録した物件をまとめて扱う
+// 物件の一覧（サーバー側）。デモの本社屋と、画面から登録した物件をまとめて扱う
 
 import type { CheckResult } from "./check";
 import { listJobs, uploadEnabled } from "./jobs";
@@ -6,9 +6,6 @@ import type { BuildingModel } from "./model";
 import { listProjects, projectInfo } from "./projects";
 import { thumbnailOf, type Thumbnail } from "./thumbnail";
 import type { SheetIndex } from "./sheets";
-import resultA from "@/demo-data/sample-x/check-result.json";
-import modelA from "@/demo-data/sample-x/model.json";
-import sheetsA from "@/demo-data/sample-x/sheets.json";
 import resultB from "@/demo-data/sample-b/check-result.json";
 import modelB from "@/demo-data/sample-b/model.json";
 import sheetsB from "@/demo-data/sample-b/sheets.json";
@@ -33,12 +30,6 @@ export type Building = {
 };
 
 const DEMOS: Building[] = [
-  {
-    slug: "sample-x",
-    model: modelA as BuildingModel,
-    sheets: sheetsA as unknown as SheetIndex,
-    check: resultA as CheckResult,
-  },
   {
     slug: "sample-b",
     model: modelB as unknown as BuildingModel,

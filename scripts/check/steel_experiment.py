@@ -30,10 +30,9 @@ from pathlib import Path
 import anthropic
 import pymupdf
 
-import ai_review
-from ai_review import MODEL, call_claude, load_env
+from claude_api import MODEL, call_claude, load_env
 from common import PRIVATE, write_json
-from repeat_runs import PRICE_INPUT, PRICE_OUTPUT
+from claude_api import PRICE_INPUT, PRICE_OUTPUT
 from review_steel_sheet import SCHEMA, SYSTEM, red_pixels, render
 
 ROOT = PRIVATE / "experiments"

@@ -15,9 +15,9 @@ from concurrent.futures import ThreadPoolExecutor
 import anthropic
 import pymupdf
 
-from ai_review import MODEL, call_claude, load_env
+from claude_api import MODEL, call_claude, load_env
 from common import write_json
-from repeat_runs import PRICE_INPUT, PRICE_OUTPUT
+from claude_api import PRICE_INPUT, PRICE_OUTPUT
 from review_steel_sheet import red_pixels, render
 from steel_experiment import ROOT, image_block, record_cost, tiles
 

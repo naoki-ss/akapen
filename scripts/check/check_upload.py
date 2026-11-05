@@ -28,7 +28,7 @@ from pathlib import Path
 import anthropic
 import pymupdf
 
-from ai_review import call_claude, load_env
+from claude_api import call_claude, load_env
 from common import PRIVATE, REPO, write_json
 from index_steel_sheets import SCHEMA as INDEX_SCHEMA, SYSTEM as INDEX_SYSTEM
 import design_basis
@@ -37,7 +37,7 @@ import knowledge_check
 import merge_findings
 import minutes_check
 from markup_pdf import SOURCE_TYPES, layer_overlay, make_marked_pdf, mask_pdf, set_visible_layers, to_rect, valid_regions
-from repeat_runs import PRICE_INPUT, PRICE_OUTPUT
+from claude_api import PRICE_INPUT, PRICE_OUTPUT
 from review_steel_sheet import SYSTEM as STEEL_SYSTEM, red_pixels, render
 from steel_experiment import REVISED_NOTE, ROOT as EXPERIMENTS, build_inputs, image_block, record_cost, schema_for, tiles
 

@@ -23,7 +23,7 @@ import pymupdf
 
 from building_pages import display_words, title_of
 from common import PRIVATE, REPO, write_json
-from repeat_runs import PRICE_INPUT, PRICE_OUTPUT
+from claude_api import PRICE_INPUT, PRICE_OUTPUT
 
 ROOT = PRIVATE / "ledger"
 PROJECTS = PRIVATE / "projects.json"
@@ -313,7 +313,7 @@ def read_titles(slug, incoming):
     """文字で読めないページの図名をAIで読む"""
     import anthropic
 
-    from ai_review import call_claude, load_env
+    from claude_api import call_claude, load_env
     from steel_experiment import ROOT as EXPERIMENTS, image_block, record_cost
 
     load_env()

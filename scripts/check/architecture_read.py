@@ -14,7 +14,7 @@ from concurrent.futures import ThreadPoolExecutor
 import anthropic
 import pymupdf
 
-from ai_review import call_claude, load_env
+from claude_api import call_claude, load_env
 from building_data import grid_positions
 from building_pages import display_words
 from check_upload import EXPERIMENTS, message_cost
