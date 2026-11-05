@@ -58,7 +58,8 @@ export default function CheckScreen({
     useSearchParams().get("finding"),
   );
   const [sheetId, setSheetId] = useState<string | null>(null);
-  const [mode, setMode] = useState<"sheet" | "3d">("sheet");
+  // 開いたときは3Dで位置を示す。施工図に切り替えたら、別の指摘を選んでもその選択を保つ
+  const [mode, setMode] = useState<"sheet" | "3d">(hasModel ? "3d" : "sheet");
   const [menuOpen, setMenuOpen] = useState(false);
   // 公開・デモ用の表示。読み込み直すと必ず塗りつぶしありに戻す
   const [publicView, setPublicView] = useState(true);

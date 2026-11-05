@@ -11,6 +11,7 @@
 import hashlib
 import json
 import re
+import shutil
 import sys
 import unicodedata
 from pathlib import Path
@@ -27,6 +28,11 @@ MAX_REFS = 2
 # 切り抜きの最小の大きさ（ページに対する割合）と、まわりの余白
 MIN_CROP = (0.30, 0.32)
 PAD = 0.03
+# 表の行とみなす語の数と高さ（ページに対する割合）
+MIN_ROW_WORDS = 4
+MAX_ROW_HEIGHT = 0.03
+WIDE_BOX = 0.5
+WIDE_CROP_HEIGHT = 0.14
 # 符号の組を探す範囲（ページに対する割合）
 WINDOW = (0.16, 0.12)
 # 1語だけで位置を決めてよいのは、ページの中に少ししかない語
@@ -40,7 +46,6 @@ MASK_COLOR = (210, 210, 210)
 DETECT_USD_PER_PAGE = 0.03
 # 図面枠を探した費用の合計
 SPENT = [0.0]
-RENDERED = {}
 
 DETECT_SYSTEM = """図面の画像から、公開してはいけない名前や印が入る欄の位置を探します。
 
@@ -212,10 +217,19 @@ def inside(box, mask):
     return box[0] >= mask[0] and box[1] >= mask[1] and box[2] <= mask[2] and box[3] <= mask[3]
 
 
+def full_row(page, box):
+    """表の行なら、枠をその行の端まで広げる。備考の欄など、判定に使った文字が必ず入るようにする"""
+    words = [b for b, _ in display_words(page) if b[1] < (box[1] + box[3]) / 2 < b[3] or box[1] <= (b[1] + b[3]) / 2 <= box[3]]
+    if len(words) < MIN_ROW_WORDS or box[3] - box[1] > MAX_ROW_HEIGHT:
+        return box
+    return [min(box[0], *[w[0] for w in words]), box[1], max(box[2], *[w[2] for w in words]), box[3]]
+
+
 def crop_around(box):
-    """枠のまわりの切り抜き（ページに対する 0〜1）"""
+    """枠のまわりの切り抜き（ページに対する 0〜1）。横に長い枠は高さを抑えて、文字が読める大きさにする"""
     rect = []
-    for axis, least in enumerate(MIN_CROP):
+    wide = box[2] - box[0] > WIDE_BOX
+    for axis, least in enumerate((MIN_CROP[0], WIDE_CROP_HEIGHT if wide else MIN_CROP[1])):
         low, high = box[axis], box[axis + 2]
         size = max(least, high - low + 2 * PAD)
         start = max(0.0, min(1.0 - size, (low + high - size) / 2))
@@ -288,24 +302,31 @@ def title_blocks(client, path, number, page):
 
 
 def render_crop(path, number, crop, dpi, masks, out):
-    """切り抜きの画像を書き出す。ページ全体を画像にしてから塗るので、画面に見える向きのまま塗れて、元に戻せない"""
-    # 同じページを何度も描かない
-    cache_key = (str(path), number, dpi, bool(masks))
-    pixmap = RENDERED.get(cache_key)
-    if pixmap is None:
-        page = pymupdf.open(path)[number - 1]
-        pixmap = page.get_pixmap(dpi=dpi, colorspace=pymupdf.csRGB, alpha=False)
-        for mask in masks:
-            pixmap.set_rect(pymupdf.IRect(int(mask[0] * pixmap.width), int(mask[1] * pixmap.height),
-                                          int(mask[2] * pixmap.width) + 1, int(mask[3] * pixmap.height) + 1), MASK_COLOR)
-        RENDERED[cache_key] = pixmap
-    area = pymupdf.IRect(int(crop[0] * pixmap.width), int(crop[1] * pixmap.height),
-                         int(crop[2] * pixmap.width), int(crop[3] * pixmap.height))
-    cut = pymupdf.Pixmap(pymupdf.csRGB, area)
-    cut.copy(pixmap, area)
+    """切り抜きの画像を書き出す。切り抜く範囲だけを描くので速い。塗りつぶしは画像に焼き込むので、元に戻せない"""
+    page = pymupdf.open(path)[number - 1]
+    width, height = page.rect.width, page.rect.height
+    clip = pymupdf.Rect(crop[0] * width, crop[1] * height, crop[2] * width, crop[3] * height)
+    cut = page.get_pixmap(dpi=dpi, clip=clip, colorspace=pymupdf.csRGB, alpha=False)
+    for mask in masks:
+        # 切り抜きの中の位置に直して塗る。ピクセルの座標は切り抜きの原点（cut.x, cut.y）からになる
+        x0 = max(0, int((mask[0] - crop[0]) / (crop[2] - crop[0]) * cut.width))
+        y0 = max(0, int((mask[1] - crop[1]) / (crop[3] - crop[1]) * cut.height))
+        x1 = min(cut.width, int((mask[2] - crop[0]) / (crop[2] - crop[0]) * cut.width) + 1)
+        y1 = min(cut.height, int((mask[3] - crop[1]) / (crop[3] - crop[1]) * cut.height) + 1)
+        if x0 >= x1 or y0 >= y1:
+            continue
+        cut.set_rect(pymupdf.IRect(x0 + cut.x, y0 + cut.y, x1 + cut.x, y1 + cut.y), MASK_COLOR)
+        # 塗れたことを確かめる。塗れていない画像は決して書き出さない
+        probe = cut.pixel((x0 + x1) // 2, (y0 + y1) // 2)
+        if tuple(probe[:3]) != MASK_COLOR:
+            raise RuntimeError("図面枠を塗りつぶせませんでした")
     out.parent.mkdir(parents=True, exist_ok=True)
     cut.save(out)
     return cut.width, cut.height
+
+
+def touches(crop, masks):
+    return any(mask[0] < crop[2] and mask[2] > crop[0] and mask[1] < crop[3] and mask[3] > crop[1] for mask in masks or [])
 
 
 def open_documents(project):
@@ -350,6 +371,8 @@ def design_refs(finding, documents, client, folder, public_only=False):
     refs = []
     for index, (key, number, where, box, located, masks) in enumerate(scored[:MAX_REFS], 1):
         entry = documents[key]
+        if box:
+            box = full_row(entry["pdf"][number - 1], box)
         crop = crop_around(box) if box else [0, 0, 1, 1]
         dpi = CROP_DPI if box else PAGE_DPI
         name = f"design/{finding['id']}-{index}.png"
@@ -358,7 +381,12 @@ def design_refs(finding, documents, client, folder, public_only=False):
             target = folder / name if public_only else folder / "masked" / name
             width, height = render_crop(entry["path"], number, crop, dpi, masks, target)
         if not public_only:
-            width, height = render_crop(entry["path"], number, crop, dpi, [], folder / name)
+            # 塗る欄に触れない切り抜きは、塗ったものと同じなので描き直さない
+            if masks is not None and not touches(crop, masks):
+                (folder / name).parent.mkdir(parents=True, exist_ok=True)
+                shutil.copyfile(folder / "masked" / name, folder / name)
+            else:
+                width, height = render_crop(entry["path"], number, crop, dpi, [], folder / name)
         refs.append({
             "doc": DOC_NAMES[key],
             "page": number,

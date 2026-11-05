@@ -15,13 +15,14 @@ stop.flag が置かれると、終わったページの結果だけで朱書き�
 """
 import copy
 import json
+import multiprocessing
 import os
 import re
 import sys
 import threading
 import time
 import traceback
-from concurrent.futures import FIRST_COMPLETED, ThreadPoolExecutor, wait
+from concurrent.futures import FIRST_COMPLETED, ProcessPoolExecutor, ThreadPoolExecutor, wait
 from datetime import datetime
 from pathlib import Path
 
@@ -32,6 +33,7 @@ from claude_api import call_claude, load_env
 from common import PRIVATE, REPO, write_json
 from index_steel_sheets import SCHEMA as INDEX_SCHEMA, SYSTEM as INDEX_SYSTEM
 import design_basis
+import design_split
 import feedback
 import drawing_ledger
 import knowledge_check
@@ -145,6 +147,9 @@ def load_project(slug):
 
 def output_schema():
     schema = copy.deepcopy(schema_for("D"))
+    # 観点ごとの判定では、部材の一覧は書かせない（出力が短くなる）
+    schema["required"].remove("inventory")
+    del schema["properties"]["inventory"]
     finding = schema["properties"]["findings"]["items"]
     finding["required"].remove("region")
     del finding["properties"]["region"]
@@ -182,7 +187,7 @@ def classify_page(client, page, raw_dir):
     for png, place in tiles(page, 3, 2):
         content += [{"type": "text", "text": f"施工図：{place} の分割図"}, image_block(png)]
     content.append({"type": "text", "text": "このページを読み取ってください。"})
-    reply = call_claude(client, INDEX_SYSTEM, content, INDEX_SCHEMA, raw_dir, "classify")
+    reply = call_claude(client, INDEX_SYSTEM, content, INDEX_SCHEMA, raw_dir, "classify", effort="low")
     return reply, message_cost(raw_dir / "classify.json")[2]
 
 
@@ -197,24 +202,23 @@ def plan_for(project, classified):
 
 
 def run_design_check(context):
-    """設計図書との照合（条件D：照合の手順あり）"""
+    """設計図書との照合。確認の観点ごとに並行で判定し、文面で整理する（1枚1分前後）"""
     project, classified = context["project"], context["classified"]
     plan, level = plan_for(project, classified)
-    config = {"sheet": context["input"], "design": project["design"], "revised": project.get("revised"),
-              "deny_sha256": {}, "design_common_pages": project["common_pages"], "allow_red": True}
-    page_config = {"sheet_page": context["number"], "design_plan": plan.get("design"), "revised_plan": plan.get("revised")}
-    content, record = build_inputs("D", page_config, config)
-    content[-1]["text"] += OUTPUT_NOTE
     system = system_prompt(project)
     schema = output_schema()
     raw_dir = context["raw_dir"]
-    write_json(raw_dir / "inputs.json", record)
-    write_json(raw_dir / "prompt.json", {"system": system, "text_blocks": [b["text"] for b in content if b["type"] == "text"]})
-    reply = call_claude(context["client"], system, content, schema, raw_dir, "review")
+    client = context["client"]
+    page = pymupdf.open(context["input"])[context["number"] - 1]
+    found, unreadable, usd, seconds = design_split.run_focus(client, system, project, plan, page, OUTPUT_NOTE, schema, raw_dir)
+    targets = knowledge_check.targets_of(context["checklist"]) if context.get("checklist") else []
+    kept, dropped, verdicts, consolidate_usd = design_split.consolidate(client, found, targets, raw_dir)
+    reply = {"findings": kept, "unreadable": unreadable, "dropped_items": dropped}
     write_json(raw_dir / "review-result.json", reply)
-    tokens = message_cost(raw_dir / "review.json")
+    usd += consolidate_usd
     findings = design_findings(reply, context["number"], level)
-    return findings, tokens[2], {"unreadable": reply.get("unreadable", []), "input_tokens": tokens[0], "output_tokens": tokens[1]}
+    red_filter.remember(findings, verdicts, [t["id"] for t in targets])
+    return findings, usd, {"unreadable": unreadable, "dropped_items": dropped, "seconds_design": seconds}
 
 
 def design_findings(reply, number, level):
@@ -320,7 +324,12 @@ def check_page(job, client, project, library, minutes, input_path, number, job_i
             write_json(raw_dir / "knowledge-checklist.json", {"name": name})
         context = {"client": client, "project": project, "classified": classified, "input": str(input_path),
                    "number": number, "raw_dir": raw_dir, "checklist": checklist, "minutes": minutes}
-        checkers = checkers_for(project, checklist, minutes)
+        # 議事録に、この階に関係する項目がなければ照合しない
+        page_level = plan_for(project, classified)[1]
+        page_floor = project.get("floor_by_level", {}).get(page_level)
+        page_minutes = minutes if minutes_check.relevant(minutes, page_floor) else ()
+        context["minutes"] = minutes
+        checkers = checkers_for(project, checklist, page_minutes)
         findings, failed = [], []
         # 照合どうしは待ち合わせない
         with ThreadPoolExecutor(len(checkers)) as pool:
@@ -494,7 +503,7 @@ def merge_same(client, findings, raw_dir):
     content = [{"type": "text", "text": merge_findings.prompt_text(pairs)}]
     usd = 0.0
     try:
-        reply = call_claude(client, merge_findings.SYSTEM, content, merge_findings.schema(ids), raw_dir, "merge")
+        reply = call_claude(client, merge_findings.SYSTEM, content, merge_findings.schema(ids), raw_dir, "merge", effort="low")
         usd = message_cost(raw_dir / "merge.json")[2]
         write_json(raw_dir / "merge-result.json", reply)
     except (Exception, SystemExit):
@@ -612,6 +621,9 @@ def finish_job(job, folder, slug, pages, checklist, use_knowledge, client, input
     findings = narrowed["findings"]
     filtered, suppressed, filter_usd, merge_usd, original_numbers = (narrowed[key] for key in ("filtered", "suppressed", "usd", "merge_usd", "original_numbers"))
     notes += narrowed["notes"]
+    # 観点ごとの判定を整理したときに、値が一致するとして外した指摘
+    for page in pages:
+        filtered += [{**item, "page": page["number"]} for item in page.get("checks", {}).get("design", {}).get("dropped_items", [])]
     if failed:
         notes.append("次のページは判定できませんでした（指摘がないという意味ではありません）： " + "、".join(f"p.{n}" for n in failed))
     unlocated = [item["number"] for item in findings if not item["regions"]]
@@ -648,9 +660,12 @@ def finish_job(job, folder, slug, pages, checklist, use_knowledge, client, input
         tables.append(("チェックリストの確認結果", checklist_rows))
     marked = folder / "marked.pdf"
     marks = {"title": "施工図の朱書き", "notes": notes, "tables": tables, "pages": numbers}
-    summary = make_marked_pdf(input_path, findings, marked, **marks)
-    sheets = render_outputs(folder, marked, findings, numbers)
-    masked = bool(masks) and write_masked(folder, input_path, masks, findings, numbers, **marks)
+    # 塗りつぶした組は別のプロセスで同時に作る
+    with ProcessPoolExecutor(1, mp_context=multiprocessing.get_context("fork")) as pool:
+        masked_job = pool.submit(write_masked, folder, input_path, masks, findings, numbers, **marks) if masks else None
+        summary = make_marked_pdf(input_path, findings, marked, **marks)
+        sheets = render_outputs(folder, marked, findings, numbers)
+        masked = bool(masked_job and masked_job.result())
     by_page = {page["number"]: page for page in pages}
     views = [to_view(item, slug, by_page[item["page"]].get("classified")) for item in findings]
     # 理由の項目を足す前の結果は、あとから作った理由を使う（作り直しても消えないように別のファイルに置く）

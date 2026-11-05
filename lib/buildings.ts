@@ -6,6 +6,7 @@ import type { CheckResult, Finding } from "./check";
 import { isBlue, numbered } from "./findings";
 import { jobFolder, listJobs, readDecisions, uploadEnabled } from "./jobs";
 import { updatedModel } from "./ledger";
+import { confirmedPages } from "./sheetStatus";
 import type { BuildingModel } from "./model";
 import { listProjects, projectInfo } from "./projects";
 import { thumbnailOf, type Thumbnail } from "./thumbnail";
@@ -108,7 +109,7 @@ export type DrawingResult = {
 };
 
 export function drawingResults({ slug, check, sheets }: Building): DrawingResult[] {
-  const latest = new Map<string, DrawingResult & { at: string }>();
+  const latest = new Map<string, DrawingResult & { at: string; locked?: boolean }>();
   const fixed = numbered(check?.findings ?? []);
   for (const sheet of sheets?.sheets ?? []) {
     const here = fixed.filter((f) => f.drawing.sheet === sheet.id);
@@ -126,10 +127,13 @@ export function drawingResults({ slug, check, sheets }: Building): DrawingResult
         const title = page.title ?? `p.${page.number}`;
         const known = latest.get(title);
         if (known && known.at > job.uploaded_at) continue;
+        // 確定した図面は、判定し直しても確定した結果を見せる
+        if (known?.locked) continue;
         const findings = numbered(result.findings as Finding[]).filter(
           (f) => f.drawing.page === page.number && !excluded.has(f.number),
         );
-        latest.set(title, { title, job: job.id, findings, stale: job.stale, at: job.uploaded_at });
+        const locked = confirmedPages(folder).some((item) => item.page === page.number);
+        latest.set(title, { title, job: job.id, findings, stale: job.stale, at: job.uploaded_at, locked });
       }
     }
   }

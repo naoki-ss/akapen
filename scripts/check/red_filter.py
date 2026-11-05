@@ -9,11 +9,13 @@ import copy
 import hashlib
 import json
 import sys
+import threading
 
 from claude_api import PRICE_INPUT, PRICE_OUTPUT, call_claude, load_env
 from common import PRIVATE, REPO, write_json
 
 CACHE = PRIVATE / "red-filter" / "classified.json"
+LOCK = threading.Lock()
 BATCH = 15
 USD_PER_ITEM = 0.003
 
@@ -88,6 +90,18 @@ def classify(client, rows):
                                    "knowledge_id": entry["knowledge_id"] if entry["knowledge_id"] in allowed else ""}
         write_json(CACHE, cache)
     return cache, usd
+
+
+def remember(findings, verdicts, target_ids):
+    """判定の整理で決めた種類を保存する。あとの絞り込みで同じ文面をAIに聞かない"""
+    if not verdicts:
+        return
+    with LOCK:
+        cache = load_cache()
+        for index, verdict in verdicts.items():
+            if index < len(findings):
+                cache[key_of(findings[index], target_ids)] = verdict
+        write_json(CACHE, cache)
 
 
 def to_blue(item, target):

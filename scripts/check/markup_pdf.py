@@ -45,7 +45,37 @@ MASK_DPI = 220
 MASK_COLOR = (225, 225, 225)
 
 
+# よく使う文字だけのフォントを1度作って使い回す。毎回作ると1枚あたり10秒以上かかる
+COMMON_FONT = Path.home() / "sekozu-data" / "cache" / "marked-font.ttf"
+
+
+def common_characters():
+    chars = {chr(code) for code in range(0x20, 0x7F)}
+    for block in ((0x2000, 0x2BFF), (0x3000, 0x30FF), (0xFF00, 0xFFEF)):
+        chars.update(chr(code) for code in range(*block))
+    for high in range(0xA1, 0xF5):
+        for low in range(0xA1, 0xFF):
+            try:
+                chars.add(bytes([high, low]).decode("euc_jp"))
+            except UnicodeDecodeError:
+                pass
+    return chars
+
+
 def build_font(text):
+    """使う文字が入ったフォントを返す。足りない文字があるときだけ、足して作り直す"""
+    wanted = set(text) - set("\n\t\r")
+    known_path = COMMON_FONT.with_suffix(".chars")
+    known = set(known_path.read_text()) if COMMON_FONT.exists() and known_path.exists() else set()
+    if not known or not wanted <= known:
+        known = known | common_characters() | wanted
+        COMMON_FONT.parent.mkdir(parents=True, exist_ok=True)
+        COMMON_FONT.write_bytes(subset_font("".join(sorted(known))))
+        known_path.write_text("".join(sorted(known)))
+    return COMMON_FONT.read_bytes()
+
+
+def subset_font(text):
     """使う文字だけの日本語フォントを作る。全文字を埋め込むと1ファイル10MB以上になる"""
     path = next((p for p in FONT_FILES if p and Path(p).exists()), None)
     if path is None:

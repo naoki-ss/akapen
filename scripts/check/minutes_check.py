@@ -100,6 +100,20 @@ def numbering_minutes(folder, project, slug):
     return load_minutes(project, slug)
 
 
+def relevant(documents, floor):
+    """この階に関係する項目があるか。対象の階の書いていない項目は、どの階にも関係するとみなす"""
+    for document in documents:
+        for key, line in document["items"].items():
+            # 宿題は施工図に描かれる内容ではないので、階の判断に使わない
+            if key.startswith("T"):
+                continue
+            target = re.search(r"（対象：(.*?)）", line)
+            floors = re.findall(r"\d+F|RF|PHR?F?", target.group(1)) if target else []
+            if not floors or not floor or floor in floors:
+                return True
+    return False
+
+
 def all_items(documents):
     """{番号: (議事録の名前, 項目の行)}。複数の議事録があるときは、番号の前に議事録の名前を付ける"""
     merged = {}

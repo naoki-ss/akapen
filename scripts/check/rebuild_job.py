@@ -33,7 +33,7 @@ def page_findings(raw_dir, project, classified, number, library, minutes):
     reply = read_reply(raw_dir, "review")
     if reply:
         found += design_findings(reply, number, level)
-        checks["design"] = {"unreadable": reply.get("unreadable", [])}
+        checks["design"] = {"unreadable": reply.get("unreadable", []), "dropped_items": reply.get("dropped_items", [])}
     reply = read_reply(raw_dir, "minutes")
     if reply and minutes:
         items = minutes_check.all_items(minutes)
