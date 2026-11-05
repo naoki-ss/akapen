@@ -42,6 +42,7 @@ function DecisionRow({
         />
       </label>
       {value.page ? <small className={styles.pageRef}>出典 p.{value.page}</small> : null}
+      {value.quote ? <small className={styles.quoteRef}>原文：{value.quote}</small> : null}
       {words("通り芯", "grids")}
       {words("階", "floors")}
       {words("部材", "members")}

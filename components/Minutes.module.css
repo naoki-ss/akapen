@@ -349,3 +349,9 @@
 .candidates small {
   color: var(--muted);
 }
+
+.quoteRef {
+  flex-basis: 100%;
+  color: var(--muted);
+  font-size: 12px;
+}

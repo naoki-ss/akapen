@@ -29,11 +29,12 @@ export type Decision = {
   grids: string[];
   floors: string[];
   members: string[];
-  // ファイルから作ったときの、元のファイルのページ
+  // ファイルから作ったときの、元のファイルのページと原文の箇所
   page?: number;
+  quote?: string;
 };
 
-export type Todo = { id: string; text: string; page?: number };
+export type Todo = { id: string; text: string; page?: number; quote?: string };
 
 export type MinutesMethod = "音声" | "貼り付け" | "ファイル";
 
@@ -85,6 +86,7 @@ const clean = (value: unknown, limit = MAX_TEXT) =>
 const cleanList = (value: unknown) =>
   (Array.isArray(value) ? value : []).map((item) => clean(item)).filter(Boolean);
 
+const cleanQuote = (value: unknown) => (clean(value) ? { quote: clean(value) } : {});
 const cleanPage = (value: unknown) =>
   Number.isInteger(value) && Number(value) > 0 ? { page: Number(value) } : {};
 
@@ -114,6 +116,7 @@ export function cleanMinutes(raw: Partial<Minutes>): Omit<Minutes, "id"> | null 
     floors: cleanList(row.floors),
     members: cleanList(row.members),
     ...cleanPage(row.page),
+    ...cleanQuote(row.quote),
   }));
   next = 1;
   const usedTodos = new Set(todos.map((row) => row.id).filter(Boolean));
@@ -121,6 +124,7 @@ export function cleanMinutes(raw: Partial<Minutes>): Omit<Minutes, "id"> | null 
     id: clean(row.id, 40) || nextId("T", usedTodos),
     text: clean(row.text),
     ...cleanPage(row.page),
+    ...cleanQuote(row.quote),
   }));
   const source =
     raw.source && ID.test(String(raw.source.import))
@@ -167,8 +171,8 @@ const importFolder = (slug: string, id: string) => path.join(IMPORTS, slug, id);
 export type FileMeeting = {
   date: string;
   title: string;
-  decisions: (Omit<Decision, "id"> & { page: number })[];
-  todos: { text: string; page: number }[];
+  decisions: (Omit<Decision, "id"> & { page: number; quote: string })[];
+  todos: { text: string; page: number; quote: string }[];
 };
 
 // ファイルを読み、打ち合わせの回ごとに整理する（ナレッジの取り込みと同じ読み方）
@@ -187,7 +191,7 @@ export function organizeMinutesFile(slug: string, data: Buffer, name: string) {
           try {
             if (error) throw error;
             const body = JSON.parse(stdout.trim().split("\n").at(-1) ?? "");
-            writeFileSync(path.join(folder, "meta.json"), JSON.stringify({ file: name, viewable: body.viewable }));
+            writeFileSync(path.join(folder, "meta.json"), JSON.stringify({ file: name }));
             resolve({ id, file: name, transcript: body.transcript, meetings: body.meetings });
           } catch {
             rmSync(folder, { recursive: true, force: true });
@@ -200,14 +204,21 @@ export function organizeMinutesFile(slug: string, data: Buffer, name: string) {
   );
 }
 
-// 元のファイル。Word は読み取りに使った PDF を見せる（ページを開けるように）
+// 元のファイルと、読み取った本文（PDF でないファイルは本文を画面で見せる）
 export function minutesSourceFile(slug: string, id: string) {
   if (!SLUG.test(slug) || !ID.test(id)) return null;
   const folder = importFolder(slug, id);
   const metaPath = path.join(folder, "meta.json");
   if (!existsSync(metaPath)) return null;
-  const meta = JSON.parse(readFileSync(metaPath, "utf8")) as { file: string; viewable: string };
-  return { name: meta.file, viewable: meta.viewable, data: readFileSync(path.join(folder, path.basename(meta.viewable))) };
+  const { file: name } = JSON.parse(readFileSync(metaPath, "utf8")) as { file: string };
+  const extension = path.extname(name).toLowerCase();
+  const textPath = path.join(folder, "text.txt");
+  return {
+    name,
+    extension,
+    data: readFileSync(path.join(folder, `source${extension}`)),
+    text: existsSync(textPath) ? readFileSync(textPath, "utf8") : "",
+  };
 }
 
 // 文章をClaudeで決定事項・宿題・対象部位に整理する

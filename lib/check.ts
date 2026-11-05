@@ -77,7 +77,13 @@ export type MinutesBlock = {
     text: string;
     hit: boolean;
     // ファイルから作った議事録の出典
-    source?: { file: string; page: number; url: string };
+    source?: {
+      file: string;
+      page: number;
+      url: string;
+      // Word とテキストの、本文の該当箇所と前後の行
+      excerpt?: { text: string; hit: boolean }[];
+    };
   }[];
 };
 

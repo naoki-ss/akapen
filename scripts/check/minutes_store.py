@@ -9,11 +9,13 @@ import re
 import sys
 import uuid
 from pathlib import Path
+from urllib.parse import quote as quote_url
 
 from common import PRIVATE, write_json
 
 ROOT = PRIVATE / "minutes"
 MAX_CHARS = 40000
+MIN_QUOTE_LINE = 6
 
 SYSTEM = """あなたは建設会社の打ち合わせの記録係です。打ち合わせの文字起こしや記録の文章を読み、議事録に整理します。
 
@@ -80,7 +82,8 @@ FILE_RULES = """
 - meetings に打ち合わせの回ごとに分けて入れます。1つのファイルに複数回の打ち合わせがあれば、回ごとに分けます。回の区切りが分からなければ1回として扱います
 - date：その回の日付を YYYY-MM-DD で。和暦は西暦に直します。年が書かれていないなど、ファイルから確かに読めないときは空にします。今日の日付や推測で埋めません
 - title：その回の表題。ファイルにあればそのまま、なければ内容が分かる短い題名
-- page：その項目が書かれていたページの番号。資料に【p.3】のような印があればその番号、なければ 0"""
+- page：その項目が書かれていたページの番号。資料に【p.3】のような印があればその番号、なければ 0
+- quote：その項目の根拠になる原文の箇所を、資料の文字のまま1〜2文で。要約や言い換えをしません"""
 
 FILE_SCHEMA = {
     "type": "object",
@@ -96,58 +99,29 @@ FILE_SCHEMA = {
             "decisions": {"type": "array", "items": {
                 "type": "object",
                 "additionalProperties": False,
-                "required": ["text", "grids", "floors", "members", "page"],
+                "required": ["text", "grids", "floors", "members", "page", "quote"],
                 "properties": {
                     "text": {"type": "string"},
                     "grids": {"type": "array", "items": {"type": "string"}},
                     "floors": {"type": "array", "items": {"type": "string"}},
                     "members": {"type": "array", "items": {"type": "string"}},
                     "page": {"type": "integer"},
+                    "quote": {"type": "string"},
                 },
             }},
             "todos": {"type": "array", "items": {
                 "type": "object",
                 "additionalProperties": False,
-                "required": ["text", "page"],
-                "properties": {"text": {"type": "string"}, "page": {"type": "integer"}},
+                "required": ["text", "page", "quote"],
+                "properties": {"text": {"type": "string"}, "page": {"type": "integer"}, "quote": {"type": "string"}},
             }},
         },
     }}},
 }
 
 
-def word_to_pdf(path):
-    """Word はページの番号を持たないので、PDF にしてから読む。変換できなければ None（ページなしで読む）"""
-    import subprocess
-
-    try:
-        subprocess.run(["soffice", "--headless", "--convert-to", "pdf", "--outdir", str(path.parent), str(path)],
-                       check=True, capture_output=True, timeout=120)
-    except (OSError, subprocess.SubprocessError):
-        return None
-    converted = path.with_suffix(".pdf")
-    return converted if converted.exists() else None
-
-
-def word_with_pages(path):
-    """変換できないときの Word の読み方。保存時のページ区切りと改ページから【p.N】の印を付ける"""
-    from docx import Document
-
-    page, lines = 1, ["【p.1】"]
-    for block in Document(path).iter_inner_content():
-        breaks = block._element.xpath(".//w:lastRenderedPageBreak | .//w:br[@w:type='page']")
-        if breaks:
-            page += len(breaks)
-            lines.append(f"【p.{page}】")
-        if hasattr(block, "rows"):
-            lines += [" | ".join(cell.text.strip() for cell in row.cells) for row in block.rows]
-        elif block.text.strip():
-            lines.append(block.text)
-    return "\n".join(lines) if page > 1 else None
-
-
 def organize_file(folder):
-    """ナレッジの取り込みと同じ読み方で文字を取り出し、回ごとに整理する。{transcript, viewable, meetings}"""
+    """ナレッジの取り込みと同じ読み方で文字を取り出し、回ごとに整理する。{transcript, meetings}"""
     import anthropic
     import pymupdf
 
@@ -156,19 +130,15 @@ def organize_file(folder):
     from steel_experiment import ROOT as EXPERIMENTS, image_block, record_cost
 
     source = source_of(folder)
-    readable = word_to_pdf(source) if source.suffix.lower() == ".docx" else source
-    readable = readable or source
-    chunks, images = extract(readable)
+    chunks, images = extract(source)
     transcript = "\n\n".join(chunks)
-    if readable.suffix.lower() == ".docx":
-        transcript = word_with_pages(readable) or transcript
     if not transcript.strip() and not images:
         sys.exit("ファイルから文字を読み取れませんでした")
     if len(transcript) > MAX_CHARS:
         sys.exit("文章が長すぎます")
     content = []
     if images:
-        document = pymupdf.open(readable)
+        document = pymupdf.open(source)
         for number in images:
             page = document[number - 1]
             zoom = PAGE_LONG_EDGE / max(page.rect.width, page.rect.height)
@@ -177,7 +147,9 @@ def organize_file(folder):
     load_env()
     reply = call_claude(anthropic.Anthropic(), SYSTEM + FILE_RULES, content, FILE_SCHEMA, folder, "organize", effort="medium")
     record_cost(EXPERIMENTS / "ledger.json", f"minutes-file-{folder.name[:8]}", round(METER.total(), 3))
-    return {"transcript": transcript, "viewable": readable.name, "meetings": reply["meetings"]}
+    # PDF でないファイルは、読み取った本文を画面で見せる
+    (folder / "text.txt").write_text(transcript)
+    return {"transcript": transcript, "meetings": reply["meetings"]}
 
 
 def stored(slug):
@@ -193,13 +165,33 @@ def decision_line(decision):
 
 
 def source_of_item(row, item, slug):
-    """ファイルから作った議事録の項目の出典。{file, page, url}"""
+    """ファイルから作った議事録の項目の出典。{file, page, url, excerpt}。
+    PDF は該当ページを開く。Word とテキストはページがないので、本文の該当箇所をハイライトして見せる"""
     source = row.get("source")
     if not source or not slug:
         return None
     url = f"/api/projects/{slug}/minutes/import/{source['import']}/source"
     page = item.get("page") or 0
-    return {"file": source["file"], "page": page, "url": f"{url}#page={page}" if page else url}
+    if source["file"].lower().endswith(".pdf"):
+        return {"file": source["file"], "page": page, "url": f"{url}#page={page}" if page else url}
+    quote = item.get("quote") or ""
+    return {"file": source["file"], "page": 0, "url": f"{url}?q={quote_url(quote)}#hit" if quote else url,
+            "excerpt": excerpt_of(row.get("transcript") or "", quote)}
+
+
+def excerpt_of(text, quote):
+    """原文の該当箇所と前後の行。[{text, hit}]。見つからなければ空"""
+    lines = [line.strip() for line in text.splitlines() if line.strip()]
+    hits = [index for index, line in enumerate(lines) if same_passage(line, quote)]
+    if not hits:
+        return []
+    return [{"text": line, "hit": index in hits} for index, line in enumerate(lines) if hits[0] - 1 <= index <= hits[-1] + 1]
+
+
+def same_passage(line, quote):
+    """行が引用に含まれるか、引用が行に含まれるか。空白の違いは無視し、短い見出しだけの一致は数えない"""
+    plain, wanted = re.sub(r"\s", "", line), re.sub(r"\s", "", quote)
+    return bool(wanted) and len(plain) >= MIN_QUOTE_LINE and (plain in wanted or wanted in plain)
 
 
 def as_document(row, slug=None):

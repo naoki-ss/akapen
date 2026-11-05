@@ -225,7 +225,7 @@ export default function ComparePane({
           {fileSource && (
             <p>
               <a href={fileSource.url} target="_blank" rel="noreferrer">
-                元のファイルを開く（{fileSource.file}
+                {fileSource.excerpt ? "本文の該当箇所を開く" : "元のファイルを開く"}（{fileSource.file}
                 {fileSource.page > 0 && ` p.${fileSource.page}`}）
               </a>
             </p>

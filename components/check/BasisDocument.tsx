@@ -127,6 +127,15 @@ export default function BasisDocument({
                       {line.source.page > 0 && ` p.${line.source.page}`}
                     </a>
                   )}
+                  {line.source?.excerpt && line.source.excerpt.length > 0 && (
+                    <span className={styles.minutesExcerpt}>
+                      {line.source.excerpt.map((row, index) => (
+                        <span key={index} data-hit={row.hit}>
+                          {row.text}
+                        </span>
+                      ))}
+                    </span>
+                  )}
                 </span>
               </li>
             ))}

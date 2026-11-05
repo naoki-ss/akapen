@@ -1279,3 +1279,26 @@
   color: var(--muted);
   font-size: 12px;
 }
+
+/* Word とテキストの議事録：本文の該当箇所 */
+.minutesExcerpt {
+  display: block;
+  margin-top: 6px;
+  padding: 8px 10px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: #fff;
+  font-size: 13px;
+}
+
+.minutesExcerpt span {
+  display: block;
+  color: var(--muted);
+}
+
+.minutesExcerpt span[data-hit="true"] {
+  color: var(--ink);
+  background: color-mix(in srgb, var(--red) 12%, transparent);
+  box-shadow: inset 2px 0 0 var(--red);
+  padding-left: 8px;
+}
