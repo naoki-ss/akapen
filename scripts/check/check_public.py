@@ -90,8 +90,10 @@ def checklist_texts(value, inside=False):
         if inside and not value.isascii():
             yield value
     elif isinstance(value, dict):
-        for child in value.values():
-            yield from checklist_texts(child, inside)
+        for key, child in value.items():
+            # 対象の図面の種類はチェックリストの文ではなく、種類の名前（drawing_kinds.json と同じ語）
+            if key != "drawing_types":
+                yield from checklist_texts(child, inside)
     elif isinstance(value, list):
         for child in value:
             yield from checklist_texts(child, True)

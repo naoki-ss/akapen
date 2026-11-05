@@ -55,8 +55,8 @@
           "page": 11,
           "where": "",
           "image": "design/p2-01-1.png",
-          "width": 844,
-          "height": 636,
+          "width": 845,
+          "height": 637,
           "box": [
             0.2154,
             0.4292,
@@ -71,8 +71,8 @@
           "page": 14,
           "where": "",
           "image": "design/p2-01-2.png",
-          "width": 844,
-          "height": 637,
+          "width": 845,
+          "height": 638,
           "box": [
             0.4762,
             0.5245,
@@ -140,13 +140,13 @@
           "page": 11,
           "where": "",
           "image": "design/p2-02-1.png",
-          "width": 843,
-          "height": 636,
+          "width": 2275,
+          "height": 280,
           "box": [
-            0.21,
-            0.4889,
-            0.2661,
-            0.5111
+            0.0371,
+            0.4746,
+            0.9629,
+            0.5254
           ],
           "located": "text",
           "masked": true
@@ -156,12 +156,12 @@
           "page": 28,
           "where": "",
           "image": "design/p2-02-2.png",
-          "width": 843,
-          "height": 636,
+          "width": 1123,
+          "height": 637,
           "box": [
-            0.2138,
+            0.0752,
             0.4889,
-            0.2699,
+            0.9248,
             0.5111
           ],
           "located": "text",
@@ -266,8 +266,8 @@
           "page": 11,
           "where": "",
           "image": "design/p2-03-1.png",
-          "width": 843,
-          "height": 636,
+          "width": 844,
+          "height": 637,
           "box": [
             0.21,
             0.3399,
@@ -282,8 +282,8 @@
           "page": 1,
           "where": "",
           "image": "design/p2-03-2.png",
-          "width": 844,
-          "height": 636,
+          "width": 845,
+          "height": 637,
           "box": [
             0.4798,
             0.4751,
@@ -360,8 +360,8 @@
           "page": 11,
           "where": "",
           "image": "design/p2-04-1.png",
-          "width": 843,
-          "height": 636,
+          "width": 844,
+          "height": 637,
           "box": [
             0.21,
             0.1907,
@@ -376,12 +376,12 @@
           "page": 12,
           "where": "",
           "image": "design/p2-04-2.png",
-          "width": 844,
+          "width": 1359,
           "height": 637,
           "box": [
-            0.4862,
+            0.0621,
             0.4604,
-            0.5138,
+            0.9379,
             0.5396
           ],
           "located": "text",
@@ -460,12 +460,12 @@
           "page": 11,
           "where": "",
           "image": "design/p2-05-2.png",
-          "width": 843,
+          "width": 1251,
           "height": 637,
           "box": [
-            0.218,
+            0.0675,
             0.4889,
-            0.256,
+            0.9325,
             0.5111
           ],
           "located": "text",
@@ -528,7 +528,7 @@
           "page": 5,
           "where": "",
           "image": "design/p2-06-1.png",
-          "width": 844,
+          "width": 845,
           "height": 637,
           "box": [
             0.4908,
@@ -544,13 +544,13 @@
           "page": 11,
           "where": "",
           "image": "design/p2-06-2.png",
-          "width": 843,
-          "height": 636,
+          "width": 2334,
+          "height": 279,
           "box": [
-            0.4817,
-            0.3737,
-            0.5183,
-            0.3959
+            0.0362,
+            0.4746,
+            0.9638,
+            0.5254
           ],
           "located": "text",
           "masked": true
@@ -647,8 +647,8 @@
           "page": 8,
           "where": "",
           "image": "design/p2-07-1.png",
-          "width": 843,
-          "height": 636,
+          "width": 845,
+          "height": 637,
           "box": [
             0.2437,
             0.3889,
@@ -744,7 +744,7 @@
           "where": "",
           "image": "design/p2-08-1.png",
           "width": 844,
-          "height": 636,
+          "height": 637,
           "box": [
             0.4888,
             0.4843,
@@ -759,12 +759,12 @@
           "page": 12,
           "where": "",
           "image": "design/p2-08-2.png",
-          "width": 844,
+          "width": 1084,
           "height": 637,
           "box": [
-            0.4573,
+            0.0779,
             0.4887,
-            0.5427,
+            0.9221,
             0.5113
           ],
           "located": "text",
@@ -829,7 +829,7 @@
           "page": 5,
           "where": "",
           "image": "design/p2-09-1.png",
-          "width": 844,
+          "width": 845,
           "height": 637,
           "box": [
             0.4508,
@@ -845,8 +845,8 @@
           "page": 14,
           "where": "",
           "image": "design/p2-09-2.png",
-          "width": 844,
-          "height": 636,
+          "width": 845,
+          "height": 637,
           "box": [
             0.3381,
             0.4597,
@@ -990,7 +990,7 @@
           "page": 1,
           "where": "",
           "image": "design/p2-11-1.png",
-          "width": 844,
+          "width": 845,
           "height": 637,
           "box": [
             0.4798,
@@ -1058,7 +1058,7 @@
           "page": 5,
           "where": "",
           "image": "design/p2-12-1.png",
-          "width": 843,
+          "width": 845,
           "height": 637,
           "box": [
             0.3131,
@@ -1074,7 +1074,7 @@
           "page": 19,
           "where": "",
           "image": "design/p2-12-2.png",
-          "width": 844,
+          "width": 845,
           "height": 637,
           "box": [
             0.486,
@@ -1143,13 +1143,13 @@
           "page": 11,
           "where": "",
           "image": "design/p3-01-1.png",
-          "width": 843,
-          "height": 636,
+          "width": 2275,
+          "height": 280,
           "box": [
-            0.21,
-            0.4889,
-            0.2661,
-            0.5111
+            0.0371,
+            0.4746,
+            0.9629,
+            0.5254
           ],
           "located": "text",
           "masked": true
@@ -1159,12 +1159,12 @@
           "page": 28,
           "where": "",
           "image": "design/p3-01-2.png",
-          "width": 843,
-          "height": 636,
+          "width": 1123,
+          "height": 637,
           "box": [
-            0.2138,
+            0.0752,
             0.4889,
-            0.2699,
+            0.9248,
             0.5111
           ],
           "located": "text",
@@ -1234,8 +1234,8 @@
           "page": 15,
           "where": "",
           "image": "design/p3-02-1.png",
-          "width": 844,
-          "height": 636,
+          "width": 845,
+          "height": 638,
           "box": [
             0.3505,
             0.4396,
@@ -1326,7 +1326,7 @@
           "where": "",
           "image": "design/p3-03-1.png",
           "width": 844,
-          "height": 636,
+          "height": 637,
           "box": [
             0.4861,
             0.4231,
@@ -1341,13 +1341,13 @@
           "page": 11,
           "where": "",
           "image": "design/p3-03-2.png",
-          "width": 843,
-          "height": 636,
+          "width": 2334,
+          "height": 279,
           "box": [
-            0.2197,
-            0.4889,
-            0.2563,
-            0.5111
+            0.0362,
+            0.4746,
+            0.9638,
+            0.5254
           ],
           "located": "text",
           "masked": true
@@ -1413,8 +1413,8 @@
           "page": 15,
           "where": "",
           "image": "design/p3-05-1.png",
-          "width": 844,
-          "height": 636,
+          "width": 845,
+          "height": 637,
           "box": [
             0.456,
             0.2839,
@@ -1498,8 +1498,8 @@
           "page": 15,
           "where": "",
           "image": "design/p3-06-1.png",
-          "width": 844,
-          "height": 636,
+          "width": 845,
+          "height": 637,
           "box": [
             0.4916,
             0.4815,
@@ -1581,8 +1581,8 @@
           "page": 11,
           "where": "",
           "image": "design/p3-07-1.png",
-          "width": 843,
-          "height": 636,
+          "width": 844,
+          "height": 638,
           "box": [
             0.218,
             0.3102,
@@ -1597,7 +1597,7 @@
           "page": 12,
           "where": "",
           "image": "design/p3-07-2.png",
-          "width": 844,
+          "width": 845,
           "height": 637,
           "box": [
             0.4815,
@@ -1672,7 +1672,7 @@
           "page": 15,
           "where": "",
           "image": "design/p3-08-1.png",
-          "width": 844,
+          "width": 845,
           "height": 637,
           "box": [
             0.4713,
@@ -1743,7 +1743,7 @@
           "page": 19,
           "where": "",
           "image": "design/p3-09-1.png",
-          "width": 844,
+          "width": 845,
           "height": 637,
           "box": [
             0.486,
@@ -1857,7 +1857,7 @@
           "page": 12,
           "where": "",
           "image": "design/p3-10-1.png",
-          "width": 844,
+          "width": 845,
           "height": 637,
           "box": [
             0.4573,
@@ -1873,8 +1873,8 @@
           "page": 13,
           "where": "",
           "image": "design/p3-10-2.png",
-          "width": 844,
-          "height": 636,
+          "width": 845,
+          "height": 637,
           "box": [
             0.4888,
             0.4842,
@@ -1992,8 +1992,8 @@
           "page": 15,
           "where": "",
           "image": "design/p3-12-1.png",
-          "width": 844,
-          "height": 636,
+          "width": 845,
+          "height": 637,
           "box": [
             0.325,
             0.4044,
@@ -2008,8 +2008,8 @@
           "page": 22,
           "where": "",
           "image": "design/p3-12-2.png",
-          "width": 844,
-          "height": 636,
+          "width": 845,
+          "height": 637,
           "box": [
             0.1711,
             0.3917,
@@ -2077,12 +2077,12 @@
           "page": 11,
           "where": "",
           "image": "design/p3-13-1.png",
-          "width": 843,
-          "height": 636,
+          "width": 1176,
+          "height": 637,
           "box": [
-            0.218,
+            0.0718,
             0.4889,
-            0.2463,
+            0.9282,
             0.5111
           ],
           "located": "text",
@@ -2158,13 +2158,13 @@
           "page": 11,
           "where": "",
           "image": "design/p6-01-1.png",
-          "width": 843,
-          "height": 636,
+          "width": 2275,
+          "height": 280,
           "box": [
-            0.21,
-            0.4889,
-            0.2661,
-            0.5111
+            0.0371,
+            0.4746,
+            0.9629,
+            0.5254
           ],
           "located": "text",
           "masked": true
@@ -2174,12 +2174,12 @@
           "page": 28,
           "where": "",
           "image": "design/p6-01-2.png",
-          "width": 843,
-          "height": 636,
+          "width": 1123,
+          "height": 637,
           "box": [
-            0.2138,
+            0.0752,
             0.4889,
-            0.2699,
+            0.9248,
             0.5111
           ],
           "located": "text",
@@ -2291,8 +2291,8 @@
           "page": 6,
           "where": "",
           "image": "design/p6-02-1.png",
-          "width": 844,
-          "height": 636,
+          "width": 845,
+          "height": 637,
           "box": [
             0.2357,
             0.3169,
@@ -2307,8 +2307,8 @@
           "page": 8,
           "where": "",
           "image": "design/p6-02-2.png",
-          "width": 844,
-          "height": 636,
+          "width": 845,
+          "height": 637,
           "box": [
             0.1351,
             0.3042,
@@ -2406,12 +2406,12 @@
           "page": 11,
           "where": "",
           "image": "design/p6-03-1.png",
-          "width": 843,
-          "height": 636,
+          "width": 994,
+          "height": 637,
           "box": [
-            0.2197,
+            0.0849,
             0.4889,
-            0.2563,
+            0.9151,
             0.5111
           ],
           "located": "text",
@@ -2422,7 +2422,7 @@
           "page": 22,
           "where": "",
           "image": "design/p6-03-2.png",
-          "width": 843,
+          "width": 845,
           "height": 637,
           "box": [
             0.4909,
@@ -2496,13 +2496,13 @@
           "page": 11,
           "where": "",
           "image": "design/p6-04-1.png",
-          "width": 843,
-          "height": 636,
+          "width": 2062,
+          "height": 279,
           "box": [
-            0.218,
-            0.4889,
-            0.256,
-            0.5111
+            0.0409,
+            0.4746,
+            0.9591,
+            0.5254
           ],
           "located": "text",
           "masked": true
@@ -2512,13 +2512,13 @@
           "page": 28,
           "where": "",
           "image": "design/p6-04-2.png",
-          "width": 843,
-          "height": 636,
+          "width": 2535,
+          "height": 280,
           "box": [
-            0.2238,
-            0.4591,
-            0.2602,
-            0.5409
+            0.0333,
+            0.4066,
+            0.9667,
+            0.5934
           ],
           "located": "text",
           "masked": true
@@ -2587,8 +2587,8 @@
           "page": 6,
           "where": "",
           "image": "design/p6-05-1.png",
-          "width": 844,
-          "height": 636,
+          "width": 845,
+          "height": 637,
           "box": [
             0.431,
             0.4557,
@@ -2603,13 +2603,13 @@
           "page": 11,
           "where": "",
           "image": "design/p6-05-2.png",
-          "width": 843,
-          "height": 636,
+          "width": 2334,
+          "height": 279,
           "box": [
-            0.2197,
-            0.4889,
-            0.2563,
-            0.5111
+            0.0362,
+            0.4746,
+            0.9638,
+            0.5254
           ],
           "located": "text",
           "masked": true
@@ -2702,7 +2702,7 @@
           "where": "",
           "image": "design/p6-06-1.png",
           "width": 844,
-          "height": 636,
+          "height": 637,
           "box": [
             0.4835,
             0.3528,
@@ -2718,7 +2718,7 @@
           "where": "",
           "image": "design/p6-06-2.png",
           "width": 844,
-          "height": 636,
+          "height": 637,
           "box": [
             0.3257,
             0.3623,
@@ -2803,8 +2803,8 @@
           "page": 11,
           "where": "",
           "image": "design/p6-07-1.png",
-          "width": 843,
-          "height": 636,
+          "width": 844,
+          "height": 637,
           "box": [
             0.21,
             0.1907,
@@ -2819,12 +2819,12 @@
           "page": 12,
           "where": "",
           "image": "design/p6-07-2.png",
-          "width": 844,
+          "width": 1359,
           "height": 637,
           "box": [
-            0.4862,
+            0.0621,
             0.4604,
-            0.5138,
+            0.9379,
             0.5396
           ],
           "located": "text",
@@ -2888,12 +2888,12 @@
           "page": 28,
           "where": "",
           "image": "design/p6-08-1.png",
-          "width": 843,
-          "height": 636,
+          "width": 1123,
+          "height": 637,
           "box": [
-            0.2138,
+            0.0752,
             0.4889,
-            0.2699,
+            0.9248,
             0.5111
           ],
           "located": "text",
@@ -3045,8 +3045,8 @@
           "page": 6,
           "where": "",
           "image": "design/p6-10-1.png",
-          "width": 844,
-          "height": 636,
+          "width": 845,
+          "height": 637,
           "box": [
             0.3915,
             0.4512,
@@ -3120,7 +3120,7 @@
           "where": "",
           "image": "design/p6-11-1.png",
           "width": 844,
-          "height": 637,
+          "height": 638,
           "box": [
             0.2323,
             0.4869,

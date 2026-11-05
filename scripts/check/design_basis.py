@@ -45,6 +45,9 @@ RARE = 6
 CROP_DPI = 170
 # 根拠の図面はページ全体を書き出し、画面の枠の中で該当箇所を中央に置く。拡大しても文字がつぶれない密度にする
 FULL_PAGE_DPI = 300
+# 枠を行に絞るときの、行の幅と余白（ページに対する比）
+ROW_STEP = 0.006
+ROW_PAD = 0.003
 # 範囲に線や文字があるかの判定
 INK_DPI = 60
 INK_LEVEL = 200
@@ -175,6 +178,45 @@ def refs_of(finding, documents):
             if 1 <= number <= len(documents[key]["pdf"]) and not any(r[:2] == (key, number) for r in refs):
                 refs.append((key, number, where))
     return refs
+
+
+def snap_to_row(finding, page):
+    """表の広い範囲を指す枠を、施工図の値の文字がある行に絞る（AIは表全体を囲むことがある）。範囲は 0〜1"""
+    regions = finding.get("regions") or []
+    tokens = [normalize(part) for part in re.split(r"[\s　]+", finding.get("sheet_value") or "") if part]
+    if not regions or len(tokens) < 2:
+        return
+    x0, y0, x1, y1 = regions[0]
+    words = [(box, normalize(word)) for box, word in display_words(page) if x0 <= (box[0] + box[2]) / 2 <= x1 and y0 <= (box[1] + box[3]) / 2 <= y1]
+    rows = {}
+    for box, word in words:
+        rows.setdefault(round(((box[1] + box[3]) / 2) / ROW_STEP), []).append((box, word))
+    best, score = None, 1
+    for key, row in rows.items():
+        near = row + rows.get(key - 1, []) + rows.get(key + 1, [])
+        hits = sum(any(token in word for _, word in near) for token in tokens)
+        if hits > score:
+            best, score = near, hits
+    if not best:
+        return
+    top, bottom = min(box[1] for box, _ in best), max(box[3] for box, _ in best)
+    if (y1 - y0) > (bottom - top) * 1.8:
+        regions[0] = [x0, max(y0, top - ROW_PAD), x1, min(y1, bottom + ROW_PAD)]
+
+
+def resolve_page(entry, number, tokens):
+    """AIが返したページ番号を、PDFのページにする。AIは図面番号（35-14 の 14）をページとして返すことがある。
+    図面番号として当てはまるページがあれば候補にし、符号の文字が見つかるほうを選ぶ"""
+    pdf = entry["pdf"]
+    by_drawing = [page for name, page in entry["numbers"].items() if name.split("-")[-1] == f"{number:02d}"]
+    direct = [number] if 1 <= number <= len(pdf) else []
+    options = list(dict.fromkeys(by_drawing + direct))
+    if len(options) < 2:
+        return options[0] if options else None
+    def hits(page):
+        text = normalize(pdf[page - 1].get_text())
+        return sum(token in text for token in tokens)
+    return max(options, key=lambda page: (hits(page), page in by_drawing))
 
 
 def page_numbers_of(label, entry):
@@ -392,8 +434,11 @@ def design_refs(finding, documents, client, folder, public_only=False):
     locations = finding.get("design_locations") or []
     for location in locations:
         key = doc_key(location["doc"])
-        if key in documents and 1 <= location["page"] <= len(documents[key]["pdf"]):
-            candidates.append((key, location["page"], "", location["box"], "ai"))
+        if key not in documents:
+            continue
+        number = resolve_page(documents[key], location["page"], main_tokens)
+        if number:
+            candidates.append((key, number, "", location["box"], "ai"))
     for key, number, where in refs_of(finding, documents):
         if not any(c[:2] == (key, number) for c in candidates):
             candidates.append((key, number, where, None, None))

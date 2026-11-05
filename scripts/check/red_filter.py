@@ -49,7 +49,8 @@ def schema(ids):
 
 
 def key_of(item, target_ids=()):
-    text = f"{item['title']}\n{item['content']}\n{','.join(sorted(target_ids))}"
+    # ナレッジが増えても前の判定を使い回せるよう、文面だけで決める
+    text = f"{item['title']}\n{item['content']}\n"
     return hashlib.sha256(text.encode()).hexdigest()[:16]
 
 

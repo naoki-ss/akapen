@@ -65,6 +65,10 @@ class Status:
         temp.replace(self.path)
 
 
+# 外観の読み取りの費用の上限（ドル）
+EXTERIOR_MAX_USD = 2.0
+
+
 def register_for(folder):
     meta = json.loads((folder / "meta.json").read_text())
     args = argparse.Namespace(slug=folder.name, name=meta["name"], design=meta["inputs"]["design"], revised=meta["inputs"].get("revised"))
@@ -245,7 +249,7 @@ def run(folder):
         if architectural and model:
             status.update(stage="外観", message="意匠図から外観を読んでいます")
             try:
-                usd += exterior_read.read_all(architectural, folder / "exterior")
+                usd += exterior_read.read_all(architectural, folder / "exterior", EXTERIOR_MAX_USD)
                 exterior_read.build(architectural, folder / "exterior", folder / "model.json", folder / "model.json")
                 model = json.loads((folder / "model.json").read_text())
             except (Exception, SystemExit):

@@ -1,5 +1,6 @@
 "use client";
 
+import { showChecks } from "@/lib/showCost";
 import CountUp from "../CountUp";
 import { ArrowRight } from "lucide-react";
 import Link from "next/link";
@@ -328,12 +329,12 @@ export default function ModelConsole({
         </div>
 
         <div className={panel.checkButtons}>
-          {summary && (
+          {showChecks && summary && (
             <button className={panel.clear} onClick={() => setDialog("summary")}>
               読み取りの要確認 {checksCount} 件
             </button>
           )}
-          {model.architecture && (
+          {showChecks && model.architecture && (
             <button className={panel.clear} onClick={() => setDialog("architecture")}>
               外観で仮の値にした所 {model.architecture.checks.length} か所
             </button>

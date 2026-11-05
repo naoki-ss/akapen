@@ -1,5 +1,6 @@
 "use client";
 
+import { showChecks } from "@/lib/showCost";
 import { Line, OrbitControls } from "@react-three/drei";
 import {
   Canvas,
@@ -1482,7 +1483,7 @@ export default function BuildingScene({
             {room.area_m2 !== null && (
               <small className="mono">{room.area_m2}㎡</small>
             )}
-            {room.status === "要確認" && <small>要確認</small>}
+            {showChecks && room.status === "要確認" && <small>要確認</small>}
           </div>
         </div>
       ))}

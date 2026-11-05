@@ -55,6 +55,7 @@ MAX_PAGES = 40
 PAGE_DPI = 260
 CROP_DPI = 150
 CROP_MARGIN = 45
+REGION_OVERRIDES = PRIVATE / "region-overrides.json"
 
 # 条件Dの入力と手順はそのままで、朱書きPDFのために出力の形だけ足す
 OUTPUT_NOTE = """
@@ -660,7 +661,15 @@ def finish_job(job, folder, slug, pages, checklist, use_knowledge, client, input
     numbers = [page["number"] for page in pages]
     job.update(stage="朱書き", message="朱書きPDFを作成中です", active_pages=[])
     findings = []
+    source_doc = pymupdf.open(input_path)
+    # 目で確かめて直した枠（図面に文字がなく、プログラムで絞れないもの）。リポジトリの外に置く
+    overrides = json.loads(REGION_OVERRIDES.read_text()).get(folder.name[:8], {}) if REGION_OVERRIDES.exists() else {}
     for page in pages:
+        for item in page["findings"]:
+            if item["source_type"] != "knowledge":
+                design_basis.snap_to_row(item, source_doc[page["number"] - 1])
+            if item["title"] in overrides:
+                item["regions"] = [overrides[item["title"]]]
         findings += page["findings"]
     for number, item in enumerate(findings, 1):
         item["number"] = number
