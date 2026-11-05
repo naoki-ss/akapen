@@ -2,13 +2,13 @@
 
 import { flushSync } from "react-dom";
 import Skeleton from "../Skeleton";
-import { ChevronDown, ChevronUp, MoreHorizontal } from "lucide-react";
+import { ChevronDown, ChevronUp, Maximize, MoreHorizontal } from "lucide-react";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
 import type { Building } from "@/lib/buildings";
 import { inkOf, isBlue, memberKeysOf, NOT_IN_MODEL, numbered } from "@/lib/findings";
-import { floorsOf } from "@/lib/model";
+import { floorsOf, memberKey } from "@/lib/model";
 import { useDecisions, type RemoveReason } from "@/lib/useDecisions";
 import { useJobResult } from "@/lib/useJobResult";
 import AppFrame from "../AppFrame";
@@ -56,13 +56,12 @@ export default function CheckScreen({
   const hasModel = model.members.length > 0;
   const floors = floorsOf(model);
 
-  // ③から開いたときは、選んでいた指摘をそのまま選ぶ
-  const [activeId, setActiveId] = useState<string | null>(
-    useSearchParams().get("finding"),
-  );
+  // 指摘を選んでいれば「指摘を見る」、選んでいなければ「全体を見る」の状態。③から開いたときは選んでいた指摘をそのまま選ぶ
+  const initialFinding = useSearchParams().get("finding");
+  const [activeId, setActiveId] = useState<string | null>(initialFinding);
   const [sheetId, setSheetId] = useState<string | null>(null);
-  // 開いたときは3Dで位置を示す。施工図に切り替えたら、別の指摘を選んでもその選択を保つ
-  const [mode, setMode] = useState<"sheet" | "3d">(hasModel ? "3d" : "sheet");
+  // 指摘を選んで開いたときは3Dで位置を示す。全体を見るときは朱書きの施工図から。切り替えたら、その選択を保つ
+  const [mode, setMode] = useState<"sheet" | "3d">(hasModel && initialFinding ? "3d" : "sheet");
   // 3D／施工図の枠を畳むと、比較が画面いっぱいに広がる
   const [viewerOpen, setViewerOpen] = useState(true);
   const [menuOpen, setMenuOpen] = useState(false);
@@ -112,10 +111,31 @@ export default function CheckScreen({
       (sheet) => sheet.id === (sheetId ?? active?.drawing.sheet),
     ) ?? pageSheets[0];
 
-  const highlighted = useMemo(
-    () => new Set(active ? memberKeysOf(active, model) : []),
-    [active, model],
+  // 全体を見る間は、この図面の赤の指摘の部材を全部光らせる。部材を押すとその指摘へ
+  const sheetFindings = useMemo(
+    () => remaining.filter((f) => f.drawing.sheet === currentSheet?.id),
+    [remaining, currentSheet],
   );
+  const highlighted = useMemo(
+    () =>
+      new Set(
+        active
+          ? memberKeysOf(active, model)
+          : sheetFindings.filter((f) => !isBlue(f)).flatMap((f) => [...memberKeysOf(f, model)]),
+      ),
+    [active, model, sheetFindings],
+  );
+  // 閉じる動きの間も中身を残す
+  const [shownFinding, setShownFinding] = useState(active);
+  if (active && active !== shownFinding) setShownFinding(active);
+  // 全体を見るへ戻す（Esc でも戻る）。比較を全画面で開いている間は、そちらを先に閉じる
+  useEffect(() => {
+    const back = (event: KeyboardEvent) => {
+      if (event.key === "Escape" && !document.querySelector('[data-big="true"]')) setActiveId(null);
+    };
+    window.addEventListener("keydown", back);
+    return () => window.removeEventListener("keydown", back);
+  }, []);
   const select = (finding: (typeof allFindings)[number]) => {
     setActiveId(finding.id);
     if (finding.drawing.sheet) setSheetId(finding.drawing.sheet);
@@ -281,7 +301,7 @@ export default function CheckScreen({
                 setActiveId(null);
               }}
             />
-            <div className={styles.workspace} data-viewer={viewerOpen}>
+            <div className={styles.workspace} data-viewer={viewerOpen} data-state={active ? "finding" : "overview"}>
               {!viewerOpen && (
                 <button className={styles.viewerBar} onClick={() => setViewerOpen(true)}>
                   <ChevronDown size={14} /> 3D／施工図を開く
@@ -291,8 +311,19 @@ export default function CheckScreen({
                 <p className={styles.viewerLabel}>
                   {mode === "sheet"
                     ? `施工図：${currentSheet.title}${version ? ` 第${version}版` : ""}`
-                    : `3D：${active ? `指摘 ${active.number} の位置` : "建物全体"}`}
+                    : `3D：${active ? `指摘 ${active.number} の位置` : `${currentSheet.title}の指摘`}`}
                 </p>
+                {active && (
+                  <button
+                    className={styles.viewerOverview}
+                    onClick={() => {
+                      setActiveId(null);
+                      setViewerOpen(true);
+                    }}
+                  >
+                    <Maximize size={14} /> 全体を見る
+                  </button>
+                )}
                 <div className={styles.viewerMode} role="group" aria-label="表示の切り替え">
                   <button aria-pressed={mode === "sheet"} onClick={() => setMode("sheet")}>
                     施工図
@@ -304,9 +335,11 @@ export default function CheckScreen({
                   >
                     3D
                   </button>
-                  <button aria-label="たたむ" title="たたむ" onClick={() => setViewerOpen(false)}>
-                    <ChevronUp size={14} />
-                  </button>
+                  {active && (
+                    <button aria-label="たたむ" title="たたむ" onClick={() => setViewerOpen(false)}>
+                      <ChevronUp size={14} />
+                    </button>
+                  )}
                 </div>
                 {mode === "sheet" ? (
                   <AnnotatedSheet
@@ -317,7 +350,7 @@ export default function CheckScreen({
                     )}
                     activeId={activeId}
                     onSelect={select}
-                    onClear={() => setActiveId(null)}
+                    onClear={ignore}
                   />
                 ) : (
                   <div className={styles.viewer3d}>
@@ -329,7 +362,12 @@ export default function CheckScreen({
                       display={highlighted.size > 0 ? "xray" : "normal"}
                       highlighted={highlighted}
                       highlightColor={active ? inkOf(active) : undefined}
-                      onSelect={ignore}
+                      onSelect={(member) => {
+                        if (!member) return;
+                        const key = memberKey(member);
+                        const hit = sheetFindings.find((f) => !isBlue(f) && memberKeysOf(f, model).includes(key));
+                        if (!active && hit) select(hit);
+                      }}
                     />
                     {active && highlighted.size === 0 && (
                       <span className={styles.miniNote}>{NOT_IN_MODEL}</span>
@@ -337,8 +375,9 @@ export default function CheckScreen({
                   </div>
                 )}
               </section>
+              <div className={styles.compareSlot} inert={!active}>
               <ComparePane
-                finding={active}
+                finding={shownFinding}
                 sheet={currentSheet}
                 locked={
                   !jobId ||
@@ -363,6 +402,7 @@ export default function CheckScreen({
                   }
                 }}
               />
+              </div>
             </div>
           </>
         )}

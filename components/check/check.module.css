@@ -1466,3 +1466,80 @@
   align-items: center;
   gap: 4px;
 }
+
+/* ④の2つの状態。全体を見る：上の枠を大きく、比較をたたむ。指摘を見る：上の枠を縮め、比較を開く */
+.workspace {
+  transition: grid-template-rows 0.3s var(--ease);
+}
+
+.workspace[data-state="overview"] {
+  grid-template-rows: minmax(0, 1fr) minmax(0, 0fr);
+}
+
+.workspace[data-state="overview"] .viewer {
+  border-bottom: 0;
+}
+
+.compareSlot {
+  min-height: 0;
+  min-width: 0;
+  display: grid;
+  overflow: hidden;
+}
+
+.viewerOverview {
+  position: absolute;
+  z-index: 5;
+  top: 8px;
+  right: 162px;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 12px;
+  border: 1px solid var(--ink);
+  border-radius: var(--radius);
+  background: var(--panel);
+  color: var(--ink);
+  font: inherit;
+  font-size: 13px;
+  cursor: pointer;
+}
+
+.viewerOverview:hover {
+  background: var(--tint);
+}
+
+.sheetPage:not([data-dragging="true"]) {
+  transition: transform 0.3s var(--ease);
+}
+
+.frameTip {
+  position: absolute;
+  z-index: 8;
+  left: 0;
+  bottom: 100%;
+  display: none;
+  max-width: 40em;
+  padding: 2px 8px;
+  border-radius: var(--radius);
+  background: var(--ink);
+  color: #fff;
+  font-size: calc(12px / var(--view-scale, 1));
+  line-height: 1.5;
+  text-align: left;
+  white-space: nowrap;
+  pointer-events: none;
+}
+
+.frame:hover {
+  z-index: 6;
+}
+
+.frame:hover .frameTip {
+  display: block;
+}
+
+/* 注記は読むだけ。下の枠を押せるようにする */
+.note {
+  pointer-events: none;
+}

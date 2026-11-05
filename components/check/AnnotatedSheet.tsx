@@ -64,6 +64,8 @@ function placeNotes(findings: Numbered[], activeId: string | null, ratio: number
   return spots;
 }
 
+const boxArea = ([x0, y0, x1, y1]: Box) => (x1 - x0) * (y1 - y0);
+
 const boxStyle = ([x0, y0, x1, y1]: Box) => ({
   left: `${x0 * 100}%`,
   top: `${y0 * 100}%`,
@@ -121,6 +123,7 @@ export default function AnnotatedSheet({
   const [view, setView] = useState<View>({ scale: 1, x: 0, y: 0 });
   const sheetImage = `${base}/${sheet.base_image ?? sheet.image}`;
   const [loadedImage, setLoadedImage] = useState<string | null>(null);
+  const [dragging, setDragging] = useState(false);
   const drag = useRef<{ x: number; y: number; startX: number; startY: number; moved: boolean } | null>(null);
   const page = {
     width: Math.min(frame.width, frame.height * ratio),
@@ -142,7 +145,8 @@ export default function AnnotatedSheet({
   );
 
   const active = findings.find((finding) => finding.id === activeId);
-  const regionsKey = active ? JSON.stringify(regionsOf(active)) : "";
+  // 指摘が離れた場所を複数指すときは、最初の場所に寄る（全部を収めると寄れない）
+  const regionsKey = active ? JSON.stringify(regionsOf(active).slice(0, 1)) : "";
 
   // 枠の大きさを見張る
   useEffect(() => {
@@ -223,18 +227,21 @@ export default function AnnotatedSheet({
           state.moved = true;
         }
         if (state.moved) {
+          if (!dragging) setDragging(true);
           setView((current) =>
             clamp({ ...current, x: event.clientX - state.x, y: event.clientY - state.y }),
           );
         }
       }}
       onPointerUp={() => {
+        setDragging(false);
         // クリックの判定のあとで消す
         requestAnimationFrame(() => {
           drag.current = null;
         });
       }}
       onPointerLeave={() => {
+        setDragging(false);
         drag.current = null;
       }}
       onClickCapture={(event) => {
@@ -246,6 +253,7 @@ export default function AnnotatedSheet({
         className={styles.sheetPage}
         data-focus={Boolean(active)}
         data-ready={loadedImage === sheetImage}
+        data-dragging={dragging}
         style={
           {
             width: page.width,
@@ -265,7 +273,8 @@ export default function AnnotatedSheet({
           loading="eager"
           unoptimized
         />
-        {findings.map((finding, order) => {
+        {/* 大きな枠を下に置く。重なっていても、小さな枠を押せる */}
+        {[...findings].sort((a, b) => boxArea(regionsOf(b)[0]) - boxArea(regionsOf(a)[0])).map((finding, order) => {
           const active = finding.id === activeId;
           const color = colorName(finding);
           return regionsOf(finding).map((region, index) => (
@@ -282,6 +291,12 @@ export default function AnnotatedSheet({
               }}
             >
               {/* 枠はペンで描くように現れる。番号札は描き終わりに出る */}
+              {/* 全体を見る間は、ホバーで番号と題名を出す */}
+              {index === 0 && !activeId && (
+                <span className={styles.frameTip}>
+                  {finding.number} {finding.title}
+                </span>
+              )}
               <svg className={styles.frameLine} aria-hidden>
                 <rect x="0" y="0" width="100%" height="100%" pathLength={1} />
               </svg>
