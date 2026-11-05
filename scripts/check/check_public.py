@@ -62,6 +62,14 @@ if imports.exists():
     for item in imports.rglob("*"):
         if item.is_file():
             upload_hashes[hashlib.sha256(item.read_bytes()).hexdigest()] = item.name
+# 非公開で持っている物件の図面と試験の結果も、リポジトリの外にだけ置く
+kept = PRIVATE / "private"
+if kept.resolve().is_relative_to(REPO.resolve()):
+    problems.append("非公開フォルダがリポジトリの中です")
+if kept.exists():
+    for item in kept.rglob("*"):
+        if item.is_file():
+            upload_hashes[hashlib.sha256(item.read_bytes()).hexdigest()] = item.name
 print(f"アップロードと登録のファイル {len(upload_hashes)} 種類と照合")
 
 # 社内のチェックリストは公開してよいか決まるまで入れない。本体と同じファイル、項目の文章の転記を止める。
