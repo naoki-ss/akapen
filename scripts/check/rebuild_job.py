@@ -65,7 +65,7 @@ def rebuild_saved(folder, slug, project, checklist, minutes):
     checks = {name for page in pages for name in page["checks"]}
     job = Job(folder)
     finish_job(job, folder, slug, pages, checklist, "knowledge" in checks, None, folder / "input.pdf",
-               minutes if "minutes" in checks else (), project.get("masks"), before.get("stopped_pages", []))
+               minutes if "minutes" in checks and not (folder / "drop_minutes.flag").exists() else (), project.get("masks"), before.get("stopped_pages", []))
     after = json.loads((folder / "result.json").read_text())
     write_json(folder / "result.json", {**after, "usd": before["usd"], "seconds": before["seconds"]})
     job.update(usd=before["usd"])
@@ -109,7 +109,7 @@ def main():
     slug = meta["project"]
     project = load_project(slug)
     checklist = knowledge_check.load_library()
-    minutes = minutes_check.load_minutes(project, slug)
+    minutes = minutes_check.numbering_minutes(folder, project, slug)
     if (folder / "result.json").exists():
         rebuild_saved(folder, slug, project, checklist, minutes)
     else:

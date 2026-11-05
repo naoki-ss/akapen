@@ -540,6 +540,9 @@ def narrow_findings(client, folder, findings, pages, checklist, project_kind):
     """赤の絞り込み、過去の判断による除外、赤青のまとめ、番号の振り直し。画面と朱書きPDFの書き出しで同じ結果にする。
     pages は [{number, classified}]。client が None のときは保存済みの判定だけを使う"""
     notes = []
+    # デモから外した議事録の指摘は出さない
+    if (folder / "drop_minutes.flag").exists():
+        findings = [item for item in findings if item["source_type"] != "minutes"]
     targets_cache = {}
 
     def targets_of_page(number):

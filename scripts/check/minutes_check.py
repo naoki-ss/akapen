@@ -88,6 +88,18 @@ def load_minutes(project, slug=None):
     return documents
 
 
+# デモから外した議事録。外す前の判定の番号を保つためだけに読む
+REMOVED_MINUTES = Path.home() / "sekozu-data" / "archive" / "2020-10-14-steel.md"
+
+
+def numbering_minutes(folder, project, slug):
+    """結果を作り直すときの議事録。議事録を外した結果は、番号が変わらないよう外す前のもので読み、あとで指摘を除く"""
+    if (folder / "drop_minutes.flag").exists():
+        text = strip_notice(REMOVED_MINUTES.read_text())
+        return [{"name": REMOVED_MINUTES.stem, "text": text, "items": parse_items(text)}]
+    return load_minutes(project, slug)
+
+
 def all_items(documents):
     """{番号: (議事録の名前, 項目の行)}。複数の議事録があるときは、番号の前に議事録の名前を付ける"""
     merged = {}
