@@ -250,6 +250,9 @@ export default function ModelConsole({
         <details className={panel.sources}>
           <summary>資料</summary>
           <div>
+            <Link className={panel.addKnowledge} href={`/projects/${slug}/drawings`}>
+              図面台帳を開く
+            </Link>
             <h3>設計図書</h3>
             {documents.length === 0 ? (
               <p className={panel.empty}>登録済みの設計図書はありません。</p>
