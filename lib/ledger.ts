@@ -9,9 +9,11 @@ import path from "node:path";
 const ROOT = path.join(homedir(), "sekozu-data", "ledger");
 const INCOMING = /^[0-9a-f-]{36}$/;
 const SLUG = /^[\w-]+$/;
-const script = () => path.join(process.cwd(), "scripts", "check", "drawing_ledger.py");
-const python = () => path.join(process.cwd(), ".venv", "bin", "python");
-const cwd = () => path.join(process.cwd(), "scripts", "check");
+const fromRoot = (...parts: string[]) =>
+  path.join(/* turbopackIgnore: true */ process.cwd(), ...parts);
+const script = () => fromRoot("scripts", "check", "drawing_ledger.py");
+const python = () => fromRoot(".venv", "bin", "python");
+const cwd = () => fromRoot("scripts", "check");
 
 export type VersionChanges = {
   rows: { mark: string; before: string; after: string }[];
@@ -68,7 +70,7 @@ export type Proposal = {
 export function readLedger(slug: string): Ledger {
   // 公開用の表示では、公開してよい物件の台帳だけを demo-data から読む
   const file = path.join(ROOT, slug, "ledger.json");
-  const demo = path.join(process.cwd(), "demo-data", slug, "ledger.json");
+  const demo = fromRoot("demo-data", slug, "ledger.json");
   const found = [file, demo].find((item) => existsSync(item));
   return found
     ? JSON.parse(readFileSync(found, "utf8"))

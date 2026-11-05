@@ -14,6 +14,8 @@ import { jobFolder } from "./jobs";
 import { readLedger, staleSheets } from "./ledger";
 import { titleKey, type Sheet } from "./sheets";
 
+const fromRoot = (...parts: string[]) =>
+  path.join(/* turbopackIgnore: true */ process.cwd(), ...parts);
 const UPLOADS = path.join(homedir(), "sekozu-data", "uploads");
 
 export type SheetState = "提出" | "チェック中" | "チェックバック済み" | "確定";
@@ -123,9 +125,9 @@ function pageHash(folder: string, page: number | null) {
   const file = path.join(folder, "page_hashes.json");
   if (!existsSync(file)) {
     execFileSync(
-      path.join(process.cwd(), ".venv", "bin", "python"),
-      [path.join(process.cwd(), "scripts", "check", "drawing_ledger.py"), "page-hashes", folder, "-"],
-      { cwd: path.join(process.cwd(), "scripts", "check") },
+      fromRoot(".venv", "bin", "python"),
+      [fromRoot("scripts", "check", "drawing_ledger.py"), "page-hashes", folder, "-"],
+      { cwd: fromRoot("scripts", "check") },
     );
   }
   const hashes = JSON.parse(readFileSync(file, "utf8"));

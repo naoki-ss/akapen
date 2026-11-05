@@ -18,9 +18,10 @@ const IMPORTS = path.join(homedir(), "sekozu-data", "knowledge-imports");
 const ADDED = path.join(homedir(), "sekozu-data", "knowledge", "added");
 const MANUAL = path.join(ADDED, "manual.json");
 const ID = /^[0-9a-f-]{36}$/;
-const root = (...parts: string[]) => path.join(process.cwd(), ...parts);
-const PYTHON = () => root(".venv", "bin", "python");
-const SCRIPT = () => root("scripts", "check", "knowledge_import.py");
+const fromRoot = (...parts: string[]) =>
+  path.join(/* turbopackIgnore: true */ process.cwd(), ...parts);
+const PYTHON = () => fromRoot(".venv", "bin", "python");
+const SCRIPT = () => fromRoot("scripts", "check", "knowledge_import.py");
 const runFile = promisify(execFile);
 
 export const MAX_KNOWLEDGE_BYTES = 20 * 1024 * 1024;
@@ -73,7 +74,7 @@ export async function prepareImport(data: Buffer, originalName: string) {
   );
   try {
     const { stdout } = await runFile(PYTHON(), [SCRIPT(), "prepare", folder], {
-      cwd: root("scripts", "check"),
+      cwd: fromRoot("scripts", "check"),
     });
     return { id, estimate: JSON.parse(stdout) as ImportEstimate };
   } catch (error) {
@@ -91,7 +92,7 @@ export function startImport(folder: string) {
   if (status.state !== "ready") return false;
   const log = openSync(path.join(folder, "run.log"), "a");
   const child = spawn(PYTHON(), ["-u", SCRIPT(), "run", folder], {
-    cwd: root("scripts", "check"),
+    cwd: fromRoot("scripts", "check"),
     detached: true,
     stdio: ["ignore", log, log],
   });
