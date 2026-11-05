@@ -138,3 +138,16 @@
   margin: 10px 0 4px;
   font-size: 13px;
 }
+
+.actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+}
+
+.finals {
+  margin: 0 0 16px;
+  padding-left: 18px;
+  font-size: 13px;
+}

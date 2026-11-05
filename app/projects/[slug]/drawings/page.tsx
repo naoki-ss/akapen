@@ -5,6 +5,7 @@ import LedgerScreen from "@/components/screens/LedgerScreen";
 import { getBuilding } from "@/lib/buildings";
 import { uploadEnabled } from "@/lib/jobs";
 import { readLedger } from "@/lib/ledger";
+import { shopSheets } from "@/lib/sheetStatus";
 
 async function Content({ params }: PageProps<"/projects/[slug]/drawings">) {
   await connection();
@@ -17,6 +18,7 @@ async function Content({ params }: PageProps<"/projects/[slug]/drawings">) {
       name={building.model.name}
       ledger={readLedger(slug)}
       canAdd={uploadEnabled()}
+      shop={uploadEnabled() ? shopSheets(slug) : []}
     />
   );
 }

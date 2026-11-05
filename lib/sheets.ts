@@ -47,3 +47,10 @@ export type SheetTarget = {
   bbox?: Box;
   label?: string;
 };
+
+// 図名を比べる形。縮尺と記号と空白の違いは同じとみなす（drawing_ledger.py の title_key と同じ）
+export const titleKey = (title: string) =>
+  title
+    .normalize("NFKC")
+    .replace(/\d+\/\d+/g, "")
+    .replace(/[\s\-‐－ー・･_]/g, "");

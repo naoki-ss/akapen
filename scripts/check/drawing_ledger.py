@@ -5,16 +5,19 @@
   python drawing_ledger.py commit <物件> <取り込みID>      標準入力の内容で台帳に入れる
   python drawing_ledger.py baseline <物件> <版,版>         今の設定の設計図書が台帳のどの版かを記録する
   python drawing_ledger.py export <物件> -                 公開してよい物件の台帳を demo-data に書き出す
+  python drawing_ledger.py page-hashes <判定のフォルダ> -   施工図のページの描画のハッシュ（版の見分けに使う）
 
 束ねる先は図名を優先する。同じ図番でも中身が違うことがあるので、図番だけでは束ねない。合わないページは入れるときに選ばせる。
 台帳と入れたPDFはリポジトリの外（~/sekozu-data/ledger/）に置く。
 """
+import hashlib
 import json
 import re
 import shutil
 import sys
 import unicodedata
 from datetime import datetime
+from pathlib import Path
 
 import pymupdf
 
@@ -283,6 +286,17 @@ def repoint_project(slug, ledger):
     ledger["config_sets"] = [full, *later]
 
 
+def page_hashes(folder):
+    """判定した施工図のページの描画のハッシュ。同じ図面を別の切り出し方で入れても同じ値になるので、版の見分けに使う"""
+    path = folder / "page_hashes.json"
+    if path.exists():
+        return json.loads(path.read_text())
+    document = pymupdf.open(folder / "input.pdf")
+    hashes = {str(page.number + 1): hashlib.sha256(page.get_pixmap(dpi=72, alpha=False).samples).hexdigest() for page in document}
+    write_json(path, hashes)
+    return hashes
+
+
 def export_public(slug):
     """公開してよい物件の台帳を demo-data に書き出す。公開用の表示で一覧を見られるようにする"""
     ledger = load_ledger(slug)
@@ -368,7 +382,9 @@ def commit(slug, incoming, payload):
 
 def main():
     command, slug, incoming = sys.argv[1:4]
-    if command == "baseline":
+    if command == "page-hashes":
+        print(json.dumps(page_hashes(Path(slug))))
+    elif command == "baseline":
         set_baseline(slug, incoming.split(","))
     elif command == "export":
         export_public(slug)

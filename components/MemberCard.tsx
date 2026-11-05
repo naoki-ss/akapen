@@ -5,7 +5,7 @@ import {
   TYPE_LABELS,
   type Member,
 } from "@/lib/model";
-import type { Box, Sheet, SheetIndex } from "@/lib/sheets";
+import { titleKey, type Box, type Sheet, type SheetIndex } from "@/lib/sheets";
 import styles from "./App.module.css";
 
 function levelText(m: Member) {
@@ -20,14 +20,23 @@ function levelText(m: Member) {
 function MemberSheets({
   member,
   index,
+  confirmed,
   onOpen,
 }: {
   member: Member;
   index?: SheetIndex;
+  confirmed?: ReadonlySet<string>;
   onOpen: (sheet: Sheet, bbox: Box | undefined, label: string) => void;
 }) {
   if (!index) return null;
-  const refs = index.member_sheets[memberKey(member)] ?? [];
+  const isConfirmed = (id: string) => {
+    const title = index.sheets.find((s) => s.id === id)?.title;
+    return Boolean(title && confirmed?.has(titleKey(title)));
+  };
+  // 確定版のある図面を先に出す
+  const refs = [...(index.member_sheets[memberKey(member)] ?? [])].sort(
+    (a, b) => Number(isConfirmed(b.sheet)) - Number(isConfirmed(a.sheet)),
+  );
   return (
     <div className={styles.sheets}>
       <h3>この部材を含む施工図（{refs.length}）</h3>
@@ -47,6 +56,7 @@ function MemberSheets({
                 >
                   <b>
                     p.{sheet.page} {sheet.title}
+                    {isConfirmed(sheet.id) && "（確定版）"}
                   </b>
                   <span>{ref.reason}</span>
                 </button>
@@ -63,11 +73,13 @@ function MemberSheets({
 export default function MemberCard({
   member,
   index,
+  confirmed,
   onClose,
   onOpen,
 }: {
   member: Member;
   index?: SheetIndex;
+  confirmed?: ReadonlySet<string>;
   onClose: () => void;
   onOpen: (sheet: Sheet, bbox: Box | undefined, label: string) => void;
 }) {
@@ -96,7 +108,7 @@ export default function MemberCard({
           </>
         )}
       </dl>
-      <MemberSheets member={member} index={index} onOpen={onOpen} />
+      <MemberSheets member={member} index={index} confirmed={confirmed} onOpen={onOpen} />
     </div>
   );
 }

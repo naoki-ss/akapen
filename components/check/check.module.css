@@ -722,3 +722,12 @@
   font-size: 15px;
   line-height: 1.8;
 }
+
+.confirmedBanner {
+  grid-area: banner;
+  margin: 0;
+  padding: 6px 14px;
+  background: var(--ink);
+  color: #fff;
+  font-size: 13px;
+}

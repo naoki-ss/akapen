@@ -6,6 +6,7 @@ import {
   saveDecisions,
   uploadEnabled,
 } from "@/lib/jobs";
+import { decisionsAllowed } from "@/lib/sheetStatus";
 
 export async function GET(
   _request: NextRequest,
@@ -32,6 +33,9 @@ export async function POST(
   const { excluded } = (await request.json()) as { excluded: unknown };
   if (!Array.isArray(excluded) || !excluded.every(Number.isInteger)) {
     return Response.json({ error: "番号の形が違います" }, { status: 400 });
+  }
+  if (!decisionsAllowed(folder, readDecisions(folder), excluded)) {
+    return Response.json({ error: "確定した図面は変更できません" }, { status: 409 });
   }
   saveDecisions(folder, excluded);
   return Response.json({ ok: true });

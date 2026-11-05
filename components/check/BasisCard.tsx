@@ -26,11 +26,14 @@ function valueLines(finding: Numbered) {
 export default function BasisCard({
   finding,
   kept,
+  locked,
   base,
   onKeep,
 }: {
   finding: Numbered | null;
   kept: boolean;
+  // 確定した図面の指摘は変更できない
+  locked: boolean;
   base: string;
   onKeep: (kept: boolean) => void;
 }) {
@@ -70,9 +73,11 @@ export default function BasisCard({
         </small>
       )}
       <div className={styles.basisActions}>
-        <button className={styles.ghost} onClick={() => onKeep(!kept)}>
-          {kept ? "この指摘を朱書きから外す" : "朱書きに戻す"}
-        </button>
+        {!locked && (
+          <button className={styles.ghost} onClick={() => onKeep(!kept)}>
+            {kept ? "この指摘を朱書きから外す" : "朱書きに戻す"}
+          </button>
+        )}
         <button
           className={styles.ghost}
           aria-expanded={opened}

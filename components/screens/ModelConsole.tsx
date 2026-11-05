@@ -13,8 +13,9 @@ import {
 } from "@/lib/findings";
 import { jobOption } from "@/lib/jobNames";
 import { floorsOf, type Member } from "@/lib/model";
+import type { ConfirmedSheet } from "@/lib/sheetStatus";
 import type { AddedKnowledge, KnowledgeApp, ProjectDocument } from "@/lib/projects";
-import { ALL_LAYERS, type LayerKey, type SheetTarget } from "@/lib/sheets";
+import { ALL_LAYERS, titleKey, type LayerKey, type SheetTarget } from "@/lib/sheets";
 import { useJobResult } from "@/lib/useJobResult";
 import { useUploadJob } from "@/lib/useUploadJob";
 import { Logo } from "../AppFrame";
@@ -39,6 +40,7 @@ export default function ModelConsole({
   canUpload,
   knowledge,
   addedKnowledge,
+  confirmedSheets,
   documents,
 }: Building & {
   projects: { slug: string; name: string }[];
@@ -46,6 +48,7 @@ export default function ModelConsole({
   canUpload: boolean;
   knowledge: KnowledgeApp[];
   addedKnowledge: AddedKnowledge[];
+  confirmedSheets: ConfirmedSheet[];
   documents: ProjectDocument[];
 }) {
   const router = useRouter();
@@ -386,10 +389,19 @@ export default function ModelConsole({
           <MemberCard
             member={selected}
             index={sheets}
+            confirmed={new Set(confirmedSheets.map((item) => titleKey(item.title)))}
             onClose={() => setSelected(null)}
-            onOpen={(sheet, bbox, label) =>
-              setOpenSheet({ sheet, bbox, label, base: `/demo-data/${slug}` })
-            }
+            onOpen={(sheet, bbox, label) => {
+              // 確定版があれば、それを開く
+              const final = confirmedSheets.find(
+                (item) => titleKey(item.title) === titleKey(sheet.title),
+              );
+              setOpenSheet(
+                final
+                  ? { sheet: final.sheet, bbox, label, base: final.base }
+                  : { sheet, bbox, label, base: `/demo-data/${slug}` },
+              );
+            }}
           />
         </div>
       )}

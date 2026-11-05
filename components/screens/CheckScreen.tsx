@@ -29,7 +29,12 @@ export default function CheckScreen({
   sheets,
   job,
   stale,
-}: Building & { job: string; stale: string[] }) {
+  confirmed,
+}: Building & {
+  job: string;
+  stale: string[];
+  confirmed: { page: number; by: string; at: string }[];
+}) {
   const isSaved = job === "saved";
   const jobId = isSaved ? null : job;
   const { result: uploaded, missing } = useJobResult(jobId);
@@ -229,6 +234,12 @@ export default function CheckScreen({
           </div>
         </div>
 
+        {confirmed.some((item) => item.page === currentSheet.page) && (
+          <p className={styles.confirmedBanner} role="status">
+            この図面は確定しています。変更できません。
+          </p>
+        )}
+
         {stale.length > 0 && (
           <p className={styles.internalBanner} role="status">
             設計図書が更新されました。再チェックが必要です（{stale.join("、")}）。
@@ -290,6 +301,9 @@ export default function CheckScreen({
               <BasisCard
                 finding={active}
                 kept={!active || !excluded.has(active.number)}
+                locked={confirmed.some(
+                  (item) => item.page === active?.drawing.page,
+                )}
                 base={resultBase}
                 onKeep={(kept) => active && setKept(active.number, kept)}
               />
