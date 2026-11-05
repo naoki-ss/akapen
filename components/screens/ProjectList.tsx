@@ -7,6 +7,7 @@ import { useState } from "react";
 import type { ProjectCard } from "@/lib/buildings";
 import AppFrame from "../AppFrame";
 import Hint from "../Hint";
+import LogoIntro from "../LogoIntro";
 import SceneThumb from "../SceneThumb";
 import styles from "./screens.module.css";
 
@@ -72,93 +73,101 @@ export default function ProjectList({
   return (
     <AppFrame crumbs={[{ label: "現場を選ぶ" }]}>
       <div className={styles.page}>
-        <div className={styles.pageHead}>
-          <h1>現場を選ぶ</h1>
-          {/* 現場が少ないうちは探す必要がないので出さない */}
-          {projects.length > 6 && (
-            <>
-              <input
-                className={styles.search}
-                type="search"
-                placeholder="名前で検索"
-                aria-label="名前で検索"
-                value={query}
-                onChange={(e) => setQuery(e.target.value)}
-              />
-              <select
-                className={styles.search}
-                aria-label="構造で絞り込む"
-                value={structure}
-                onChange={(e) => setStructure(e.target.value)}
-              >
-                <option value="">すべての構造</option>
-                {structures.map((name) => (
-                  <option key={name}>{name}</option>
-                ))}
-              </select>
-            </>
-          )}
-          {canRegister && (
-            <Link className={styles.action} href="/projects/new">
-              <Plus size={15} /> 新しい現場をつくる
-            </Link>
-          )}
-        </div>
-        <Hint id="list" text="現場を選ぶと、3Dでどこに問題があるかを見られます。" />
-        <ul className={styles.cards}>
-          {running.map((project) => (
-            <li key={project.slug}>
-              <Link href={`/projects/new?watch=${project.slug}`}>
-                <div className={styles.thumb}>3Dを作成中</div>
-                <div className={styles.cardBody}>
-                  <b>{project.name}</b>
-                  <div className={styles.progress}>
+        <LogoIntro>
+          <div className={styles.pageHead}>
+            <h1>現場を選ぶ</h1>
+            {/* 現場が少ないうちは探す必要がないので出さない */}
+            {projects.length > 6 && (
+              <>
+                <input
+                  className={styles.search}
+                  type="search"
+                  placeholder="名前で検索"
+                  aria-label="名前で検索"
+                  value={query}
+                  onChange={(e) => setQuery(e.target.value)}
+                />
+                <select
+                  className={styles.search}
+                  aria-label="構造で絞り込む"
+                  value={structure}
+                  onChange={(e) => setStructure(e.target.value)}
+                >
+                  <option value="">すべての構造</option>
+                  {structures.map((name) => (
+                    <option key={name}>{name}</option>
+                  ))}
+                </select>
+              </>
+            )}
+            {canRegister && (
+              <Link className={styles.action} href="/projects/new">
+                <Plus size={15} /> 新しい現場をつくる
+              </Link>
+            )}
+          </div>
+          <Hint
+            id="list"
+            text="現場を選ぶと、3Dでどこに問題があるかを見られます。"
+          />
+          <ul className={styles.cards}>
+            {running.map((project) => (
+              <li key={project.slug}>
+                <Link href={`/projects/new?watch=${project.slug}`}>
+                  <div className={styles.thumb}>3Dを作成中</div>
+                  <div className={styles.cardBody}>
+                    <b>{project.name}</b>
+                    <div className={styles.progress}>
+                      <div
+                        style={{
+                          width: `${project.total ? (project.done / project.total) * 100 : 0}%`,
+                        }}
+                      />
+                    </div>
+                    <small>{project.message}</small>
+                  </div>
+                </Link>
+              </li>
+            ))}
+            {shown.map((project) => (
+              <li key={project.slug}>
+                <Link href={`/projects/${project.slug}/model`}>
+                  <Thumb card={project} />
+                  <div className={styles.cardBody}>
+                    <b>{project.name}</b>
+                    <small>
+                      {[
+                        project.use,
+                        project.structure,
+                        project.floors > 0 ? `${project.floors}階建て` : null,
+                        project.updatedAt
+                          ? `更新 ${dateFormat.format(new Date(project.updatedAt))}`
+                          : null,
+                      ]
+                        .filter(Boolean)
+                        .join("・")}
+                    </small>
                     <div
-                      style={{
-                        width: `${project.total ? (project.done / project.total) * 100 : 0}%`,
-                      }}
-                    />
+                      className={styles.openCounts}
+                      aria-label="未対応の指摘"
+                    >
+                      <small>未対応の指摘</small>
+                      <i className="mono" data-color="red">
+                        赤 <CountUp value={project.red} />
+                      </i>
+                      <i className="mono" data-color="blue">
+                        青 <CountUp value={project.blue} />
+                      </i>
+                    </div>
                   </div>
-                  <small>{project.message}</small>
-                </div>
-              </Link>
-            </li>
-          ))}
-          {shown.map((project) => (
-            <li key={project.slug}>
-              <Link href={`/projects/${project.slug}/model`}>
-                <Thumb card={project} />
-                <div className={styles.cardBody}>
-                  <b>{project.name}</b>
-                  <small>
-                    {[
-                      project.use,
-                      project.structure,
-                      project.floors > 0 ? `${project.floors}階建て` : null,
-                      project.updatedAt
-                        ? `更新 ${dateFormat.format(new Date(project.updatedAt))}`
-                        : null,
-                    ]
-                      .filter(Boolean)
-                      .join("・")}
-                  </small>
-                  <div className={styles.openCounts} aria-label="未対応の指摘">
-                    <small>未対応の指摘</small>
-                    <i className="mono" data-color="red">
-                      赤 <CountUp value={project.red} />
-                    </i>
-                    <i className="mono" data-color="blue">
-                      青 <CountUp value={project.blue} />
-                    </i>
-                  </div>
-                </div>
-              </Link>
-            </li>
-          ))}
-        </ul>
-        {shown.length === 0 && running.length === 0 && (
-          <p className={styles.none}>当てはまる現場はありません。</p>
-        )}
+                </Link>
+              </li>
+            ))}
+          </ul>
+          {shown.length === 0 && running.length === 0 && (
+            <p className={styles.none}>当てはまる現場はありません。</p>
+          )}
+        </LogoIntro>
       </div>
     </AppFrame>
   );
