@@ -48,79 +48,78 @@ function sourceText(finding: Finding) {
   return [card.checklist, file].filter(Boolean).join("・");
 }
 
-type FindingRow = {
-  key: string;
-  drawing: DrawingResult;
-  finding: DrawingResult["findings"][number];
-};
-
-// 赤と青それぞれのリスト。見出しに件数を出し、たためる
-function FindingGroup({
+// 赤か青の並び。項目を押すと、そのまま④に移る
+function FindingItems({
   color,
-  label,
-  rows,
-  activeKey,
-  showDrawing,
+  drawing,
+  findings,
+  source,
   slug,
-  notInModel,
-  onSelect,
 }: {
   color: "red" | "blue";
-  label: string;
-  rows: FindingRow[];
-  activeKey: string | null;
-  showDrawing: boolean;
+  drawing: DrawingResult;
+  findings: DrawingResult["findings"];
+  source: boolean;
   slug: string;
-  notInModel: boolean;
-  onSelect: (key: string | null) => void;
 }) {
+  if (findings.length === 0) return null;
   return (
-    <details className={panel.group} data-color={color} open>
-      <summary>
-        {label} <b className="mono">{rows.length}</b>
-      </summary>
-      {rows.length === 0 ? (
-        <p className={panel.empty}>ありません。</p>
-      ) : (
-        <ul>
-          {rows.map(({ key, drawing, finding }) => {
-            const isActive = key === activeKey;
-            const source = color === "blue" ? sourceText(finding) : null;
-            return (
-              <li key={key}>
-                <button
-                  data-active={isActive}
-                  onClick={() => onSelect(isActive ? null : key)}
-                >
-                  <i className="mono" data-color={color}>
-                    {finding.number}
-                  </i>
-                  <span>
-                    {finding.title}
-                    {(showDrawing || source) && (
-                      <small className={panel.itemNote}>
-                        {[showDrawing ? drawing.title : null, source]
-                          .filter(Boolean)
-                          .join("／")}
-                      </small>
-                    )}
-                  </span>
-                </button>
-                {isActive && (
-                  <div className={panel.findingOpen}>
-                    {notInModel && <p className={panel.empty}>{NOT_IN_MODEL}</p>}
-                    <Link
-                      href={`/projects/${slug}/check/${drawing.job}?finding=${finding.id}`}
-                    >
-                      なぜ問題かを見る →
-                    </Link>
-                  </div>
+    <>
+      <h4 className={panel.colorHead} data-color={color}>
+        {color === "red" ? "赤" : "青"} {findings.length}
+      </h4>
+      <ul>
+        {findings.map((finding) => (
+          <li key={finding.id}>
+            <Link
+              className={panel.findingLink}
+              href={`/projects/${slug}/check/${drawing.job}?finding=${finding.id}`}
+            >
+              <i className="mono" data-color={color}>
+                {finding.number}
+              </i>
+              <span>
+                {finding.title}
+                {source && sourceText(finding) && (
+                  <small className={panel.itemNote}>{sourceText(finding)}</small>
                 )}
-              </li>
-            );
-          })}
-        </ul>
-      )}
+              </span>
+            </Link>
+          </li>
+        ))}
+      </ul>
+    </>
+  );
+}
+
+// 図面ごとのまとまり。見出しに赤と青の件数を出し、開くと赤と青に分かれて並ぶ
+function DrawingGroup({
+  drawing,
+  open,
+  slug,
+}: {
+  drawing: DrawingResult;
+  open: boolean;
+  slug: string;
+}) {
+  const blue = drawing.findings.filter(isBlue);
+  return (
+    <details className={panel.group} open={open}>
+      <summary>
+        <b>{drawing.title}</b>
+        <span className="mono">
+          <em data-color="red">赤{drawing.findings.length - blue.length}</em>・
+          <em data-color="blue">青{blue.length}</em>
+        </span>
+      </summary>
+      <FindingItems
+        color="red"
+        drawing={drawing}
+        findings={drawing.findings.filter((finding) => !isBlue(finding))}
+        source={false}
+        slug={slug}
+      />
+      <FindingItems color="blue" drawing={drawing} findings={blue} source slug={slug} />
     </details>
   );
 }
@@ -188,27 +187,18 @@ export default function ModelConsole({
         : drawings.filter((item) => item.title === drawing),
     [drawing, drawings],
   );
-  const rows = useMemo(
-    () =>
-      shown.flatMap((item) =>
-        item.findings.map((finding) => ({
-          key: `${item.job}:${finding.id}`,
-          drawing: item,
-          finding,
-        })),
-      ),
-    [shown],
-  );
-  const redRows = rows.filter((row) => !isBlue(row.finding));
-  const blueRows = rows.filter((row) => isBlue(row.finding));
-  const [activeKey, setActiveKey] = useState<string | null>(
-    params.get("finding")
-      ? `${params.get("job") ?? "saved"}:${params.get("finding")}`
-      : null,
-  );
-  const activeRow = rows.find((row) => row.key === activeKey) ?? null;
-  const active = activeRow?.finding ?? null;
   const staleCount = new Set(shown.flatMap((item) => item.stale)).size;
+  // ④から戻ったときに、その指摘の部材を3Dで示す
+  const active = useMemo(() => {
+    const id = params.get("finding");
+    if (!id) return null;
+    const job = params.get("job") ?? "saved";
+    return (
+      drawings
+        .find((item) => item.job === job && item.findings.some((f) => f.id === id))
+        ?.findings.find((f) => f.id === id) ?? null
+    );
+  }, [params, drawings]);
   const highlighted = useMemo(
     () => new Set(active ? memberKeysOf(active, model) : []),
     [active, model],
@@ -221,10 +211,6 @@ export default function ModelConsole({
       : floors.indexOf(floorLimit);
   const display = active ? "xray" : roofOff ? "noRoof" : "normal";
 
-  const selectFinding = (key: string | null) => {
-    setActiveKey(key);
-    setSelected(null);
-  };
 
   const columns = model.members.filter((m) => m.type === "column").length;
   const beams = model.members.filter((m) => m.type === "beam").length;
@@ -292,7 +278,7 @@ export default function ModelConsole({
             <Link href={`/projects/${slug}/meeting`}>打ち合わせで見せる</Link>
           )}
         </p>
-        <Hint id="model" text="指摘を選ぶと、3Dで場所を示します。" />
+        <Hint id="model" text="指摘を選ぶと、なぜ問題かと3Dの位置を見られます。" />
 
         <label className={panel.viewing}>
           <span>見ている施工図</span>
@@ -303,7 +289,6 @@ export default function ModelConsole({
               value={drawing}
               onChange={(e) => {
                 setDrawing(e.target.value);
-                selectFinding(null);
               }}
             >
               <option value={ALL_DRAWINGS}>
@@ -338,30 +323,14 @@ export default function ModelConsole({
           {drawings.length === 0 && (
             <p className={panel.empty}>指摘はまだありません。</p>
           )}
-          {drawings.length > 0 && (
-            <>
-              <FindingGroup
-                color="red"
-                label="赤：設計図書・議事録との食い違い"
-                rows={redRows}
-                activeKey={activeKey}
-                showDrawing={drawing === ALL_DRAWINGS}
-                slug={slug}
-                notInModel={active !== null && highlighted.size === 0}
-                onSelect={selectFinding}
-              />
-              <FindingGroup
-                color="blue"
-                label="青：ナレッジにもとづく指摘"
-                rows={blueRows}
-                activeKey={activeKey}
-                showDrawing={drawing === ALL_DRAWINGS}
-                slug={slug}
-                notInModel={active !== null && highlighted.size === 0}
-                onSelect={selectFinding}
-              />
-            </>
-          )}
+          {shown.map((item) => (
+            <DrawingGroup
+              key={item.title}
+              drawing={item}
+              open={drawing !== ALL_DRAWINGS}
+              slug={slug}
+            />
+          ))}
         </div>
 
         <details className={panel.sources}>

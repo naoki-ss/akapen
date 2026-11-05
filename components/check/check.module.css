@@ -1017,13 +1017,32 @@
   font-weight: 700;
 }
 
-.compareCard > img,
-.compareCard img {
+.compareCard .docImage img {
   display: block;
   width: 100%;
   height: auto;
-  max-height: 240px;
-  object-fit: contain;
+}
+
+.sheetCrop {
+  position: relative;
+  max-width: 100%;
+  max-height: 32vh;
+  margin: 0 auto;
+  overflow: hidden;
+  border: 1px solid var(--line);
+  background: #fff;
+}
+
+.sheetCrop img {
+  position: absolute;
+  max-width: none;
+}
+
+.sheetReading {
+  margin: 0 0 6px;
+  font-size: 16px;
+  font-weight: 700;
+  line-height: 1.4;
 }
 
 .compareValue {
@@ -1111,4 +1130,15 @@
   outline-offset: -2px;
   background: var(--tint);
   font-weight: 700;
+}
+
+/* 操作はスクロールしても見えるようにする */
+.compare .basisActions {
+  position: sticky;
+  z-index: 2;
+  bottom: -12px;
+  margin: 8px -16px -12px;
+  padding: 8px 16px;
+  border-top: 1px solid var(--line);
+  background: var(--panel);
 }

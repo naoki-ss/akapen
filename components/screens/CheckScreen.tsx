@@ -321,6 +321,7 @@ export default function CheckScreen({
               </section>
               <ComparePane
                 finding={active}
+                sheet={currentSheet}
                 locked={
                   !jobId ||
                   confirmed.some((item) => item.page === active?.drawing.page)
