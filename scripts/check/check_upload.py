@@ -242,6 +242,16 @@ def run_design_check(context):
     return findings, usd, {"unreadable": unreadable, "dropped_items": dropped, "seconds_design": seconds}
 
 
+NO_TARGET = "該当図面なし"
+
+
+def no_design_target(page, findings):
+    """設計図書との照合で、AI が「該当図面なし」と答え、赤の指摘がないページ"""
+    unreadable = page.get("checks", {}).get("design", {}).get("unreadable", [])
+    has_red = any(item["page"] == page["number"] and item.get("source_type") != "knowledge" for item in findings)
+    return not has_red and any(str(text).startswith(NO_TARGET) for text in unreadable)
+
+
 def design_findings(reply, number, level):
     return [{**item, "source_type": "design", "page": number, "regions": valid_regions(item.get("regions")), "floor_level": level}
             for item in reply["findings"]]
@@ -708,6 +718,10 @@ def finish_job(job, folder, slug, pages, checklist, use_knowledge, client, input
     no_list = [str(page["number"]) for page in pages if page.get("ok") and "knowledge" not in page.get("checks", {})]
     if checklist and no_list:
         notes.append("次のページは、種類の合うチェックリストがないので青の照合をしていません： " + "、".join(f"p.{n}" for n in no_list))
+    # 照らし合わせる設計図面がないページは、指摘なしではなく「該当図面なし」と書く
+    no_target = [str(page["number"]) for page in pages if page.get("ok") and no_design_target(page, findings)]
+    if no_target:
+        notes.append("次のページは、照合に該当する設計図面がないので赤の照合をしていません（施工図の種類が設計図書と合いません）： " + "、".join(f"p.{n}" for n in no_target))
     if minutes:
         done = [(page["number"], page["checks"]["minutes"]["item_results"]) for page in pages if "minutes" in page.get("checks", {})]
         minutes_rows = minutes_check.summary_rows(minutes_check.all_items(minutes), done)
