@@ -956,25 +956,6 @@
   pointer-events: none;
 }
 
-.sheetFrame .frame {
-  border-width: calc(1.5px / var(--view-scale, 1));
-}
-
-.sheetFrame .frame[data-active="true"] {
-  border-width: calc(3.5px / var(--view-scale, 1));
-  box-shadow: 0 0 0 calc(3px / var(--view-scale, 1)) rgb(255 255 255 / 90%);
-}
-
-.sheetFrame .frameNumber {
-  transform: scale(calc(1 / var(--view-scale, 1)));
-  transform-origin: 0 0;
-}
-
-.sheetFrame .note {
-  transform: scale(calc(1 / var(--view-scale, 1)));
-  transform-origin: 0 100%;
-}
-
 .zoomButtons {
   position: absolute;
   z-index: 5;
@@ -1260,9 +1241,9 @@
 .items > li:nth-child(n + 9) { --order: 8; }
 
 /* 図面が出てから朱書きを描き始める */
-.sheetPage:not([data-ready="true"]) .frameLine rect,
-.sheetPage:not([data-ready="true"]) .frameNumber,
-.sheetPage:not([data-ready="true"]) .note {
+.sheetMarks:not([data-ready="true"]) .frameLine rect,
+.sheetMarks:not([data-ready="true"]) .frameNumber,
+.sheetMarks:not([data-ready="true"]) .note {
   animation-play-state: paused;
 }
 
@@ -1524,7 +1505,7 @@
   border-radius: var(--radius);
   background: var(--ink);
   color: #fff;
-  font-size: calc(12px / var(--view-scale, 1));
+  font-size: 12px;
   line-height: 1.5;
   text-align: left;
   white-space: nowrap;
@@ -1544,23 +1525,66 @@
   pointer-events: none;
 }
 
-/* 寄っても枠と番号が太らない。太さと文字の大きさを倍率で割る */
+/* 枠の層。図面の拡大に合わせて座標だけが動く。線の太さと文字の大きさは画面の上で一定 */
+.sheetMarks {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+  pointer-events: none;
+}
+
+.sheetMarks .frame {
+  pointer-events: auto;
+}
+
+.sheetMarks:not([data-dragging="true"]) .frame,
+.sheetMarks:not([data-dragging="true"]) .note {
+  transition:
+    left 0.3s var(--ease),
+    top 0.3s var(--ease),
+    width 0.3s var(--ease),
+    height 0.3s var(--ease);
+}
+
 .frameLine rect {
-  stroke-width: calc(1.5px / var(--view-scale, 1));
+  stroke-width: 1.5px;
 }
 
-.frame[data-active="true"] .frameLine rect {
-  stroke-width: calc(2.5px / var(--view-scale, 1));
+.frame:hover {
+  background: none;
 }
 
+.sheetMarks[data-focus="false"] .frame:hover {
+  background: color-mix(in srgb, var(--ink-frame) 6%, transparent);
+}
+
+/* 選んだ指摘の枠だけ、ごく薄く塗る。ほかは細い線だけ */
 .frame[data-active="true"] {
+  background: color-mix(in srgb, var(--ink-frame) 5%, transparent);
   box-shadow: none;
 }
 
+.frame[data-active="true"] .frameLine rect {
+  stroke-width: 2px;
+}
+
+.sheetMarks[data-focus="true"] .frame[data-active="false"] {
+  opacity: 0.45;
+}
+
+.sheetMarks[data-focus="true"] .frame[data-active="false"] .frameLine rect {
+  stroke-width: 1px;
+}
+
+.sheetMarks[data-focus="true"] .frame[data-active="false"] .frameNumber {
+  display: none;
+}
+
 .frameNumber {
-  font-size: calc(max(9px, 0.9cqw) / var(--view-scale, 1));
+  font-size: 11px;
 }
 
 .note {
-  font-size: calc(max(11px, 1.05cqw) / var(--view-scale, 1));
+  font-size: 12px;
+  transform: none;
 }

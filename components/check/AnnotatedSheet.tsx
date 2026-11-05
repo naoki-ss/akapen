@@ -66,13 +66,6 @@ function placeNotes(findings: Numbered[], activeId: string | null, ratio: number
 
 const boxArea = ([x0, y0, x1, y1]: Box) => (x1 - x0) * (y1 - y0);
 
-const boxStyle = ([x0, y0, x1, y1]: Box) => ({
-  left: `${x0 * 100}%`,
-  top: `${y0 * 100}%`,
-  width: `${(x1 - x0) * 100}%`,
-  height: `${(y1 - y0) * 100}%`,
-});
-
 // 枠を順に描く数の上限。多くても1秒で描き終わるようにする
 const MAX_ORDER = 10;
 const MIN_SCALE = 1;
@@ -204,6 +197,14 @@ export default function AnnotatedSheet({
     return () => node.removeEventListener("wheel", onWheel);
   }, [zoomAt]);
 
+  // 図面の上の位置（0〜1）を、枠の中の位置（px）にする
+  const onScreen = ([x0, y0, x1, y1]: Box) => ({
+    left: view.x + x0 * page.width * view.scale,
+    top: view.y + y0 * page.height * view.scale,
+    width: (x1 - x0) * page.width * view.scale,
+    height: (y1 - y0) * page.height * view.scale,
+  });
+
   return (
     <div
       ref={frameRef}
@@ -251,15 +252,12 @@ export default function AnnotatedSheet({
     >
       <div
         className={styles.sheetPage}
-        data-focus={Boolean(active)}
-        data-ready={loadedImage === sheetImage}
         data-dragging={dragging}
         style={
           {
             width: page.width,
             height: page.height,
             transform: `translate(${view.x}px, ${view.y}px) scale(${view.scale})`,
-            "--view-scale": view.scale,
           } as CSSProperties
         }
         onClick={onClear}
@@ -273,6 +271,14 @@ export default function AnnotatedSheet({
           loading="eager"
           unoptimized
         />
+      </div>
+      {/* 枠と番号札と注記は図面と別の層に置く。座標だけが拡大に合わせて動き、線の太さと文字の大きさは一定 */}
+      <div
+        className={styles.sheetMarks}
+        data-focus={Boolean(active)}
+        data-ready={loadedImage === sheetImage}
+        data-dragging={dragging}
+      >
         {/* 大きな枠を下に置く。重なっていても、小さな枠を押せる */}
         {[...findings].sort((a, b) => boxArea(regionsOf(b)[0]) - boxArea(regionsOf(a)[0])).map((finding, order) => {
           const active = finding.id === activeId;
@@ -281,7 +287,7 @@ export default function AnnotatedSheet({
             <button
               key={`${finding.id}-${index}`}
               className={styles.frame}
-              style={{ ...boxStyle(region), "--order": Math.min(order, MAX_ORDER) } as CSSProperties}
+              style={{ ...onScreen(region), "--order": Math.min(order, MAX_ORDER) } as CSSProperties}
               data-color={color}
               data-active={active}
               aria-label={`指摘 ${finding.number}：${finding.title}`}
@@ -308,14 +314,15 @@ export default function AnnotatedSheet({
         })}
         {findings.map((finding) => {
           const spot = notes.get(finding.id);
-          if (!spot) return null;
+          // 指摘を見ている間は、選んだ指摘の注記だけを出す
+          if (!spot || (activeId && finding.id !== activeId)) return null;
           return (
             <button
               key={finding.id}
               className={`${styles.note} hand`}
               style={{
-                left: `${spot.left * 100}%`,
-                top: `${spot.top * 100}%`,
+                left: view.x + spot.left * page.width * view.scale,
+                top: view.y + spot.top * page.height * view.scale,
               }}
               data-color={colorName(finding)}
               data-active={finding.id === activeId}

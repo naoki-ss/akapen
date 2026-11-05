@@ -39,6 +39,7 @@ import drawing_ledger
 import knowledge_check
 import merge_findings
 import red_filter
+import region_refine
 import minutes_check
 from markup_pdf import SOURCE_TYPES, layer_overlay, make_marked_pdf, mask_pdf, set_visible_layers, to_rect, valid_regions
 from claude_api import METER, usage_usd
@@ -55,7 +56,6 @@ MAX_PAGES = 40
 PAGE_DPI = 260
 CROP_DPI = 150
 CROP_MARGIN = 45
-REGION_OVERRIDES = PRIVATE / "region-overrides.json"
 
 # 条件Dの入力と手順はそのままで、朱書きPDFのために出力の形だけ足す
 OUTPUT_NOTE = """
@@ -662,15 +662,16 @@ def finish_job(job, folder, slug, pages, checklist, use_knowledge, client, input
     job.update(stage="朱書き", message="朱書きPDFを作成中です", active_pages=[])
     findings = []
     source_doc = pymupdf.open(input_path)
-    # 目で確かめて直した枠（図面に文字がなく、プログラムで絞れないもの）。リポジトリの外に置く
-    overrides = json.loads(REGION_OVERRIDES.read_text()).get(folder.name[:8], {}) if REGION_OVERRIDES.exists() else {}
     for page in pages:
         for item in page["findings"]:
             if item["source_type"] != "knowledge":
                 design_basis.snap_to_row(item, source_doc[page["number"] - 1])
-            if item["title"] in overrides:
-                item["regions"] = [overrides[item["title"]]]
         findings += page["findings"]
+    # 枠を該当の文字に合わせる。確定したページは変えない
+    status_path = folder / "sheet_status.json"
+    locked_pages = {int(number) for number, value in json.loads(status_path.read_text())["pages"].items() if value.get("confirmed")} if status_path.exists() else set()
+    region_refine.apply(client, [item for item in findings if item["source_type"] != "knowledge" and item["page"] not in locked_pages],
+                        lambda item: source_doc[item["page"] - 1], folder)
     for number, item in enumerate(findings, 1):
         item["number"] = number
     failed = [page["number"] for page in pages if not page["ok"]]

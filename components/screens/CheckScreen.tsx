@@ -60,8 +60,8 @@ export default function CheckScreen({
   const initialFinding = useSearchParams().get("finding");
   const [activeId, setActiveId] = useState<string | null>(initialFinding);
   const [sheetId, setSheetId] = useState<string | null>(null);
-  // 指摘を選んで開いたときは3Dで位置を示す。全体を見るときは朱書きの施工図から。切り替えたら、その選択を保つ
-  const [mode, setMode] = useState<"sheet" | "3d">(hasModel && initialFinding ? "3d" : "sheet");
+  // 開いたときは3Dから。施工図に切り替えたら、別の指摘を選んでもその選択を保つ（開き直すと3Dに戻る）
+  const [mode, setMode] = useState<"sheet" | "3d">(hasModel ? "3d" : "sheet");
   // 3D／施工図の枠を畳むと、比較が画面いっぱいに広がる
   const [viewerOpen, setViewerOpen] = useState(true);
   const [menuOpen, setMenuOpen] = useState(false);
