@@ -113,7 +113,7 @@ def main():
     slug = meta["project"]
     project = load_project(slug)
     checklist = knowledge_check.load_library()
-    minutes = minutes_check.load_minutes(project)
+    minutes = minutes_check.load_minutes(project, slug)
     if (folder / "result.json").exists():
         rebuild_saved(folder, slug, project, checklist, minutes)
     else:

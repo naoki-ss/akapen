@@ -372,3 +372,14 @@
   color: var(--ink);
   font-size: 13px;
 }
+
+.meetingAction {
+  padding: 4px 10px;
+  border: 1px solid var(--ink);
+  border-radius: 6px;
+  background: var(--ink);
+  color: #fff;
+  font: inherit;
+  font-size: 12px;
+  cursor: pointer;
+}

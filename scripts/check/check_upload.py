@@ -647,7 +647,7 @@ def main():
             raise ValueError("ANTHROPIC_API_KEY がありません")
         client = anthropic.Anthropic()
         checklist = knowledge_check.load_library()
-        minutes = minutes_check.load_minutes(project)
+        minutes = minutes_check.load_minutes(project, slug)
         use_knowledge = "knowledge" in checkers_for(project, checklist, minutes)
         pages, stopped = run_pages(job, numbers, lambda n: check_page(job, client, project, checklist, minutes, input_path, n, folder.name))
         masks = project.get("masks")

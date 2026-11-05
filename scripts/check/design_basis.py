@@ -377,7 +377,8 @@ def minutes_context(finding, minutes):
     for ref in refs:
         ref_id = ref["id"].split(":")[-1]
         for document in minutes:
-            if ref["id"].split(":")[0] != ref_id and ref["id"].split(":")[0] != document["name"]:
+            # 議事録が複数あるときは、番号の前に議事録の名前が付いている
+            if ":" in ref["id"] and ref["id"].rsplit(":", 1)[0] != document["name"]:
                 continue
             rows = readable_lines(document["text"])
             hit = next((i for i, row in enumerate(rows) if row["id"] == ref_id), None)
@@ -396,7 +397,7 @@ def minutes_context(finding, minutes):
                 blocks.append({"doc": document["name"], "heading": heading,
                                "lines": [{"id": r["id"], "text": r["text"], "hit": r["id"] == ref_id} for r in around]})
     for block in blocks:
-        block["lines"].sort(key=lambda row: [int(n) if n.isdigit() else 0 for n in re.split(r"\D+", row["id"]) if n] )
+        block["lines"].sort(key=lambda row: [int(n) for n in re.findall(r"\d+", row["id"])])
     return blocks
 
 
@@ -412,7 +413,7 @@ def readable_lines(text):
             columns = cells[1:]
         heading = re.match(r"#+\s*(.+)", line)
         table = re.match(r"\|\s*\**(\d+(?:-\d+)+)\**\s*\|(.*)\|$", line)
-        bullet = re.match(r"-\s*\*\*(\d+(?:-\d+)+)\*\*\s*(.+)", line)
+        bullet = re.match(r"-\s*\*\*([\w-]+)\*\*\s*(.+)", line)
         if heading:
             rows.append({"id": "", "text": heading.group(1), "heading": True})
         elif table:
@@ -504,7 +505,7 @@ def main():
         import minutes_check
 
         library = knowledge_check.load_library()
-        minutes = minutes_check.load_minutes(project)
+        minutes = minutes_check.load_minutes(project, "sample-b")
         for folder, result in results.items():
             attach(result["findings"], project, folder, client, minutes, library, numbers_from=everything)
             write_json(folder / "result.json", result)

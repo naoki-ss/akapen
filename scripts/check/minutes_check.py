@@ -70,8 +70,8 @@ def parse_items(text):
     return items
 
 
-def load_minutes(project):
-    """[{name, text, items}]。登録がないかファイルがなければ空（議事録の照合をせず、そのことを一覧に書く）"""
+def load_minutes(project, slug=None):
+    """[{name, text, items}]。その物件の議事録だけを返す。なければ空（議事録の照合をせず、そのことを一覧に書く）"""
     documents = []
     for path in project.get("minutes", []):
         path = Path(path)
@@ -81,6 +81,10 @@ def load_minutes(project):
         items = parse_items(text)
         if items:
             documents.append({"name": path.stem, "text": text, "items": items})
+    if slug:
+        from minutes_store import as_document, stored
+
+        documents += [document for document in map(as_document, stored(slug)) if document["items"]]
     return documents
 
 

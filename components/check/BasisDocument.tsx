@@ -109,7 +109,11 @@ export default function BasisDocument({
             <i className={`${styles.number} mono`} data-color={colorName(finding)}>
               {finding.number}
             </i>
-            議事録：{block.heading}
+            <span>
+              議事録 {block.doc}
+              <br />
+              <small>{block.heading}</small>
+            </span>
           </h3>
           <ol className={styles.minutesLines}>
             {block.lines.map((line) => (

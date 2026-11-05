@@ -13,6 +13,7 @@ import {
 } from "@/lib/findings";
 import { jobOption } from "@/lib/jobNames";
 import { floorsOf, type Member } from "@/lib/model";
+import type { MinutesSummary } from "@/lib/minutes";
 import type { ConfirmedSheet } from "@/lib/sheetStatus";
 import type { KnowledgeApp, ProjectDocument } from "@/lib/projects";
 import { ALL_LAYERS, titleKey, type LayerKey, type SheetTarget } from "@/lib/sheets";
@@ -40,6 +41,7 @@ export default function ModelConsole({
   canUpload,
   knowledge,
   confirmedSheets,
+  minutes,
   documents,
 }: Building & {
   projects: { slug: string; name: string }[];
@@ -47,6 +49,7 @@ export default function ModelConsole({
   canUpload: boolean;
   knowledge: KnowledgeApp[];
   confirmedSheets: ConfirmedSheet[];
+  minutes: MinutesSummary[];
   documents: ProjectDocument[];
 }) {
   const router = useRouter();
@@ -264,10 +267,29 @@ export default function ModelConsole({
               <p className={panel.empty}>登録済みの設計図書はありません。</p>
             ) : (
               <ul className={panel.rows}>
-                {documents.map((document) => (
+                {documents.filter((document) => document.kind !== "議事録").map((document) => (
                   <li key={document.kind} data-on>
                     <span>{document.kind}</span>
                     <small>{document.count} 件</small>
+                  </li>
+                ))}
+              </ul>
+            )}
+            <h3>議事録の履歴</h3>
+            {minutes.length === 0 ? (
+              <p className={panel.empty}>
+                議事録はまだありません。「打ち合わせで見せる」から作れます。
+              </p>
+            ) : (
+              <ul className={panel.rows}>
+                {minutes.map((row) => (
+                  <li key={row.id} data-on>
+                    <Link href={`/projects/${slug}/minutes/${row.id}`}>
+                      {row.date} {row.title}
+                    </Link>
+                    <small>
+                      決定事項 {row.decisionCount} 件・{row.method}
+                    </small>
                   </li>
                 ))}
               </ul>
