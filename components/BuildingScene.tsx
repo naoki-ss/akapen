@@ -301,7 +301,10 @@ function GridLines({ model, level }: { model: BuildingModel; level: number }) {
   );
 }
 
-export type ViewName = "oblique" | "top" | "east" | "west" | "south" | "north";
+export type ViewName = "oblique" | "front" | "top" | "east" | "west" | "south" | "north";
+
+// デモ動画の冒頭。正面の写真から切り替えるので、正面の画角を合わせ、斜めへゆっくり回る
+export type ShotSettings = { fov?: number; eye?: number; dist?: number; flyMs: number };
 export type Display = "normal" | "noRoof" | "xray";
 export type Callout = { number: number; title: string; color: string };
 
@@ -374,6 +377,11 @@ function fitView(
   return { position: eye, target: look };
 }
 
+// 正面の向き。frame.front は斜めの視点の向きなので、近いほうの軸にそろえて面に直角にする
+function facing({ front }: Frame): [number, number] {
+  return Math.abs(front[0]) > Math.abs(front[1]) ? [Math.sign(front[0]), 0] : [0, Math.sign(front[1])];
+}
+
 function viewPosition(view: ViewName, frame: Frame): Vec3 {
   const { center, size } = frame;
   const d = size * 1.75;
@@ -390,6 +398,11 @@ function viewPosition(view: ViewName, frame: Frame): Vec3 {
       return [x + d, y + d * 0.18, z];
     case "west":
       return [x - d, y + d * 0.18, z];
+    case "front": {
+      const [nx, nz] = facing(frame);
+      const distance = frame.size * 2;
+      return [x + nx * distance, Math.max(1.6, frame.height * 0.1), z + nz * distance];
+    }
     case "oblique": {
       // 距離は fitView で決める
       const distance = frame.size * 2;
@@ -422,7 +435,9 @@ function CameraRig({
   insetLeft,
   looksInside,
   underground,
+  shot,
 }: {
+  shot?: ShotSettings;
   view: ViewName;
   frame: Frame;
   focus: { center: Vec3; size: number } | null;
@@ -473,7 +488,19 @@ function CameraRig({
       fx !== undefined && fy !== undefined && fz !== undefined && fs !== undefined;
     if (!focused && !visibleAspect) return;
     const inside = looksInside && view === "oblique";
-    goal.current = focused
+    // 動画の正面：距離と目の高さを指定できる（写真に合わせる）
+    const shotFront =
+      !focused && view === "front" && shot?.dist
+        ? {
+            position: new Vector3(
+              frame.center[0] + facing(frame)[0] * shot.dist,
+              shot.eye ?? 1.6,
+              frame.center[2] + facing(frame)[1] * shot.dist,
+            ),
+            target: new Vector3(...frame.center),
+          }
+        : null;
+    goal.current = shotFront ?? (focused
       ? {
           position: new Vector3(...focusPosition([fx, fy, fz], fs, frame.front)),
           target: new Vector3(fx, fy, fz),
@@ -488,9 +515,9 @@ function CameraRig({
           frame.corners,
           visibleAspect,
           view === "oblique" && !inside,
-        );
+        ));
     invalidate();
-  }, [view, frame, fx, fy, fz, fs, looksInside, visibleAspect]);
+  }, [view, frame, fx, fy, fz, fs, looksInside, visibleAspect, shot]);
 
   useEffect(() => {
     if (!controls) return;
@@ -515,10 +542,28 @@ function CameraRig({
     const now = performance.now();
     goal.current.from ??= { position: camera.position.clone(), target: orbit.target.clone(), at: now };
     const { from } = goal.current;
-    const t = opening.current || reducedMotion() ? 1 : Math.min(1, (now - from.at) / FLY_MS);
+    const t = opening.current || reducedMotion() ? 1 : Math.min(1, (now - from.at) / (shot?.flyMs ?? FLY_MS));
     opening.current = false;
     const k = t < 0.5 ? 4 * t ** 3 : 1 - (-2 * t + 2) ** 3 / 2;
-    camera.position.lerpVectors(from.position, goal.current.position, k);
+    if (shot) {
+      // 動画の冒頭は建物の周りを回る（まっすぐ動くと建物に近づいてしまう）
+      const to = goal.current;
+      const fromSide = from.position.clone().sub(to.target);
+      const toSide = to.position.clone().sub(to.target);
+      const a0 = Math.atan2(fromSide.x, fromSide.z);
+      const a1 = Math.atan2(toSide.x, toSide.z);
+      const turn = Math.atan2(Math.sin(a1 - a0), Math.cos(a1 - a0));
+      const angle = a0 + turn * k;
+      const r0 = Math.hypot(fromSide.x, fromSide.z);
+      const radius = r0 + (Math.hypot(toSide.x, toSide.z) - r0) * k;
+      camera.position.set(
+        to.target.x + Math.sin(angle) * radius,
+        from.position.y + (to.position.y - from.position.y) * k,
+        to.target.z + Math.cos(angle) * radius,
+      );
+    } else {
+      camera.position.lerpVectors(from.position, goal.current.position, k);
+    }
     orbit.target.lerpVectors(from.target, goal.current.target, k);
     orbit.update();
     if (t >= 1) goal.current = null;
@@ -1150,6 +1195,7 @@ export type SceneProps = {
   highlighted: ReadonlySet<string>;
   // 強調の色。青（ナレッジ）の指摘は青で光らせる
   highlightColor?: string;
+  shot?: ShotSettings;
   onSelect: (member: Member | null) => void;
   display?: Display;
   view?: ViewName;
@@ -1213,6 +1259,7 @@ export default function BuildingScene({
   sun = null,
   insetLeft = 0,
   onCapture,
+  shot,
 }: SceneProps) {
   const floors = floorsOf(model);
   const roofIndex = floors.findIndex((floor) => /^R/.test(floor));
@@ -1353,7 +1400,7 @@ export default function BuildingScene({
       dpr={onCapture ? 2 : [1, 1.5]}
       shadows={{ type: PCFShadowMap, autoUpdate: false }}
       gl={{ toneMapping: ACESFilmicToneMapping, toneMappingExposure: 0.82 }}
-      camera={{ fov: FOV, near: 0.1, far: 2500, position: start }}
+      camera={{ fov: shot?.fov ?? FOV, near: 0.1, far: 2500, position: start }}
       onPointerMissed={() => onSelect(null)}
     >
       <SkySetup />
@@ -1370,6 +1417,7 @@ export default function BuildingScene({
         enableDamping
       />
       <CameraRig
+        shot={shot}
         view={view}
         frame={frame}
         focus={focus}

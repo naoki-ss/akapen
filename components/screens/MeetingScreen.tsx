@@ -1,12 +1,13 @@
 "use client";
 
 import Link from "next/link";
-import { useState } from "react";
+import { useSearchParams } from "next/navigation";
+import { useEffect, useMemo, useState } from "react";
 import MinutesRecorder from "../MinutesRecorder";
 import { floorsOf, type BuildingModel } from "@/lib/model";
 import { sunDirection, sunPosition } from "@/lib/sun";
 import { Logo } from "../AppFrame";
-import type { Display, ViewName } from "../BuildingScene";
+import type { Display, ShotSettings, ViewName } from "../BuildingScene";
 import BuildingScene from "../BuildingSceneLazy";
 import SceneControls from "../SceneControls";
 import SunBar, { DEFAULT_SUN, type SunState } from "../SunBar";
@@ -31,7 +32,25 @@ export default function MeetingScreen({
   canRecord: boolean;
 }) {
   const floors = floorsOf(model);
-  const [view, setView] = useState<ViewName>("oblique");
+  // デモ動画の冒頭（?shot=front）。操作の部品を消して正面で開き、スペースキーで斜めへ回る
+  const params = useSearchParams();
+  const shotOn = params.get("shot") === "front";
+  const shotQuery = params.toString();
+  const shot = useMemo<ShotSettings | undefined>(() => {
+    if (!shotOn) return undefined;
+    const query = new URLSearchParams(shotQuery);
+    const number = (name: string) => Number(query.get(name)) || undefined;
+    return { fov: number("fov"), eye: number("eye"), dist: number("dist"), flyMs: number("ms") ?? 5500 };
+  }, [shotOn, shotQuery]);
+  const [view, setView] = useState<ViewName>(shotOn ? "front" : "oblique");
+  useEffect(() => {
+    if (!shotOn) return;
+    const turn = (event: KeyboardEvent) => {
+      if (event.code === "Space") setView("oblique");
+    };
+    window.addEventListener("keydown", turn);
+    return () => window.removeEventListener("keydown", turn);
+  }, [shotOn]);
   const [display, setDisplay] = useState<Display>("normal");
   const [floorLimit, setFloorLimit] = useState("all");
   const [sunOn, setSunOn] = useState(true);
@@ -57,6 +76,7 @@ export default function MeetingScreen({
             onSelect={ignore}
             display={display}
             view={view}
+            shot={shot}
             showRooms={showRooms}
             sun={
               sunOn
@@ -69,6 +89,7 @@ export default function MeetingScreen({
           />
         )}
       </div>
+      {!shotOn && (<>
       <header className={`${styles.panel} ${styles.meetingHead}`}>
         <Logo />
         <b>{model.name}</b>
@@ -117,6 +138,7 @@ export default function MeetingScreen({
       <p className={styles.sceneNote}>
         初期検討用のイメージです。寸法の精度は保証しません。
       </p>
+      </>)}
     </div>
   );
 }
