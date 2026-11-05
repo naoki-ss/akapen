@@ -238,6 +238,8 @@ def forbidden_boxes(page):
 # この見出しの行の右側には場所が書かれる。AIが見落としても必ず塗る
 PLACE_LABEL = re.compile(r"建築場所|工事場所|建設場所|建設地|所在地|住所|地名地番|敷地の地名")
 PLACE_WIDTH = 0.28
+# 電話番号は、どの様式でも必ず塗る
+PHONE = re.compile(r"(TEL|FAX|ＴＥＬ|ＦＡＸ)|\d{2,4}[-(（]\d{2,4}[-)）]\d{4}")
 
 
 def place_rows(page):
@@ -245,6 +247,8 @@ def place_rows(page):
     for box, word in display_words(page):
         if PLACE_LABEL.search(word.replace(" ", "")):
             rows.append([box[0] - 0.004, box[1] - 0.006, min(1, box[2] + PLACE_WIDTH), box[3] + 0.006])
+        elif PHONE.search(word):
+            rows.append([box[0] - 0.004, box[1] - 0.004, box[2] + 0.004, box[3] + 0.004])
     return rows
 
 
