@@ -1,9 +1,9 @@
 "use client";
 
-import Image from "next/image";
 import type { DesignRef, Finding } from "@/lib/check";
 import { colorName } from "@/lib/findings";
 import styles from "./check.module.css";
+import ZoomCrop from "./ZoomCrop";
 
 type Numbered = Finding & { number: number };
 
@@ -31,35 +31,16 @@ function DesignFigure({
           {item.doc} p.{item.page}
         </b>
         {item.where && <span>{item.where}</span>}
-        <a href={src} target="_blank" rel="noreferrer">
-          大きく開く
-        </a>
       </figcaption>
-      <div className={styles.docImage}>
-        <Image
-          src={src}
-          alt={`${item.doc} p.${item.page}`}
-          width={item.width}
-          height={item.height}
-          unoptimized
-        />
-        {item.box && (
-          <span
-            className={styles.docBox}
-            data-color={colorName(finding)}
-            style={{
-              left: `${item.box[0] * 100}%`,
-              top: `${item.box[1] * 100}%`,
-              width: `${(item.box[2] - item.box[0]) * 100}%`,
-              height: `${(item.box[3] - item.box[1]) * 100}%`,
-            }}
-          >
-            <b className="mono" data-side={item.box[0] < 0.08 ? "right" : "left"}>
-              {finding.number}
-            </b>
-          </span>
-        )}
-      </div>
+      <ZoomCrop
+        src={src}
+        width={item.width}
+        height={item.height}
+        box={item.box ?? null}
+        color={colorName(finding)}
+        number={finding.number}
+        alt={`${item.doc} p.${item.page}`}
+      />
       {LOCATED[item.located] && (
         <p className={styles.docNote}>{LOCATED[item.located]}</p>
       )}

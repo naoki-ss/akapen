@@ -10,8 +10,10 @@
 """
 import hashlib
 import json
+import os
 import re
 import shutil
+import struct
 import sys
 import unicodedata
 from pathlib import Path
@@ -41,6 +43,13 @@ WINDOW = (0.16, 0.12)
 # 1語だけで位置を決めてよいのは、ページの中に少ししかない語
 RARE = 6
 CROP_DPI = 170
+# 根拠の図面はページ全体を書き出し、画面の枠の中で該当箇所を中央に置く。拡大しても文字がつぶれない密度にする
+FULL_PAGE_DPI = 300
+# 範囲に線や文字があるかの判定
+INK_DPI = 60
+INK_LEVEL = 200
+INK_RATIO = 0.005
+PAGE_CACHE = PRIVATE / "cache" / "design-pages"
 PAGE_DPI = 110
 DETECT_LONG_EDGE = 1568
 # 見つけた枠の外側に足す余白（読み違いの分）
@@ -220,6 +229,20 @@ def overlaps(a, b):
     return a[0] < b[2] and b[0] < a[2] and a[1] < b[3] and b[1] < a[3]
 
 
+def has_ink(page, box):
+    """ページに対する 0〜1 の範囲に線や文字があるか。画面に見える向きの座標で調べる"""
+    pixmap = page.get_pixmap(dpi=INK_DPI, colorspace=pymupdf.csGRAY, alpha=False)
+    x0, x1 = int(box[0] * pixmap.width), int(box[2] * pixmap.width)
+    y0, y1 = int(box[1] * pixmap.height), int(box[3] * pixmap.height)
+    samples = pixmap.samples
+    dark = total = 0
+    for y in range(max(0, y0), min(pixmap.height, y1)):
+        row = samples[y * pixmap.stride + max(0, x0):y * pixmap.stride + min(pixmap.width, x1)]
+        total += len(row)
+        dark += sum(value < INK_LEVEL for value in row)
+    return total > 0 and dark / total >= INK_RATIO
+
+
 def inside(box, mask):
     return box[0] >= mask[0] and box[1] >= mask[1] and box[2] <= mask[2] and box[3] <= mask[3]
 
@@ -236,6 +259,10 @@ def aligned_with_neighbors(page, words):
 
 def full_row(page, box):
     """表の行なら、枠をその行の端まで広げる。備考の欄など、判定に使った文字が必ず入るようにする"""
+    # 仕様書の文章は段組みなので、横に広げると別の段の文字まで入ってしまう。リストの図面だけ広げる
+    text = page.get_text()
+    if "リスト" not in text or "仕様書" in text:
+        return box
     words = [b for b, _ in display_words(page) if b[1] < (box[1] + box[3]) / 2 < b[3] or box[1] <= (b[1] + b[3]) / 2 <= box[3]]
     if len(words) < MIN_ROW_WORDS or box[3] - box[1] > MAX_ROW_HEIGHT or not aligned_with_neighbors(page, words):
         return box
@@ -383,6 +410,9 @@ def design_refs(finding, documents, client, folder, public_only=False):
         elif not box:
             box, _ = locate(page, all_tokens, masks or [])
             located = "text" if box else "page"
+        # AIが示した場所に何も描かれていなければ、位置は分からないものとして扱う（空の枠を見せない）
+        if located == "ai" and not has_ink(page, box):
+            box, located = None, "page"
         scored.append((key, number, where, box, located, masks))
     # 位置の分かる資料を先に出す
     scored.sort(key=lambda row: row[4] == "page")
@@ -391,6 +421,12 @@ def design_refs(finding, documents, client, folder, public_only=False):
         entry = documents[key]
         if box:
             box = full_row(entry["pdf"][number - 1], box)
+        if not public_only:
+            # 判定の結果は、ページ全体の画像を使い回す。公開用の切り抜き（下）はリポジトリに入るので小さいまま
+            name, width, height = full_page_images(folder, key, number, entry["path"], masks)
+            refs.append({"doc": DOC_NAMES[key], "page": number, "where": where, "image": name, "width": width, "height": height,
+                         "box": [round(value, 4) for value in box] if box else None, "located": located, "masked": masks is not None})
+            continue
         crop = crop_around(box) if box else [0, 0, 1, 1]
         dpi = CROP_DPI if box else PAGE_DPI
         name = f"design/{finding['id']}-{index}.png"
@@ -417,6 +453,36 @@ def design_refs(finding, documents, client, folder, public_only=False):
             "masked": masks is not None,
         })
     return refs, len(scored)
+
+
+def cached_page(path, number, masks):
+    """ページ全体の画像の置き場所。描くのに時間が掛かるので、同じ図面の同じページと塗り方は全部の判定で使い回す"""
+    mask_key = hashlib.sha256(json.dumps(masks).encode()).hexdigest()[:12]
+    cache = PAGE_CACHE / f"{file_hash(path)}-p{number}-{FULL_PAGE_DPI}-{mask_key}.png"
+    if not cache.exists():
+        temp = cache.with_suffix(".tmp.png")
+        render_crop(path, number, [0, 0, 1, 1], FULL_PAGE_DPI, masks, temp)
+        temp.replace(cache)
+    return cache
+
+
+def link_to(cache, target):
+    """同じ中身をコピーせずに置く"""
+    target.parent.mkdir(parents=True, exist_ok=True)
+    target.unlink(missing_ok=True)
+    os.link(cache, target)
+
+
+def full_page_images(folder, key, number, path, masks):
+    """ページ全体の画像を、塗りつぶしたものと塗らないものの2枚置く。(名前, 幅, 高さ)"""
+    name = f"design/page-{key}-{number}.png"
+    plain = cached_page(path, number, [])
+    link_to(plain, folder / name)
+    if masks is not None:
+        link_to(cached_page(path, number, masks), folder / "masked" / name)
+    # PNG の見出しに幅と高さがある
+    width, height = struct.unpack(">II", plain.read_bytes()[16:24])
+    return name, width, height
 
 
 def relative_box(box, crop):

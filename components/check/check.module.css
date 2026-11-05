@@ -864,7 +864,7 @@
 .workspace {
   grid-area: work;
   display: grid;
-  grid-template-rows: minmax(0, 46fr) minmax(0, 54fr);
+  grid-template-rows: minmax(0, 3fr) minmax(0, 7fr);
   min-width: 0;
   min-height: 0;
 }
@@ -1299,4 +1299,170 @@
   background: color-mix(in srgb, var(--red) 12%, transparent);
   box-shadow: inset 2px 0 0 var(--red);
   padding-left: 8px;
+}
+
+/* ④：比較を主役にする。3D／施工図の枠は小さく、畳める */
+.workspace[data-viewer="false"] {
+  grid-template-rows: auto minmax(0, 1fr);
+}
+
+.viewer[hidden] {
+  display: none;
+}
+
+.viewerBar {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 16px;
+  border: 0;
+  border-bottom: 1px solid var(--line-strong);
+  background: var(--tint);
+  color: var(--ink);
+  font: inherit;
+  font-size: 13px;
+  cursor: pointer;
+}
+
+.viewerBar:hover {
+  background: var(--tint-strong);
+}
+
+/* 比較の欄。判定の一文の帯と重ならないよう、残りの高さだけを使う */
+.compare {
+  display: grid;
+  grid-template-rows: auto minmax(260px, 1fr) auto;
+  grid-auto-rows: auto;
+  padding-bottom: 10px;
+}
+
+.compareColumns {
+  min-height: 0;
+}
+
+.compareCard {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.compareCard h3 {
+  display: flex;
+  align-items: center;
+  flex: none;
+}
+
+.sheetReading,
+.compareValue {
+  flex: none;
+}
+
+.compareCard .document {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  padding: 0;
+  border: 0;
+  background: none;
+}
+
+.compareCard .docFigure {
+  flex: 1 0 240px;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  margin: 0 0 8px;
+}
+
+.compareFoot {
+  margin-top: 8px;
+}
+
+.expand {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  margin-left: auto;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--muted);
+  font: inherit;
+  font-size: 12px;
+  font-weight: 400;
+  cursor: pointer;
+}
+
+.expand:hover {
+  color: var(--ink);
+}
+
+/* 枠の中で動かせる図面 */
+.zoomCrop {
+  position: relative;
+  flex: 1;
+  min-height: 0;
+  overflow: hidden;
+  border: 1px solid var(--line);
+  background: #fff;
+  cursor: grab;
+  touch-action: none;
+  user-select: none;
+}
+
+.zoomCrop:active {
+  cursor: grabbing;
+}
+
+.zoomCrop img {
+  position: absolute;
+  top: 0;
+  left: 0;
+  max-width: none;
+  transform-origin: 0 0;
+  pointer-events: none;
+}
+
+.zoomReset {
+  position: absolute;
+  right: 8px;
+  bottom: 8px;
+  padding: 3px 8px;
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius);
+  background: var(--panel);
+  color: var(--ink);
+  font: inherit;
+  font-size: 12px;
+  cursor: pointer;
+}
+
+/* 全画面で並べる */
+.compareColumns[data-big="true"] {
+  position: fixed;
+  z-index: 60;
+  inset: 0;
+  grid-template-rows: auto minmax(0, 1fr);
+  padding: 12px 16px 16px;
+  background: var(--panel);
+}
+
+.compareBigHead {
+  grid-column: 1 / -1;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 16px;
+}
+
+.compareBigHead b {
+  flex: 1;
+}
+
+.compareBigHead .btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
 }

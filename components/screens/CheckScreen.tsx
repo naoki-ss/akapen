@@ -2,7 +2,7 @@
 
 import { flushSync } from "react-dom";
 import Skeleton from "../Skeleton";
-import { MoreHorizontal } from "lucide-react";
+import { ChevronDown, ChevronUp, MoreHorizontal } from "lucide-react";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
@@ -63,6 +63,8 @@ export default function CheckScreen({
   const [sheetId, setSheetId] = useState<string | null>(null);
   // 開いたときは3Dで位置を示す。施工図に切り替えたら、別の指摘を選んでもその選択を保つ
   const [mode, setMode] = useState<"sheet" | "3d">(hasModel ? "3d" : "sheet");
+  // 3D／施工図の枠を畳むと、比較が画面いっぱいに広がる
+  const [viewerOpen, setViewerOpen] = useState(true);
   const [menuOpen, setMenuOpen] = useState(false);
   // 公開・デモ用の表示。読み込み直すと必ず塗りつぶしありに戻す
   const [publicView, setPublicView] = useState(true);
@@ -279,8 +281,13 @@ export default function CheckScreen({
                 setActiveId(null);
               }}
             />
-            <div className={styles.workspace}>
-              <section className={styles.viewer} aria-label="図面ビューア">
+            <div className={styles.workspace} data-viewer={viewerOpen}>
+              {!viewerOpen && (
+                <button className={styles.viewerBar} onClick={() => setViewerOpen(true)}>
+                  <ChevronDown size={14} /> 3D／施工図を開く
+                </button>
+              )}
+              <section className={styles.viewer} aria-label="図面ビューア" hidden={!viewerOpen}>
                 <p className={styles.viewerLabel}>
                   {mode === "sheet"
                     ? `施工図：${currentSheet.title}${version ? ` 第${version}版` : ""}`
@@ -296,6 +303,9 @@ export default function CheckScreen({
                     onClick={() => setMode("3d")}
                   >
                     3D
+                  </button>
+                  <button aria-label="たたむ" title="たたむ" onClick={() => setViewerOpen(false)}>
+                    <ChevronUp size={14} />
                   </button>
                 </div>
                 {mode === "sheet" ? (

@@ -1,6 +1,7 @@
 "use client";
 
-import { useState } from "react";
+import { Maximize2, X } from "lucide-react";
+import { useEffect, useState } from "react";
 import type { Finding } from "@/lib/check";
 import {
   colorName,
@@ -9,84 +10,13 @@ import {
   regionsOf,
   sourceLabel,
 } from "@/lib/findings";
-import type { Box, Sheet } from "@/lib/sheets";
+import type { Sheet } from "@/lib/sheets";
 import { REMOVE_REASONS, type RemoveReason } from "@/lib/useDecisions";
 import BasisDocument from "./BasisDocument";
 import styles from "./check.module.css";
+import ZoomCrop from "./ZoomCrop";
 
 type Numbered = Finding & { number: number };
-
-// 切り抜きの枠の縦横比。右の根拠と同じ幅で、文字が読める倍率にする
-const CROP_ASPECT = 2.4;
-const CROP_PADDING = 1.3;
-const MIN_WINDOW = 0.1;
-// 切り抜く幅の上限（図面の幅に対する比）。これより広い指摘は、枠の始まりを見せる
-const MAX_WIDE = 0.26;
-
-// 該当箇所のまわりを、同じ比率で図面から切り出して見せる。余白が出ないよう図面の中に収める
-function SheetCrop({
-  sheet,
-  base,
-  region,
-  color,
-}: {
-  sheet: Sheet;
-  base: string;
-  region: Box;
-  color: "red" | "blue";
-}) {
-  const ratio = sheet.width / sheet.height;
-  const [x0, y0, x1, y1] = region;
-  let high = Math.max(
-    (y1 - y0) * CROP_PADDING,
-    ((x1 - x0) * CROP_PADDING * ratio) / CROP_ASPECT,
-    MIN_WINDOW,
-  );
-  let wide = (high * CROP_ASPECT) / ratio;
-  if (wide > 1) {
-    high /= wide;
-    wide = 1;
-  }
-  if (high > 1) {
-    wide /= high;
-    high = 1;
-  }
-  if (wide > MAX_WIDE) {
-    high *= MAX_WIDE / wide;
-    wide = MAX_WIDE;
-  }
-  // 枠が切り抜きより大きいときは、枠の左上から見せる
-  const place = (from: number, to: number, size: number) =>
-    Math.min(1 - size, Math.max(0, to - from > size ? from - size * 0.06 : (from + to - size) / 2));
-  const left = place(x0, x1, wide);
-  const top = place(y0, y1, high);
-  return (
-    <div className={styles.sheetCrop} style={{ aspectRatio: CROP_ASPECT }}>
-      {/* 図面の一部を拡大して切り出すので、next/image の最適化は使わない */}
-      {/* eslint-disable-next-line @next/next/no-img-element */}
-      <img
-        src={`${base}/${sheet.base_image ?? sheet.image}`}
-        alt="施工図の該当箇所"
-        style={{
-          width: `${100 / wide}%`,
-          height: `${100 / high}%`,
-          left: `${(-left / wide) * 100}%`,
-          top: `${(-top / high) * 100}%`,
-        }}
-      />
-      <span
-        className={styles.docBox}
-        data-color={color}
-        style={{
-          left: `${((x0 - left) / wide) * 100}%`,
-          top: `${((y0 - top) / high) * 100}%`,
-          width: `${((x1 - x0) / wide) * 100}%`,
-          height: `${((y1 - y0) / high) * 100}%`,
-        }}
-      />
-    </div>
-  );
-}
 
 // 右下の比較。施工図のいまの状態と根拠を並べ、なぜ問題かの一文と操作を出す
 export default function ComparePane({
@@ -110,6 +40,16 @@ export default function ComparePane({
   const [removingFor, setRemovingFor] = useState<string | null>(null);
   const [reason, setReason] = useState("");
   const [note, setNote] = useState("");
+  // 施工図と根拠を並べたまま全画面で見る
+  const [big, setBig] = useState(false);
+  useEffect(() => {
+    if (!big) return;
+    const close = (event: KeyboardEvent) => {
+      if (event.key === "Escape") setBig(false);
+    };
+    window.addEventListener("keydown", close);
+    return () => window.removeEventListener("keydown", close);
+  }, [big]);
   if (!finding) {
     return (
       <section className={styles.compare}>
@@ -136,21 +76,48 @@ export default function ComparePane({
           {sourceLabel(finding)}
         </span>
       </header>
-      <div key={finding.id} className={styles.compareColumns}>
+      <div key={finding.id} className={styles.compareColumns} data-big={big}>
+        {big && (
+          <div className={styles.compareBigHead}>
+            <i className={`${styles.number} mono`} data-color={color}>
+              {finding.number}
+            </i>
+            <b>{finding.title}</b>
+            <button className={styles.btn} onClick={() => setBig(false)}>
+              <X size={14} /> 閉じる（Esc）
+            </button>
+          </div>
+        )}
         <div className={styles.compareCard} data-side="sheet">
-          <h3>施工図（いまの状態）</h3>
+          <h3>
+            施工図（いまの状態）
+            {!big && (
+              <button className={styles.expand} onClick={() => setBig(true)}>
+                <Maximize2 size={12} /> 大きく開く
+              </button>
+            )}
+          </h3>
           {finding.sheet_value && (
             <p className={styles.sheetReading}>{finding.sheet_value}</p>
           )}
-          <SheetCrop
-            sheet={sheet}
-            base={base}
-            region={regionsOf(finding)[0]}
+          <ZoomCrop
+            src={`${base}/${sheet.base_image ?? sheet.image}`}
+            width={sheet.width}
+            height={sheet.height}
+            box={regionsOf(finding)[0]}
             color={color}
+            alt="施工図の該当箇所"
           />
         </div>
         <div className={styles.compareCard} data-side="basis">
-          <h3>根拠（{sourceLabel(finding)}）</h3>
+          <h3>
+            根拠（{sourceLabel(finding)}）
+            {!big && (
+              <button className={styles.expand} onClick={() => setBig(true)}>
+                <Maximize2 size={12} /> 大きく開く
+              </button>
+            )}
+          </h3>
           <BasisDocument
             finding={finding}
             base={base}

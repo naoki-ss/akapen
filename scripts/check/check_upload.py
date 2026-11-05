@@ -51,7 +51,8 @@ WORKERS = 3
 MESSAGE_FILES = {"design": "review", "minutes": "minutes", "knowledge": "knowledge"}
 CHECK_LABELS = {"design": "設計図書との照合（赤）", "minutes": "議事録との照合（赤）", "knowledge": "ナレッジの確認（青）"}
 MAX_PAGES = 40
-PAGE_DPI = 220
+# 図面は2倍の密度で書き出す。拡大しても文字がつぶれないように
+PAGE_DPI = 260
 CROP_DPI = 150
 CROP_MARGIN = 45
 

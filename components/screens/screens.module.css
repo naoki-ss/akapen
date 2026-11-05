@@ -449,9 +449,10 @@
   }
 }
 
+/* 終わったら効果を残さない（全画面の表示が親の動きに引きずられないように） */
 .frameBody > :not(.tabBody),
 .tabBody > :not(.tabs) {
-  animation: pageEnter 0.26s var(--ease) both;
+  animation: pageEnter 0.26s var(--ease) backwards;
 }
 
 /* 一覧は上から順に少しずつ */
