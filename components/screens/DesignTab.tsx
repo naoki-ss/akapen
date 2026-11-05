@@ -1,5 +1,6 @@
 "use client";
 
+import { showCost } from "@/lib/showCost";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 import type { Ledger, ModelChanges, ModelStatus, Proposal, ProposedPage } from "@/lib/ledger";
@@ -72,7 +73,7 @@ function ReviewSet({
               if (result) setProposal(result.proposal);
             }}
           >
-            AIで読む（約 {proposal.ai_usd} ドル）
+            AIで読む{showCost && `（約 ${proposal.ai_usd} ドル）`}
           </button>
         </p>
       )}
@@ -139,7 +140,7 @@ function ReviewSet({
       </table>
       {error && <p className={styles.error}>{error}</p>}
       <p className={styles.note}>
-        入れると、建物データと3Dも更新します。読み取り済みのページは読み直しません（費用は多くても約 {proposal.model_usd} ドル）。
+        入れると、建物データと3Dも更新します。読み取り済みのページは読み直しません{showCost && `（費用は多くても約 ${proposal.model_usd} ドル）`}。
       </p>
       <button
         className={screens.action}

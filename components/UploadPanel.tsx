@@ -4,12 +4,13 @@ import Image from "next/image";
 import { useRef, useState } from "react";
 import { Check } from "lucide-react";
 import type { Draft, JobStatus, useUploadJob } from "@/lib/useUploadJob";
+import { showCost } from "@/lib/showCost";
 import CountUp from "./CountUp";
 import styles from "./App.module.css";
 
-// 3ページずつ並行して判定する。実績は1ページ 約1分半、約2ドル
+// 3ページずつ並行して判定する。実績は1ページ 約1分半
 const estimate = (pages: number) =>
-  `目安 約${Math.ceil(pages / 3) * 1.5}分・約${pages * 2}ドル`;
+  `目安 約${Math.ceil(pages / 3) * 1.5}分${showCost ? `・約${pages * 2}ドル` : ""}`;
 
 // 確認の観点。判定の順ではなく、終わった数だけ順に点灯する
 const FOCUS_LABELS = ["部材リスト", "差替の赤枠", "共通事項", "符号の有無", "配置", "詳細図"];

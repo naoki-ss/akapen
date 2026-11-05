@@ -63,6 +63,10 @@ def text_spans(words, axis, names, positions):
     return spans
 
 
+# 寸法線が通り芯と柱芯で分かれているとみなす、全体寸法との差の上限（mm）
+SPLIT_DIMENSION_MAX = 1000
+
+
 def adjacent_pairs(names, start, end):
     if start not in names or end not in names:
         return []
@@ -110,7 +114,8 @@ def build(reads, doc_of):
     names = {}
     for axis, key in (("x", "grids_x"), ("y", "grids_y")):
         counts = Counter(tuple(r["reply"][key]) for r in plans if r["reply"][key])
-        names[axis] = list(counts.most_common(1)[0][0]) if counts else []
+        # 一部の階にしかない通りも落とさないよう、いちばん長い並びを使う。同じ長さなら多く出てきた並び
+        names[axis] = list(max(counts, key=lambda row: (len(row), counts[row]))) if counts else []
         if not names[axis]:
             check("通り芯", f"{axis} 方向の通りを読めませんでした")
         elif len(counts) > 1:
@@ -130,6 +135,7 @@ def build(reads, doc_of):
             positions = grid_positions(page_words)
             for pair, value in text_spans(page_words, axis, names[axis], positions).items():
                 text_values[pair].append((value, refs))
+        verified = verified_spans(plans, axis, names[axis])
         for pair in zip(names[axis], names[axis][1:]):
             ai = Counter(value for value, _ in ai_values[pair]).most_common(1)
             text = Counter(value for value, _ in text_values[pair]).most_common(1)
@@ -138,16 +144,18 @@ def build(reads, doc_of):
                 status = "一致" if ai_value == text_value else "不一致"
             else:
                 status = "文字のみ" if text_value is not None else "AIのみ" if ai_value is not None else "読めず"
-            value = text_value if text_value is not None else ai_value
+            value = verified.get(pair, text_value if text_value is not None else ai_value)
+            if pair in verified:
+                status = "全体の寸法と一致"
             if status in ("不一致", "読めず"):
                 check("通り芯の寸法", f"{pair[0]}〜{pair[1]}：文字 {text_value}、AI {ai_value}", [pair[0], pair[1]])
             # 多数決で隠れないように、ページで読みが違うときも出す
             for name, values in (("AIの読み", ai_values[pair]), ("図面の文字", text_values[pair])):
                 by_value = defaultdict(set)
-                for value, refs in values:
-                    by_value[value].add(refs["page"])
+                for seen_value, refs in values:
+                    by_value[seen_value].add(refs["page"])
                 if len(by_value) > 1:
-                    detail = "、".join(f"{value}（p.{'、'.join(str(n) for n in sorted(pages))}）" for value, pages in sorted(by_value.items()))
+                    detail = "、".join(f"{seen}（p.{'、'.join(str(n) for n in sorted(pages))}）" for seen, pages in sorted(by_value.items()))
                     check("通り芯の寸法", f"{pair[0]}〜{pair[1]}：{name}がページで違います。{detail}", [pair[0], pair[1]])
             span_rows.append({"axis": axis, "from": pair[0], "to": pair[1], "mm": value, "text": text_value, "ai": ai_value, "status": status})
 
@@ -337,9 +345,49 @@ def column_mark_near(words, row):
                and abs((w[1] + w[3]) / 2 - positions[row["y"]]) <= MARK_NEAR_COLUMN for w in words)
 
 
+def verified_spans(plans, axis, names):
+    """全体の寸法で確かめられる区間の値。1区間だけの全体寸法はそのまま使い、複数区間は足し算が合うものを使う。
+    足りない分が少しだけなら、寸法線が通り芯と柱芯で分かれている（両端の 200 など）とみなして両端の区間に足す"""
+    verified = {}
+    rows = [(overall, {(s["from"], s["to"]): s["mm"] for s in read["reply"]["spans"] if s["axis"] == axis})
+            for read in plans for overall in read["reply"]["overall"] if overall["axis"] == axis]
+    for overall, _ in rows:
+        pairs = adjacent_pairs(names, overall["from"], overall["to"])
+        if len(pairs) == 1:
+            verified.setdefault(pairs[0], overall["mm"])
+    for overall, spans in sorted(rows, key=lambda row: -len(adjacent_pairs(names, row[0]["from"], row[0]["to"]))):
+        pairs = adjacent_pairs(names, overall["from"], overall["to"])
+        if len(pairs) < 2:
+            continue
+        # どの図の区間の読みかで合うものを探す
+        all_spans = [spans] + [other for _, other in rows]
+        values = []
+        for pair in pairs:
+            found = verified.get(pair)
+            for table in all_spans:
+                if found is None:
+                    found = table.get(pair, table.get(pair[::-1]))
+            values.append(found)
+        if None in values:
+            continue
+        gap = overall["mm"] - sum(values)
+        if gap == 0:
+            verified.update({pair: value for pair, value in zip(pairs, values) if pair not in verified})
+        elif 0 < gap <= SPLIT_DIMENSION_MAX and pairs[0] not in verified and pairs[-1] not in verified:
+            values[0] += gap / 2
+            values[-1] += gap / 2
+            verified.update({pair: value for pair, value in zip(pairs, values) if pair not in verified})
+    return verified
+
+
+def whole_roof(floor):
+    return floor.startswith(("R", "PH"))
+
+
 def apply_slopes(frames, beams, positions_mm, check):
     """勾配を階ごとに決め、梁の両端の高さの差に足す。図で値が違うときは要確認にして、多い方を使う"""
     votes = defaultdict(Counter)
+    lines = defaultdict(set)
     for read in frames:
         for frame in read["reply"]["frames"]:
             for slope in frame.get("slopes", []):
@@ -351,12 +399,16 @@ def apply_slopes(frames, beams, positions_mm, check):
                         drop = round(distance * float(ratio.group(1)) / float(ratio.group(2)))
                     if drop is not None:
                         votes[slope["floor"]][(slope["high"], slope["low"], drop)] += 1
+                        # 勾配があるのはこの図の通りだけ。同じ階でも水平な部分がある
+                        if frame["line"][0] != slope["high"][0]:
+                            lines[slope["floor"]].add(frame["line"])
     rows = []
     for floor, count in votes.items():
         (high, low, drop), _ = count.most_common(1)[0]
         if len(count) > 1:
             check("勾配", f"{floor}：図によって値が違います（{[list(k) for k in count]}）")
-        rows.append({"floor": floor, "high": high, "low": low, "drop_mm": drop})
+        # R階の屋根は全体に掛かる。途中の階の勾配（平屋の部分の屋根など）は、図に書かれた通りだけ
+        rows.append({"floor": floor, "high": high, "low": low, "drop_mm": drop, "lines": [] if whole_roof(floor) else sorted(lines[floor])})
         start, end = positions_mm[high], positions_mm[low]
         axis = high[0]
 
@@ -367,6 +419,10 @@ def apply_slopes(frames, beams, positions_mm, check):
             if beam["floor"] != floor or beam["from"] not in positions_mm or beam["to"] not in positions_mm or beam["along"] not in positions_mm:
                 continue
             first, second = (beam["from"], beam["to"]) if beam["from"][0] == axis else (beam["along"], beam["along"])
+            # 勾配のない通りの梁は水平のまま。直交する梁は、どちらかの端が勾配のある通りなら勾配に乗る
+            crossing = (beam["along"],) if beam["from"][0] == axis else (beam["from"], beam["to"])
+            if not whole_roof(floor) and lines[floor] and not set(crossing) & lines[floor]:
+                continue
             base = beam["offset_mm"] or 0
             beam["offset_mm"] = round(base - fall(first))
             beam["offset_end_mm"] = round(base - fall(second))
@@ -405,6 +461,9 @@ def slope_fall(slopes, floor, x, y, coordinates):
     for slope in slopes:
         if slope["floor"] == floor:
             at = x if slope["high"][0] == "X" else y
+            other = y if at == x else x
+            if slope.get("lines") and other not in slope["lines"]:
+                return 0
             start, end = coordinates[slope["high"]], coordinates[slope["low"]]
             return slope["drop_mm"] * (coordinates[at] - start) / (end - start)
     return 0
@@ -424,6 +483,36 @@ def typical_sections(sections):
         values = sorted(s[key] for s in sections if s[key] and s["mark"].startswith(kind))
         return values[len(values) // 2] if values else None
     return {"column": middle("width_mm", "C") or 300, "beam_width": middle("width_mm", "G") or 200, "beam_depth": middle("depth_mm", "G") or 400}
+
+
+def fill_floating_columns(members, beams, floors, levels, grid_x, grid_y, foundation, checks):
+    """上の階の柱の下に柱がなく、それを受ける梁もなければ、読み落としとみなして下の階の柱を足す"""
+    columns = {(row["floor"], row["grid"]) for row in members if row["type"] == "column"}
+
+    def carried(floor, x, y):
+        # 梁の途中に載っていれば、梁で受けている（梁の端は受けにならない）
+        for beam in beams:
+            if beam["floor"] != floor:
+                continue
+            if beam["along"] == x and beam["from"][0] == "Y":
+                low, high = sorted((grid_y.get(beam["from"], 0), grid_y.get(beam["to"], 0)))
+                if low < grid_y[y] < high:
+                    return True
+            if beam["along"] == y and beam["from"][0] == "X":
+                low, high = sorted((grid_x.get(beam["from"], 0), grid_x.get(beam["to"], 0)))
+                if low < grid_x[x] < high:
+                    return True
+        return False
+
+    for index in range(len(floors) - 1, 0, -1):
+        floor, below = floors[index], floors[index - 1]
+        for row in [m for m in members if m["type"] == "column" and m["floor"] == floor]:
+            x, y = row["grid"].split("-")
+            if (below, row["grid"]) in columns or carried(floor, x, y):
+                continue
+            members.append({**row, "floor": below, "mark": row["mark"], "z0": levels[below] + (foundation if index == 1 else 0), "z1": row["z0"]})
+            columns.add((below, row["grid"]))
+            checks.append({"kind": "柱", "result": "要確認", "message": f"{below} {row['grid']}：上の階に柱があり、受ける梁がないので柱を足しました", "refs": [x, y]})
 
 
 def to_model(data, name):
@@ -450,6 +539,9 @@ def to_model(data, name):
     for row in data["columns"]:
         if row["floor"] not in levels or row["x"] not in grid_x or row["y"] not in grid_y:
             continue
+        # 軸組図の読みだけで、伏図に符号がない柱は描かない（確認の一覧には残る）
+        if row["status"] == "軸組図のみ":
+            continue
         index = floors.index(row["floor"])
         if index + 1 >= len(floors):
             continue
@@ -461,6 +553,7 @@ def to_model(data, name):
         members.append({"type": "column", "mark": row["mark"], "grid": f"{row['x']}-{row['y']}", "floor": row["floor"],
                         "x": grid_x[row["x"]], "y": grid_y[row["y"]], "z0": bottom, "z1": round(top),
                         "width": (section or {}).get("width_mm") or default_section["column"], **({"section": section["text"]} if section else {})})
+    fill_floating_columns(members, data["beams"], floors, levels, grid_x, grid_y, foundation, data["checks"])
     for row in data["beams"]:
         base = foundation if row["floor"] == "基礎" else levels.get(row["floor"])
         coordinates = {**grid_x, **grid_y}

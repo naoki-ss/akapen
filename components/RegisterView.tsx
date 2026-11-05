@@ -1,6 +1,7 @@
 "use client";
 
 import { Check, X } from "lucide-react";
+import { showCost } from "@/lib/showCost";
 import { useEffect, useState } from "react";
 import type { ProjectSummary } from "@/lib/buildings";
 import { PREFECTURES } from "@/lib/prefectures";
@@ -549,8 +550,8 @@ export default function RegisterView({
         {pages && estimate && !status && (
           <div className={reg.running}>
             <b>
-              目安 {minutesText(estimate.seconds)}・
-              {estimate.usd > 0 ? `約${estimate.usd}ドル` : "費用なし"}
+              目安 {minutesText(estimate.seconds)}
+              {showCost && `・${estimate.usd > 0 ? `約${estimate.usd}ドル` : "費用なし"}`}
             </b>
             <small>
               全 {pages.length} ページのうち {estimate.read} ページを読みます。

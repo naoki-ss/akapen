@@ -40,7 +40,9 @@ CACHE = PRIVATE / "projects" / "_cache"
 class Register:
     def __init__(self, args):
         self.args = args
-        self.folder = PRIVATE / "projects" / args.slug
+        # --folder を付けると、画面に出さない非公開フォルダに置く（読み取りのキャッシュも共有しない）
+        self.folder = Path(args.folder) if getattr(args, "folder", None) else PRIVATE / "projects" / args.slug
+        self.cache = self.folder / "_cache" if getattr(args, "folder", None) else CACHE
         self.raw = self.folder / "raw"
         self.raw.mkdir(parents=True, exist_ok=True)
         self.docs = {"D1": pymupdf.open(args.design)}
@@ -107,7 +109,7 @@ class Register:
         return total
 
     def cache_path(self, entry):
-        return CACHE / f"{self.hashes[entry['source']]}-p{entry['page']}-{entry['kind']}.json"
+        return self.cache / f"{self.hashes[entry['source']]}-p{entry['page']}-{entry['kind']}.json"
 
     def cached(self, entry):
         return (self.folder / "reads" / f"{entry['source']}-p{entry['page']}.json").exists() or self.cache_path(entry).exists()
@@ -127,7 +129,7 @@ class Register:
         content = building_read.build_content(self.doc(entry["source"])[entry["page"] - 1], entry["kind"], image_block, render, tiles)
         reply = call_claude(client, system, content, schema, raw_dir, "read")
         write_json(path, {"source": entry["source"], "page": entry["page"], "kind": entry["kind"], "title": entry["title"], "reply": reply})
-        CACHE.mkdir(parents=True, exist_ok=True)
+        self.cache.mkdir(parents=True, exist_ok=True)
         shutil.copy(path, self.cache_path(entry))
         return entry, message_cost(raw_dir / "read.json")[2], True
 
@@ -206,6 +208,7 @@ def main():
     parser.add_argument("--design", required=True)
     parser.add_argument("--revised")
     parser.add_argument("--stage", required=True, choices=list("ABCDE"))
+    parser.add_argument("--folder")
     args = parser.parse_args()
     if "/" in args.slug or ".." in args.slug:
         sys.exit("記号に使えない文字があります")

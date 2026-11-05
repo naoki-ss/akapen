@@ -31,6 +31,10 @@ export const MATERIALS: Record<string, MaterialSpec> = {
   steel_deck: { label: "デッキプレート", color: "#90969A", metalness: 0.6, roughness: 0.5, pattern: "folded", tile: 0.3 },
   roof_membrane: { label: "防水屋根", color: "#A8A8A4", metalness: 0, roughness: 0.92 },
   floor_plate: { label: "床", color: "#E4E1D8", metalness: 0, roughness: 0.85 },
+  metal_siding: { label: "金属サイディング", color: "#9EA3A6", metalness: 0.55, roughness: 0.5, pattern: "ribs", tile: 0.2 },
+  siding: { label: "窯業系サイディング", color: "#C9C5BB", metalness: 0, roughness: 0.8, pattern: "ribs", tile: 0.45 },
+  mortar: { label: "モルタル", color: "#BDBBB4", metalness: 0, roughness: 0.92 },
+  painted_wall: { label: "塗装の外壁", color: "#D6D3CB", metalness: 0, roughness: 0.85 },
   // 読めなかったところに使う
   standard_wall: { label: "標準の外壁", color: "#CFCDC6", metalness: 0, roughness: 0.85 },
 };

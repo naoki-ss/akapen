@@ -7,6 +7,7 @@
 進み具合は status.json。stop.flag が置かれたら止める（読み終えたページは次に使い回す）。
 3Dが作れなくても、設計図書が読めれば「3Dなし」で登録を終え、施工図チェックは使える。
 """
+import exterior_read
 import argparse
 import fcntl
 import hashlib
@@ -239,6 +240,17 @@ def run(folder):
         for entry in failed:
             data["checks"].append({"kind": "読み取り", "result": "要確認", "message": f"{entry['title']}（p.{entry['page']}）を読み取れませんでした", "refs": []})
         write_json(folder / "building.json", data)
+        # 意匠図があれば外観を足す。失敗しても骨組みの3Dで登録を終える
+        architectural = meta["inputs"].get("architectural")
+        if architectural and model:
+            status.update(stage="外観", message="意匠図から外観を読んでいます")
+            try:
+                usd += exterior_read.read_all(architectural, folder / "exterior")
+                exterior_read.build(architectural, folder / "exterior", folder / "model.json", folder / "model.json")
+                model = json.loads((folder / "model.json").read_text())
+            except (Exception, SystemExit):
+                (folder / "error-exterior.txt").write_text(traceback.format_exc())
+                data["checks"].append({"kind": "外観", "result": "要確認", "message": "意匠図から外観を作れなかったので、骨組みで表示します", "refs": []})
         minutes, minutes_usd = minutes_files(folder, meta, status)
         usd += minutes_usd
         reg.spend("minutes", minutes_usd) if minutes_usd else None

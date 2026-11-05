@@ -661,6 +661,8 @@ function wallMaterial(
   return hits[0]?.material ?? "standard_wall";
 }
 
+const CURTAIN_RATIO = 0.6;
+
 function floorPieces(floor: ArchFloor, architecture: Architecture): Pieces {
   const pieces: Pieces = new Map();
   const points = floor.outline;
@@ -750,8 +752,9 @@ function floorPieces(floor: ArchFloor, architecture: Architecture): Pieces {
       const to = Math.min(opening.to, b);
       if (to <= from) continue;
       wall(cursor, from, floor.z0, floor.z1);
-      // 幅の広い開口の腰壁と垂れ壁は、外壁の仕上げではなく開口の枠と同じ素材にする
-      if (to - from >= 3000) {
+      // 階の高さの大半を占める幅の広い開口（カーテンウォールなど）の腰壁と垂れ壁は、外壁の仕上げではなく開口の枠と同じ素材にする
+      const curtain = (opening.z1 - opening.z0) / (floor.z1 - floor.z0) >= CURTAIN_RATIO;
+      if (to - from >= 3000 && curtain) {
         box(from, to, fixed, alongX, floor.z0, opening.z0, WALL_THICKNESS, frameKey);
         box(from, to, fixed, alongX, opening.z1, floor.z1, WALL_THICKNESS, frameKey);
       } else {
@@ -1213,13 +1216,13 @@ export type SceneProps = {
   onCapture?: (image: string) => void;
 };
 
-// 正面を決める：ガラスの開口が一番広い面。読めなければ南。
+// 正面を決める：開口の面積が一番広い面。読めなければ南。
 // カメラは正面から斜めに振る。建物の高い部分のある側へ振って、全体の形が見えるようにする
 function frontOf(model: BuildingModel, xMid: number): [number, number] {
   const totals: Record<string, number> = { north: 0, south: 0, east: 0, west: 0 };
   for (const floor of model.architecture?.floors ?? []) {
     for (const opening of floor.openings) {
-      totals[opening.side] += opening.to - opening.from;
+      totals[opening.side] += (opening.to - opening.from) * (opening.z1 - opening.z0);
     }
   }
   const side = Object.entries(totals).reduce(

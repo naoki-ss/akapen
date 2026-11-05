@@ -1,5 +1,6 @@
 "use client";
 
+import { showCost } from "@/lib/showCost";
 import { X, Plus } from "lucide-react";
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
@@ -295,10 +296,12 @@ function FileFlow({ kinds, onAdded }: { kinds: string[]; onAdded: () => void }) 
           文字 {estimate.chars.toLocaleString()} 字
           {estimate.image_pages > 0 && `、文字のないページ ${estimate.image_pages} 枚`}
         </p>
-        <p>
-          費用の目安：<b className="mono">約 {estimate.usd} ドル</b>
-          （多くても {estimate.usd_high} ドルほど）
-        </p>
+        {showCost && (
+          <p>
+            費用の目安：<b className="mono">約 {estimate.usd} ドル</b>
+            （多くても {estimate.usd_high} ドルほど）
+          </p>
+        )}
         <p className={styles.note}>
           ファイルの内容はAnthropicのAPIへ送られます。登録するまで判定には使いません。
         </p>
