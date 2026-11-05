@@ -290,6 +290,31 @@ export function knowledgeApps(): KnowledgeApp[] {
   });
 }
 
+export type AddedKnowledge = {
+  id: string;
+  name: string;
+  items: number;
+  types: string[];
+};
+
+// 画面から追加したナレッジの一覧。中身は返さない
+export function addedKnowledge(): AddedKnowledge[] {
+  const folder = path.join(KNOWLEDGE, "added");
+  if (!existsSync(folder)) return [];
+  return readdirSync(folder)
+    .filter((name) => name.endsWith(".json"))
+    .map((name) => {
+      const added = readJson(path.join(folder, name));
+      const items: { drawing_types?: string[] }[] = added.items ?? [];
+      return {
+        id: name,
+        name: added.name,
+        items: items.length,
+        types: [...new Set(items.flatMap((item) => item.drawing_types ?? []))],
+      };
+    });
+}
+
 export type ProjectDocument = { kind: string; count: number };
 
 // 登録済みの設計図書。ファイル名は社名が入ることがあるので、種類と数だけを返す

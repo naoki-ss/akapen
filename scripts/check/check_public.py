@@ -50,6 +50,14 @@ if registered.exists():
     for item in registered.rglob("*"):
         if item.is_file():
             upload_hashes[hashlib.sha256(item.read_bytes()).hexdigest()] = item.name
+# ナレッジの取り込みで入れた元のファイルも、リポジトリの外にだけ置く
+imports = PRIVATE / "knowledge-imports"
+if imports.resolve().is_relative_to(REPO.resolve()):
+    problems.append("ナレッジの取り込みの保存先がリポジトリの中です")
+if imports.exists():
+    for item in imports.rglob("*"):
+        if item.is_file():
+            upload_hashes[hashlib.sha256(item.read_bytes()).hexdigest()] = item.name
 print(f"アップロードと登録のファイル {len(upload_hashes)} 種類と照合")
 
 # 社内のチェックリストは公開してよいか決まるまで入れない。本体と同じファイル、項目の文章の転記を止める。
@@ -76,7 +84,7 @@ def checklist_texts(value, inside=False):
             yield from checklist_texts(child, True)
 
 
-for source in sorted(knowledge.iterdir()) if knowledge.exists() else []:
+for source in sorted(item for item in knowledge.rglob("*") if item.is_file()) if knowledge.exists() else []:
     checklist_hashes.add(hashlib.sha256(source.read_bytes()).hexdigest())
     if source.suffix != ".json":
         continue

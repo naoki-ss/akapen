@@ -240,3 +240,10 @@
   background: var(--accent);
   color: #fff;
 }
+
+.addKnowledge {
+  display: block;
+  margin: 6px 0 10px;
+  font-size: 12px;
+  font-weight: 700;
+}

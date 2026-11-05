@@ -4,7 +4,7 @@ import { connection } from "next/server";
 import ModelConsole from "@/components/screens/ModelConsole";
 import { getBuilding, listBuildings } from "@/lib/buildings";
 import { uploadEnabled } from "@/lib/jobs";
-import { knowledgeApps, projectDocuments } from "@/lib/projects";
+import { addedKnowledge, knowledgeApps, projectDocuments } from "@/lib/projects";
 
 async function Content({ params }: PageProps<"/projects/[slug]">) {
   await connection();
@@ -21,6 +21,7 @@ async function Content({ params }: PageProps<"/projects/[slug]">) {
       }))}
       canUpload={enabled}
       knowledge={enabled ? knowledgeApps() : []}
+      addedKnowledge={enabled ? addedKnowledge() : []}
       documents={enabled ? projectDocuments(slug) : []}
     />
   );

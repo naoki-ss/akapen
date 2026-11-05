@@ -13,7 +13,7 @@ import {
 } from "@/lib/findings";
 import { jobOption } from "@/lib/jobNames";
 import { floorsOf, type Member } from "@/lib/model";
-import type { KnowledgeApp, ProjectDocument } from "@/lib/projects";
+import type { AddedKnowledge, KnowledgeApp, ProjectDocument } from "@/lib/projects";
 import { ALL_LAYERS, type LayerKey, type SheetTarget } from "@/lib/sheets";
 import { useJobResult } from "@/lib/useJobResult";
 import { useUploadJob } from "@/lib/useUploadJob";
@@ -38,12 +38,14 @@ export default function ModelConsole({
   projects,
   canUpload,
   knowledge,
+  addedKnowledge,
   documents,
 }: Building & {
   projects: { slug: string; name: string }[];
   // 公開先では施工図を入れられない（APIの費用が掛かるため）
   canUpload: boolean;
   knowledge: KnowledgeApp[];
+  addedKnowledge: AddedKnowledge[];
   documents: ProjectDocument[];
 }) {
   const router = useRouter();
@@ -270,6 +272,11 @@ export default function ModelConsole({
                 </small>
               )}
             </h3>
+            {canUpload && (
+              <Link className={panel.addKnowledge} href={`/knowledge/new?from=${slug}`}>
+                ＋ ナレッジを追加
+              </Link>
+            )}
             {knowledge.length === 0 ? (
               <p className={panel.empty}>
                 チェックリストがありません。青の指摘は「該当なし」になります。
@@ -283,6 +290,18 @@ export default function ModelConsole({
                       {app.imported_at
                         ? `kintoneから取り込み済み（${app.imported_at.slice(5).replace("-", "/")}）・${app.items}項目`
                         : "未取り込み"}
+                    </small>
+                  </li>
+                ))}
+              </ul>
+            )}
+            {addedKnowledge.length > 0 && (
+              <ul className={panel.rows}>
+                {addedKnowledge.map((added) => (
+                  <li key={added.id} data-on>
+                    <span>{added.name}</span>
+                    <small>
+                      画面から追加・{added.items}項目・{added.types.join("、")}
                     </small>
                   </li>
                 ))}
