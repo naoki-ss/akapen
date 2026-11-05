@@ -275,14 +275,16 @@ def to_findings(reply, targets, page_number, floor_level):
             dropped += 1
             continue
         checklist_id = item["id"]
+        # 画面から追加した項目のIDは内部の番号なので、題名に出さない
+        label = "" if item.get("source") else f"[{checklist_id}] "
         findings.append({
             **copy.deepcopy(found),
             "source_type": "knowledge",
             "page": page_number,
             "floor_level": floor_level,
             "category": item["section"],
-            "title": f"[{checklist_id}] {found['title']}",
-            "comment": f"{checklist_id} {found['comment'] or found['title']}",
+            "title": f"{label}{found['title']}",
+            "comment": f"{label}{found['comment'] or found['title']}",
             "checklist": {"id": checklist_id, "basis": basis_text(item)},
             "evidence": [{"drawing": "チェックリスト", "page": checklist_id, "where": basis_text(item)}],
         })

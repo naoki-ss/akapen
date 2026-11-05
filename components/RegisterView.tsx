@@ -27,6 +27,8 @@ type Estimate = {
 
 type Status = {
   state: "running" | "done" | "stopped" | "error";
+  // デモ用：事前に作った現場を完成の状態として開く
+  preset_slug?: string;
   message: string;
   stage?: string;
   pages_total?: number;
@@ -502,7 +504,10 @@ export default function RegisterView({
             </button>
           )}
           {done && slug && (
-            <button className={styles.primary} onClick={() => onDone(slug)}>
+            <button
+              className={styles.primary}
+              onClick={() => onDone(status?.preset_slug ?? slug)}
+            >
               {hasModel ? "3Dを開く" : "現場を開く"}
             </button>
           )}

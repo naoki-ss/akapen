@@ -337,10 +337,12 @@ def design_refs(finding, documents, client, folder, public_only=False):
         entry = documents[key]
         page = entry["pdf"][number - 1]
         masks = title_blocks(client, entry["path"], number, page)
-        if not box:
-            box, _ = locate(page, main_tokens, masks or [])
-            if not box:
-                box, _ = locate(page, all_tokens, masks or [])
+        # 題名や根拠の符号が文字で見つかれば、そちらを使う（AIが返す位置より確かなので）
+        found, _ = locate(page, main_tokens, masks or [])
+        if found:
+            box, located = found, "text"
+        elif not box:
+            box, _ = locate(page, all_tokens, masks or [])
             located = "text" if box else "page"
         scored.append((key, number, where, box, located, masks))
     # 位置の分かる資料を先に出す
