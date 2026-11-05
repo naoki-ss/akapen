@@ -29,11 +29,16 @@ export type Decision = {
   grids: string[];
   floors: string[];
   members: string[];
+  // ファイルから作ったときの、元のファイルのページ
+  page?: number;
 };
 
-export type Todo = { id: string; text: string };
+export type Todo = { id: string; text: string; page?: number };
 
-export type MinutesMethod = "音声" | "貼り付け";
+export type MinutesMethod = "音声" | "貼り付け" | "ファイル";
+
+// ファイルから作った議事録の元のファイル
+export type MinutesSource = { import: string; file: string };
 
 export type Minutes = {
   id: string;
@@ -43,6 +48,7 @@ export type Minutes = {
   transcript: string;
   decisions: Decision[];
   todos: Todo[];
+  source?: MinutesSource;
 };
 
 export type MinutesSummary = Pick<Minutes, "id" | "date" | "title" | "method"> & {
@@ -79,6 +85,9 @@ const clean = (value: unknown, limit = MAX_TEXT) =>
 const cleanList = (value: unknown) =>
   (Array.isArray(value) ? value : []).map((item) => clean(item)).filter(Boolean);
 
+const cleanPage = (value: unknown) =>
+  Number.isInteger(value) && Number(value) > 0 ? { page: Number(value) } : {};
+
 // 画面から来た内容を確かめる。番号は保存のたびに付け直さず、なければ新しく付ける
 export function cleanMinutes(raw: Partial<Minutes>): Omit<Minutes, "id"> | null {
   const title = clean(raw.title);
@@ -104,17 +113,24 @@ export function cleanMinutes(raw: Partial<Minutes>): Omit<Minutes, "id"> | null 
     grids: cleanList(row.grids),
     floors: cleanList(row.floors),
     members: cleanList(row.members),
+    ...cleanPage(row.page),
   }));
   next = 1;
   const usedTodos = new Set(todos.map((row) => row.id).filter(Boolean));
   const cleanedTodos = todos.map((row) => ({
     id: clean(row.id, 40) || nextId("T", usedTodos),
     text: clean(row.text),
+    ...cleanPage(row.page),
   }));
+  const source =
+    raw.source && ID.test(String(raw.source.import))
+      ? { import: String(raw.source.import), file: clean(raw.source.file, 200) }
+      : null;
   return {
     title,
     date,
-    method: raw.method === "音声" ? "音声" : "貼り付け",
+    method: raw.method === "音声" || raw.method === "ファイル" ? raw.method : "貼り付け",
+    ...(source ? { source } : {}),
     transcript: clean(raw.transcript, MAX_MINUTES_CHARS),
     decisions: cleanedDecisions,
     todos: cleanedTodos,
@@ -132,7 +148,66 @@ export function saveMinutes(slug: string, id: string | null, body: Omit<Minutes,
 }
 
 export function deleteMinutes(slug: string, id: string) {
+  const source = readMinutes(slug, id)?.source;
   rmSync(file(slug, id), { force: true });
+  // 元のファイルは、同じファイルから作った議事録がなくなったら消す
+  if (!source) return;
+  const folder = path.join(ROOT, slug);
+  const used = existsSync(folder) && readdirSync(folder)
+    .filter((name) => name.endsWith(".json"))
+    .some((name) => (JSON.parse(readFileSync(path.join(folder, name), "utf8")) as Minutes).source?.import === source.import);
+  if (!used) rmSync(importFolder(slug, source.import), { recursive: true, force: true });
+}
+
+// ファイルから作るときの置き場所。議事録の一覧に混ざらないよう別のフォルダにする
+const IMPORTS = path.join(homedir(), "sekozu-data", "minutes-imports");
+export const MINUTES_FILE_TYPES = [".pdf", ".docx", ".txt"];
+const importFolder = (slug: string, id: string) => path.join(IMPORTS, slug, id);
+
+export type FileMeeting = {
+  date: string;
+  title: string;
+  decisions: (Omit<Decision, "id"> & { page: number })[];
+  todos: { text: string; page: number }[];
+};
+
+// ファイルを読み、打ち合わせの回ごとに整理する（ナレッジの取り込みと同じ読み方）
+export function organizeMinutesFile(slug: string, data: Buffer, name: string) {
+  const id = randomUUID().replace(/-/g, "");
+  const folder = importFolder(slug, id);
+  mkdirSync(folder, { recursive: true });
+  writeFileSync(path.join(folder, `source${path.extname(name).toLowerCase()}`), data);
+  return new Promise<{ id: string; file: string; transcript: string; meetings: FileMeeting[] }>(
+    (resolve, reject) => {
+      execFile(
+        fromRoot(".venv", "bin", "python"),
+        [fromRoot("scripts", "check", "minutes_store.py"), "organize-file", folder],
+        { cwd: fromRoot("scripts", "check"), maxBuffer: 10 * 1024 * 1024, timeout: 240000 },
+        (error, stdout, stderr) => {
+          try {
+            if (error) throw error;
+            const body = JSON.parse(stdout.trim().split("\n").at(-1) ?? "");
+            writeFileSync(path.join(folder, "meta.json"), JSON.stringify({ file: name, viewable: body.viewable }));
+            resolve({ id, file: name, transcript: body.transcript, meetings: body.meetings });
+          } catch {
+            rmSync(folder, { recursive: true, force: true });
+            const reason = stderr?.trim().split("\n").at(-1) ?? "";
+            reject(new Error(/[ぁ-ん]/.test(reason) ? reason : "ファイルから議事録を作れませんでした"));
+          }
+        },
+      );
+    },
+  );
+}
+
+// 元のファイル。Word は読み取りに使った PDF を見せる（ページを開けるように）
+export function minutesSourceFile(slug: string, id: string) {
+  if (!SLUG.test(slug) || !ID.test(id)) return null;
+  const folder = importFolder(slug, id);
+  const metaPath = path.join(folder, "meta.json");
+  if (!existsSync(metaPath)) return null;
+  const meta = JSON.parse(readFileSync(metaPath, "utf8")) as { file: string; viewable: string };
+  return { name: meta.file, viewable: meta.viewable, data: readFileSync(path.join(folder, path.basename(meta.viewable))) };
 }
 
 // 文章をClaudeで決定事項・宿題・対象部位に整理する

@@ -160,10 +160,13 @@ def extract(path):
         from docx import Document
 
         word = Document(path)
-        lines = [paragraph.text for paragraph in word.paragraphs if paragraph.text.strip()]
-        for table in word.tables:
-            for row in table.rows:
-                lines.append(" | ".join(cell.text.strip() for cell in row.cells))
+        # 段落と表を、文書の順のまま読む
+        lines = []
+        for block in word.iter_inner_content():
+            if hasattr(block, "rows"):
+                lines += [" | ".join(cell.text.strip() for cell in row.cells) for row in block.rows]
+            elif block.text.strip():
+                lines.append(block.text)
         return text_chunks("\n".join(lines)), []
     return text_chunks(decode(data)), []
 

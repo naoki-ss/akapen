@@ -436,6 +436,7 @@ def minutes_context(finding, minutes):
             if ":" in ref["id"] and ref["id"].rsplit(":", 1)[0] != document["name"]:
                 continue
             rows = readable_lines(document["text"])
+            source = (document.get("sources") or {}).get(ref_id)
             hit = next((i for i, row in enumerate(rows) if row["id"] == ref_id), None)
             if hit is None:
                 continue
@@ -447,10 +448,13 @@ def minutes_context(finding, minutes):
                     block["lines"] += [{"id": r["id"], "text": r["text"], "hit": False} for r in around if r["id"] not in known]
                     for row in block["lines"]:
                         row["hit"] = row["hit"] or row["id"] == ref_id
+                        if row["id"] == ref_id and source:
+                            row["source"] = source
                     break
             else:
                 blocks.append({"doc": document["name"], "heading": heading,
-                               "lines": [{"id": r["id"], "text": r["text"], "hit": r["id"] == ref_id} for r in around]})
+                               "lines": [{"id": r["id"], "text": r["text"], "hit": r["id"] == ref_id,
+                                          **({"source": source} if r["id"] == ref_id and source else {})} for r in around]})
     for block in blocks:
         block["lines"].sort(key=lambda row: [int(n) for n in re.findall(r"\d+", row["id"])])
     return blocks

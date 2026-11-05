@@ -1,8 +1,8 @@
 "use client";
 
-import { Mic, Square, X } from "lucide-react";
+import { Check, FileUp, Mic, Square, X } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
-import type { Minutes, MinutesMethod } from "@/lib/minutes";
+import type { FileMeeting, Minutes, MinutesMethod } from "@/lib/minutes";
 import MinutesEditor from "./MinutesEditor";
 import styles from "./Minutes.module.css";
 
@@ -40,7 +40,21 @@ const ERROR_TEXT: Record<string, string> = {
 const today = () =>
   new Intl.DateTimeFormat("sv-SE", { timeZone: "Asia/Tokyo" }).format(new Date());
 
-type Stage = "input" | "organizing" | "edit" | "saved";
+type Stage = "input" | "organizing" | "pick" | "edit" | "saved";
+
+type Draft = Omit<Minutes, "id">;
+type FileReply = { id: string; file: string; transcript: string; meetings: FileMeeting[] };
+
+// 回ごとの候補を、音声や貼り付けと同じ確認の画面に渡す形にする
+const toDraft = (reply: FileReply, meeting: FileMeeting): Draft => ({
+  title: meeting.title,
+  date: meeting.date,
+  method: "ファイル",
+  transcript: reply.transcript,
+  source: { import: reply.id, file: reply.file },
+  decisions: meeting.decisions.map((row) => ({ ...row, id: "" })),
+  todos: meeting.todos.map((row) => ({ ...row, id: "" })),
+});
 
 // ⑤の議事録づくり。音声（Web Speech API）または貼り付けの文章をClaudeで整理し、直して保存する
 export default function MinutesRecorder({
@@ -65,7 +79,13 @@ export default function MinutesRecorder({
   const [pasted, setPasted] = useState("");
   const [error, setError] = useState("");
   const [seconds, setSeconds] = useState(0);
-  const [draft, setDraft] = useState<Omit<Minutes, "id"> | null>(null);
+  const [draft, setDraft] = useState<Draft | null>(null);
+  // ファイルから作るときの候補。1つのファイルに複数回の打ち合わせがあれば回ごとに分かれる
+  const [candidates, setCandidates] = useState<Draft[]>([]);
+  const [editing, setEditing] = useState(0);
+  const [savedIndexes, setSavedIndexes] = useState<ReadonlySet<number>>(new Set());
+  const [over, setOver] = useState(false);
+  const fileInput = useRef<HTMLInputElement>(null);
   const [saving, setSaving] = useState(false);
   const engine = useRef<Recognition | null>(null);
   const keepGoing = useRef(false);
@@ -157,6 +177,41 @@ export default function MinutesRecorder({
     setStage("edit");
   };
 
+  const openCandidate = (list: Draft[], index: number) => {
+    setEditing(index);
+    setDraft(list[index]);
+    setStage("edit");
+  };
+
+  const readFile = async (file: File | undefined) => {
+    if (!file) return;
+    setError("");
+    setSeconds(0);
+    setStage("organizing");
+    const form = new FormData();
+    form.append("file", file);
+    const response = await fetch(`/api/projects/${slug}/minutes/import`, {
+      method: "POST",
+      body: form,
+    });
+    const body = await response.json();
+    if (!response.ok) {
+      setError(body.error);
+      setStage("input");
+      return;
+    }
+    const list = (body as FileReply).meetings.map((meeting) => toDraft(body, meeting));
+    if (list.length === 0) {
+      setError("ファイルから打ち合わせの内容を読み取れませんでした");
+      setStage("input");
+      return;
+    }
+    setCandidates(list);
+    setSavedIndexes(new Set());
+    if (list.length === 1) openCandidate(list, 0);
+    else setStage("pick");
+  };
+
   const voiceText = finalText.trim();
 
   return (
@@ -191,13 +246,57 @@ export default function MinutesRecorder({
             >
               テキストを貼り付け
             </button>
+            <button
+              type="button"
+              aria-pressed={mode === "ファイル"}
+              onClick={() => {
+                stopRecording();
+                setMode("ファイル");
+              }}
+            >
+              ファイルから
+            </button>
           </div>
           {!supported && (
             <p className={styles.note}>
               このブラウザは音声認識に対応していません。Chromeで開くか、テキストを貼り付けて作ってください。
             </p>
           )}
-          {mode === "音声" ? (
+          {mode === "ファイル" ? (
+            <div
+              className={styles.fileDrop}
+              data-over={over}
+              onDragOver={(e) => {
+                e.preventDefault();
+                setOver(true);
+              }}
+              onDragLeave={() => setOver(false)}
+              onDrop={(e) => {
+                e.preventDefault();
+                setOver(false);
+                void readFile(e.dataTransfer.files[0]);
+              }}
+            >
+              <input
+                ref={fileInput}
+                type="file"
+                hidden
+                accept=".pdf,.docx,.txt"
+                aria-label="議事録のファイル"
+                onChange={(e) => {
+                  void readFile(e.target.files?.[0]);
+                  e.target.value = "";
+                }}
+              />
+              <span>議事録のファイルをここに置く</span>
+              <button type="button" className={styles.secondary} onClick={() => fileInput.current?.click()}>
+                <FileUp size={14} /> ファイルを選ぶ
+              </button>
+              <small className={styles.note}>
+                PDF・Word（.docx）・テキスト。日付と題名はファイルから読み取ります。複数回の打ち合わせは回ごとに分けます。
+              </small>
+            </div>
+          ) : mode === "音声" ? (
             <>
               <div className={styles.transcript} aria-live="polite">
                 {finalText || interim ? (
@@ -264,8 +363,36 @@ export default function MinutesRecorder({
           Claudeが決定事項と宿題に整理しています… <span className="mono">{seconds} 秒</span>
         </p>
       )}
+      {stage === "pick" && (
+        <>
+          <p>
+            {candidates[0]?.source?.file} に {candidates.length} 回分の打ち合わせがありました。1回ずつ確かめて保存してください。
+          </p>
+          <ul className={styles.candidates}>
+            {candidates.map((row, index) => (
+              <li key={index}>
+                <span className="mono">{row.date || "日付なし"}</span>
+                <b>{row.title}</b>
+                <small className="mono">
+                  決定 {row.decisions.length}・宿題 {row.todos.length}
+                </small>
+                {savedIndexes.has(index) ? (
+                  <small>
+                    <Check size={13} /> 保存しました
+                  </small>
+                ) : (
+                  <button type="button" className={styles.secondary} onClick={() => openCandidate(candidates, index)}>
+                    確かめて保存する
+                  </button>
+                )}
+              </li>
+            ))}
+          </ul>
+        </>
+      )}
       {stage === "edit" && draft && (
         <MinutesEditor
+          key={`${stage}-${editing}`}
           initial={draft}
           saving={saving}
           error={error}
@@ -280,7 +407,9 @@ export default function MinutesRecorder({
             });
             setSaving(false);
             if (response.ok) {
-              setStage("saved");
+              const done = new Set(savedIndexes).add(editing);
+              setSavedIndexes(done);
+              setStage(candidates.length > 1 && done.size < candidates.length ? "pick" : "saved");
               onSaved?.();
             }
             else setError((await response.json()).error);

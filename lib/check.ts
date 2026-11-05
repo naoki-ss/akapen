@@ -72,7 +72,13 @@ export type DesignRef = {
 export type MinutesBlock = {
   doc: string;
   heading: string;
-  lines: { id: string; text: string; hit: boolean }[];
+  lines: {
+    id: string;
+    text: string;
+    hit: boolean;
+    // ファイルから作った議事録の出典
+    source?: { file: string; page: number; url: string };
+  }[];
 };
 
 export type ChecklistCard = {

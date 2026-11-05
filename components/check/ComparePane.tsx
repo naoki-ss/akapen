@@ -112,6 +112,9 @@ export default function ComparePane({
   }
   const color = colorName(finding);
   const opened = openedFor === finding.id;
+  const fileSource = finding.minutes_context
+    ?.flatMap((block) => block.lines)
+    .find((line) => line.hit && line.source)?.source;
   return (
     <section className={styles.compare} aria-label="施工図と根拠の比較">
       <header className={styles.compareHead} data-color={color}>
@@ -171,7 +174,11 @@ export default function ComparePane({
           <button
             className={styles.ghost}
             aria-expanded={opened}
-            onClick={() => setOpenedFor(opened ? null : finding.id)}
+            onClick={() => {
+              // 議事録がファイルから作られていれば、元のファイルの該当ページも開く
+              if (!opened && fileSource) window.open(fileSource.url, "_blank", "noopener");
+              setOpenedFor(opened ? null : finding.id);
+            }}
           >
             根拠資料を{opened ? "閉じる" : "開く"}
           </button>
@@ -215,6 +222,14 @@ export default function ComparePane({
       {opened && (
         <div className={styles.sources}>
           <p>{detailOf(finding)}</p>
+          {fileSource && (
+            <p>
+              <a href={fileSource.url} target="_blank" rel="noreferrer">
+                元のファイルを開く（{fileSource.file}
+                {fileSource.page > 0 && ` p.${fileSource.page}`}）
+              </a>
+            </p>
+          )}
           {finding.source_type !== "knowledge" &&
             !finding.minutes_refs?.length &&
             finding.sources &&

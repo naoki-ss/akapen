@@ -56,6 +56,21 @@ summary {
     opacity var(--quick) ease;
 }
 
+/* 標準の青い枠は朱書きの青と紛らわしいので使わない。キーボード操作のときだけ細い濃色の枠を出す */
+:focus {
+  outline: none;
+}
+
+:focus-visible {
+  outline: 1px solid var(--ink);
+  outline-offset: 2px;
+}
+
+a,
+button {
+  -webkit-tap-highlight-color: transparent;
+}
+
 /* 青は朱書きの意味を持つので、リンクには使わない */
 a {
   color: var(--ink);

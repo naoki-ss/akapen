@@ -1272,3 +1272,10 @@
 .compareCard[data-side="sheet"] .docBox {
   background: none;
 }
+
+.minutesSource {
+  display: block;
+  margin-top: 2px;
+  color: var(--muted);
+  font-size: 12px;
+}

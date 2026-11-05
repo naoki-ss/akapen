@@ -294,3 +294,58 @@
 .row:nth-child(4) { --order: 3; }
 .row:nth-child(5) { --order: 4; }
 .row:nth-child(n + 6) { --order: 5; }
+
+/* ファイルから作る */
+.fileDrop {
+  min-height: 190px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  padding: 16px;
+  border: 1px dashed var(--line-strong);
+  border-radius: var(--radius);
+  background: #fff;
+  text-align: center;
+}
+
+.fileDrop[data-over="true"] {
+  border-color: var(--ink);
+  background: var(--tint);
+}
+
+.pageRef {
+  align-self: flex-end;
+  color: var(--muted);
+  font-size: 12px;
+  white-space: nowrap;
+}
+
+.candidates {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin: 8px 0;
+  padding: 0;
+  list-style: none;
+}
+
+.candidates li {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 12px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: #fff;
+}
+
+.candidates b {
+  flex: 1;
+  min-width: 0;
+}
+
+.candidates small {
+  color: var(--muted);
+}

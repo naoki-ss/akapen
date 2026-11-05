@@ -118,7 +118,7 @@ export default function ProjectList({
           ))}
           {shown.map((project) => (
             <li key={project.slug}>
-              <Link href={`/projects/${project.slug}`}>
+              <Link href={`/projects/${project.slug}/model`}>
                 <Thumb card={project} />
                 <div className={styles.cardBody}>
                   <b>{project.name}</b>

@@ -84,7 +84,7 @@ def load_minutes(project, slug=None):
     if slug:
         from minutes_store import as_document, stored
 
-        documents += [document for document in map(as_document, stored(slug)) if document["items"]]
+        documents += [document for document in (as_document(row, slug) for row in stored(slug)) if document["items"]]
     return documents
 
 

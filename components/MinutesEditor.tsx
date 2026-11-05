@@ -41,6 +41,7 @@ function DecisionRow({
           onChange={(e) => onChange({ ...value, text: e.target.value })}
         />
       </label>
+      {value.page ? <small className={styles.pageRef}>出典 p.{value.page}</small> : null}
       {words("通り芯", "grids")}
       {words("階", "floors")}
       {words("部材", "members")}

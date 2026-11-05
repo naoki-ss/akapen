@@ -23,7 +23,7 @@ export default function RegisterScreen({
         maskChoices={maskChoices}
         watch={watch}
         onCancel={() => router.push("/")}
-        onDone={(slug) => router.push(`/projects/${slug}`)}
+        onDone={(slug) => router.push(`/projects/${slug}/model`)}
       />
     </AppFrame>
   );

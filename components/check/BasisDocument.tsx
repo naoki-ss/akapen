@@ -119,7 +119,15 @@ export default function BasisDocument({
             {block.lines.map((line) => (
               <li key={line.id} data-hit={line.hit}>
                 <span className="mono">{line.id}</span>
-                <span>{line.text}</span>
+                <span>
+                  {line.text}
+                  {line.source && (
+                    <a className={styles.minutesSource} href={line.source.url} target="_blank" rel="noreferrer">
+                      出典：{line.source.file}
+                      {line.source.page > 0 && ` p.${line.source.page}`}
+                    </a>
+                  )}
+                </span>
               </li>
             ))}
           </ol>
