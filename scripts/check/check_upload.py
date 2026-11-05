@@ -31,6 +31,7 @@ import pymupdf
 from ai_review import call_claude, load_env
 from common import PRIVATE, REPO, write_json
 from index_steel_sheets import SCHEMA as INDEX_SCHEMA, SYSTEM as INDEX_SYSTEM
+import design_basis
 import knowledge_check
 import merge_findings
 import minutes_check
@@ -56,7 +57,8 @@ OUTPUT_NOTE = """
 - regions に、指摘の場所ごとの範囲を入れてください。指摘が複数の場所を指すときは、場所ごとに範囲を分けて全部入れます。
 - comment は図面に書き込む短いコメントです。30文字以内で、何を確認するのかが分かるように書きます。
 - reason は、なぜ問題かを1文（40字程度）で書きます。前置きや読めた値の説明ではなく、何が問題なのかを書きます。
-- needs_confirmation は、図面だけでは食い違いと言い切れず、人の確認が必要なときに true にします。"""
+- needs_confirmation は、図面だけでは食い違いと言い切れず、人の確認が必要なときに true にします。
+- design_locations に、根拠になる設計図の場所を書きます。doc は構造図か差替図面、page は元のPDFのページ番号（添付のPDFの何枚目かではなく、案内に書いたページ番号）、box はそのページ全体に対する 0〜1 の範囲 [x0, y0, x1, y1] です。"""
 
 # 鉄骨以外の施工図では、製作会社向けの言い方だけを変える
 FOUNDATION_WORDS = [
@@ -148,6 +150,17 @@ def output_schema():
     finding["properties"]["comment"] = {"type": "string"}
     finding["properties"]["reason"] = {"type": "string"}
     finding["properties"]["needs_confirmation"] = {"type": "boolean"}
+    finding["required"].append("design_locations")
+    finding["properties"]["design_locations"] = {
+        "type": "array",
+        "items": {
+            "type": "object",
+            "additionalProperties": False,
+            "required": ["doc", "page", "box"],
+            "properties": {"doc": {"type": "string", "enum": ["構造図", "差替図面"]}, "page": {"type": "integer"},
+                           "box": {"type": "array", "items": {"type": "number"}}},
+        },
+    }
     return schema
 
 
@@ -457,6 +470,7 @@ def to_view(item, slug, classified):
         "sheet_value": item.get("sheet_value") or None,
         "design_value": item.get("design_value") or item.get("decided_value") or None,
         "sources": [{"doc": e["drawing"], "page": e["page"], "where": e["where"]} for e in item.get("evidence", [])],
+        "design_locations": item.get("design_locations"),
     }
 
 
@@ -570,7 +584,18 @@ def finish_job(job, folder, slug, pages, checklist, use_knowledge, client, input
         reasons = json.loads(reasons_path.read_text())
         for view in views:
             view["reason"] = view["reason"] or reasons.get(view["id"])
-    usd = round(sum(page["usd"] for page in pages) + merge_usd + stopped_usd, 3)
+    # 根拠の資料（設計図の切り抜きなど）。作れなくても判定の結果は返す
+    basis_usd = 0.0
+    try:
+        design_basis.SPENT[0] = 0.0
+        design_basis.attach(views, load_project(slug), folder, client, minutes, checklist or {})
+        basis_usd = design_basis.SPENT[0]
+        if basis_usd:
+            record_cost(EXPERIMENTS / "ledger.json", f"upload-{folder.name[:8]}-title-blocks", round(basis_usd, 3))
+    except Exception:
+        traceback.print_exc()
+        notes.append("根拠の資料の一部を作れませんでした。文面の根拠は表示できます。")
+    usd = round(sum(page["usd"] for page in pages) + merge_usd + stopped_usd + basis_usd, 3)
     seconds = round(time.time() - job.started, 1)
     write_json(folder / "result.json", {
         "mode": f"{'、'.join(used)}の照合（設計図書は条件D）。{len(numbers)} ページ、{len(findings)} 件。",

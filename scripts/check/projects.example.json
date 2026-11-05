@@ -5,6 +5,7 @@
     "revised": "差替図面PDFの絶対パス。なければ null",
     "minutes": ["議事録ファイル（Markdown）の絶対パスのリスト。使わない物件では書かない"],
     "checklist": "チェックリストJSONの絶対パス（~/sekozu-data/knowledge の下）。使わない物件では書かない",
+    "design_images": "④に設計図の画像を出さない物件だけ false にする（実寸法を出さない物件など）",
     "masks": [[0.43, 0.935, 0.627, 1.0]],
     "common_pages": [18, 19, 28],
     "plan_by_level": { "2SL": { "design": 14, "revised": 5 } },

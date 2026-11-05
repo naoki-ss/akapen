@@ -15,6 +15,7 @@ import Hint from "../Hint";
 import LayerToggles from "../LayerToggles";
 import AnnotatedSheet from "../check/AnnotatedSheet";
 import BasisCard from "../check/BasisCard";
+import BasisDocument from "../check/BasisDocument";
 import FindingList from "../check/FindingList";
 import styles from "../check/check.module.css";
 
@@ -253,7 +254,11 @@ export default function CheckScreen({
               checklist={uploaded?.checklist}
               onSelect={select}
             />
-            <section className={styles.sheetPane} aria-label="朱書きの図面">
+            <section
+              className={styles.sheetPane}
+              data-split={Boolean(active)}
+              aria-label="朱書きの図面と根拠の資料"
+            >
               <AnnotatedSheet
                 sheet={currentSheet}
                 base={resultBase}
@@ -266,6 +271,13 @@ export default function CheckScreen({
                 onSelect={select}
                 onClear={() => setActiveId(null)}
               />
+              {active && (
+                <BasisDocument
+                  finding={active}
+                  base={resultBase}
+                  publicView={uploaded ? publicView : true}
+                />
+              )}
             </section>
             <aside className={styles.side}>
               <BasisCard

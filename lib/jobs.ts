@@ -24,7 +24,7 @@ const fromRoot = (...parts: string[]) =>
 const JOB_ID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
 // 返してよいファイルだけを通す（図面の場所や生の応答は返さない）
 const PUBLIC_FILE =
-  /^(result\.json|thumbs\/p\d+\.png|(masked\/)?(marked\.pdf|pages\/p\d+(-(base|design|minutes|knowledge))?\.png|findings\/\d+\.png))$/;
+  /^(result\.json|thumbs\/p\d+\.png|(masked\/)?(marked\.pdf|pages\/p\d+(-(base|design|minutes|knowledge))?\.png|findings\/\d+\.png|design\/[\w-]+\.png))$/;
 
 // 別のサイトから勝手に判定（API の費用）を走らせられないようにする
 export function crossSite(request: Request) {

@@ -3,7 +3,7 @@
   flex: 1;
   min-width: 0;
   display: grid;
-  grid-template-columns: 288px minmax(0, 1fr) 372px;
+  grid-template-columns: 264px minmax(0, 1fr) 320px;
   grid-template-rows: auto auto auto minmax(0, 1fr);
   grid-template-areas:
     "bar bar bar"
@@ -327,6 +327,139 @@
   min-height: 0;
   display: flex;
   background: var(--tint);
+}
+
+/* 指摘を選ぶと、左に施工図、右に根拠の資料を並べる */
+.sheetPane[data-split="true"] > * {
+  flex: 1 1 50%;
+  min-width: 0;
+}
+
+.document {
+  overflow: auto;
+  padding: 12px;
+  border-left: 1px solid var(--line);
+  background: var(--panel);
+  font-size: 13px;
+}
+
+.documentHead {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  margin: 0 0 8px;
+  font-size: 13px;
+}
+
+.documentHead a {
+  margin-left: auto;
+  color: var(--muted);
+  font-size: 12px;
+  white-space: nowrap;
+}
+
+.docFigure {
+  margin: 0 0 14px;
+}
+
+.docImage {
+  position: relative;
+  border: 1px solid var(--line);
+  line-height: 0;
+}
+
+.docImage img {
+  width: 100%;
+  height: auto;
+}
+
+/* 文字に線が重ならないよう、枠を少し外に広げる */
+.docBox {
+  position: absolute;
+  box-sizing: content-box;
+  margin: -6px;
+  padding: 4px;
+  border: 2px solid var(--ink);
+  border-radius: 3px;
+  pointer-events: none;
+}
+
+.docBox[data-color="red"] {
+  --ink: #c62d23;
+}
+
+.docBox[data-color="blue"] {
+  --ink: #1d5bb8;
+}
+
+.docBox b[data-side="left"] {
+  right: calc(100% + 3px);
+}
+
+.docBox b[data-side="right"] {
+  left: calc(100% + 3px);
+}
+
+.docBox b {
+  position: absolute;
+  top: -2px;
+  min-width: 20px;
+  padding: 0 4px;
+  border-radius: 10px;
+  background: var(--ink);
+  color: #fff;
+  font-size: 12px;
+  line-height: 20px;
+  text-align: center;
+}
+
+.docNote {
+  margin: 6px 0 0;
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.minutesLines {
+  margin: 0 0 14px;
+  padding: 0;
+  list-style: none;
+}
+
+.minutesLines li {
+  display: grid;
+  grid-template-columns: 44px minmax(0, 1fr);
+  gap: 6px;
+  padding: 6px 8px;
+  border-left: 3px solid transparent;
+  color: var(--muted);
+}
+
+.minutesLines li[data-hit="true"] {
+  border-left-color: #c62d23;
+  background: #c62d2314;
+  color: var(--text, #1b2430);
+  font-weight: 700;
+}
+
+.checkCard {
+  padding: 12px;
+  border: 1px solid #1d5bb8;
+  border-left-width: 4px;
+  border-radius: 6px;
+}
+
+.checkCard small {
+  color: var(--muted);
+}
+
+.checkCard h3 {
+  margin: 4px 0 8px;
+  font-size: 14px;
+}
+
+.checkCard ul {
+  margin: 0;
+  padding-left: 18px;
 }
 
 .sheetScroller {

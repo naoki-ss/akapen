@@ -90,7 +90,9 @@ def check_file(name, data, label=""):
     """1ファイルの中身を調べる。data はファイルの内容（バイト列）"""
     path = REPO / name
     digest = hashlib.sha256(data).hexdigest()
-    if digest in upload_hashes:
+    # 根拠の設計図の切り抜きは、判定の結果の画像と同じ内容になる。目で確認した記録があるものだけ認める
+    confirmed_basis = "/design/" in name and name.startswith("demo-data/") and reviewed.get(name) == digest
+    if digest in upload_hashes and not confirmed_basis:
         problems.append(f"{label}{name}: アップロードされたファイルと同じ内容です")
     if digest in checklist_hashes:
         problems.append(f"{label}{name}: チェックリストの本体と同じ内容です")
