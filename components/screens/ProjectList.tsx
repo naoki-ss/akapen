@@ -26,6 +26,14 @@ const dateFormat = new Intl.DateTimeFormat("ja-JP", {
 });
 
 function Thumb({ card }: { card: ProjectCard }) {
+  if (card.image) {
+    return (
+      <div className={styles.thumb}>
+        {/* eslint-disable-next-line @next/next/no-img-element -- 作っておいた画像をそのまま見せる */}
+        <img className={styles.thumbImage} src={card.image} alt="" />
+      </div>
+    );
+  }
   if (!card.thumbnail) return <div className={styles.thumb}>3Dなし</div>;
   const { viewBox, columns, beams } = card.thumbnail;
   return (

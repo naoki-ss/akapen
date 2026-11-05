@@ -1,6 +1,6 @@
 // 物件の一覧（サーバー側）。デモの本社屋と、画面から登録した物件をまとめて扱う
 
-import { readFileSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 import path from "node:path";
 import type { CheckResult, Finding } from "./check";
 import { isBlue, numbered } from "./findings";
@@ -96,6 +96,8 @@ export type ProjectCard = {
   red: number;
   blue: number;
   thumbnail: Thumbnail | null;
+  // 作っておいた一覧の画像。あれば一覧で3Dを描かない（描く間、画面が止まるため）
+  image: string | null;
 };
 
 // 図面ごとの最新の結果。同じ図面を何度もチェックしても、一番新しい結果だけを使う（朱書きから消した指摘は除く）。
@@ -167,5 +169,8 @@ export function cardOf(building: Building): ProjectCard {
     red: all.length - blue,
     blue,
     thumbnail: thumbnailOf(model),
+    image: existsSync(path.join(/* turbopackIgnore: true */ process.cwd(), "public", "thumbs", `${slug}.jpg`))
+      ? `/thumbs/${slug}.jpg`
+      : null,
   };
 }

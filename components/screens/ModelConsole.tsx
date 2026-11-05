@@ -335,7 +335,7 @@ export default function ModelConsole({
           )}
           {model.architecture && (
             <button className={panel.clear} onClick={() => setDialog("architecture")}>
-              外観の要確認 {model.architecture.checks.length} 件
+              外観で仮の値にした所 {model.architecture.checks.length} か所
             </button>
           )}
         </div>
@@ -428,7 +428,10 @@ export default function ModelConsole({
             )}
             {dialog === "architecture" && model.architecture && (
               <div className={appStyles.checks}>
-                <h3>外観の要確認 {model.architecture.checks.length} 件</h3>
+                <h3>外観で仮の値にした所 {model.architecture.checks.length} か所</h3>
+                <p className={appStyles.fine}>
+                  意匠図に寸法の記入がなく、3Dの見た目のために仮の値で描いた所や、読み取りを確かめたい所です。施工図のチェックには影響しません。
+                </p>
                 <p className={appStyles.fine}>{model.architecture.source}</p>
                 <ul>
                   {model.architecture.checks.map((item, index) => (

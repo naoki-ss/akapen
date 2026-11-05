@@ -25,7 +25,15 @@ export default function CountUp({ value }: { value: number }) {
       setShown(current.current);
       if (t < 1) frame = requestAnimationFrame(step);
     });
-    return () => cancelAnimationFrame(frame);
+    // 描画が止まっていても（裏のタブなど）、途中の数のまま残さない
+    const finish = setTimeout(() => {
+      current.current = value;
+      setShown(value);
+    }, DURATION + 200);
+    return () => {
+      cancelAnimationFrame(frame);
+      clearTimeout(finish);
+    };
   }, [value]);
 
   return <span aria-label={String(value)}>{shown}</span>;

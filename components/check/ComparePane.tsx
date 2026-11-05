@@ -16,10 +16,12 @@ import styles from "./check.module.css";
 
 type Numbered = Finding & { number: number };
 
-// 切り抜きの枠の縦横比
-const CROP_ASPECT = 2;
-const CROP_PADDING = 1.5;
+// 切り抜きの枠の縦横比。右の根拠と同じ幅で、文字が読める倍率にする
+const CROP_ASPECT = 2.4;
+const CROP_PADDING = 1.3;
 const MIN_WINDOW = 0.1;
+// 切り抜く幅の上限（図面の幅に対する比）。これより広い指摘は、枠の始まりを見せる
+const MAX_WIDE = 0.26;
 
 // 該当箇所のまわりを、同じ比率で図面から切り出して見せる。余白が出ないよう図面の中に収める
 function SheetCrop({
@@ -49,8 +51,15 @@ function SheetCrop({
     wide /= high;
     high = 1;
   }
-  const left = Math.min(1 - wide, Math.max(0, (x0 + x1 - wide) / 2));
-  const top = Math.min(1 - high, Math.max(0, (y0 + y1 - high) / 2));
+  if (wide > MAX_WIDE) {
+    high *= MAX_WIDE / wide;
+    wide = MAX_WIDE;
+  }
+  // 枠が切り抜きより大きいときは、枠の左上から見せる
+  const place = (from: number, to: number, size: number) =>
+    Math.min(1 - size, Math.max(0, to - from > size ? from - size * 0.06 : (from + to - size) / 2));
+  const left = place(x0, x1, wide);
+  const top = place(y0, y1, high);
   return (
     <div className={styles.sheetCrop} style={{ aspectRatio: CROP_ASPECT }}>
       {/* 図面の一部を拡大して切り出すので、next/image の最適化は使わない */}
