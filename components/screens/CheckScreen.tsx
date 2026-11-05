@@ -250,9 +250,11 @@ export default function CheckScreen({
   return (
     <AppFrame crumbs={crumbs}>
       <div className={styles.screen}>
-        {uploaded && !noMaskedFiles && (
+        {/* 塗りつぶした図面がない現場でも、社内用の表示に切り替えられるようにメニューは出す */}
+        {uploaded && (
           <div className={styles.topBar}>
             <div className={styles.barActions}>
+              {!noMaskedFiles && (
               <a
                 className={styles.btnPrimary}
                 href={`/api/check/${jobId}/export?public=${publicView ? 1 : 0}`}
@@ -260,6 +262,7 @@ export default function CheckScreen({
               >
                 朱書きPDFをダウンロード
               </a>
+              )}
               <div className={styles.menu}>
                 <button
                   className={styles.btn}
