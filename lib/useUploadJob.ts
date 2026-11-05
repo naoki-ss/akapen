@@ -32,6 +32,8 @@ export type JobResult = CheckResult & {
   // 塗りつぶした図面（masked/）があるか
   masked?: boolean;
   notes: string[];
+  // 過去の判断で除外した指摘
+  suppressed?: { title: string; reason: string }[];
   checklist?: ResultRow[] | null;
   minutes?: ResultRow[] | null;
   pages?: { number: number; title?: string | null }[];

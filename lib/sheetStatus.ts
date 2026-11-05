@@ -28,6 +28,8 @@ type StatusFile = {
 export type ShopVersion = {
   version: number;
   job: string;
+  // 同じ内容を判定した結果の全部
+  jobs: string[];
   page: number | null;
   uploaded_at: string;
   state: SheetState;
@@ -214,6 +216,7 @@ export function shopSheets(project: string): ShopSheet[] {
       return {
         version: index + 1,
         job: chosen.job,
+        jobs: same.map((row) => row.job),
         page: chosen.page,
         uploaded_at: chosen.uploaded_at,
         state: chosen.state,

@@ -32,9 +32,11 @@ from claude_api import call_claude, load_env
 from common import PRIVATE, REPO, write_json
 from index_steel_sheets import SCHEMA as INDEX_SCHEMA, SYSTEM as INDEX_SYSTEM
 import design_basis
+import feedback
 import drawing_ledger
 import knowledge_check
 import merge_findings
+import red_filter
 import minutes_check
 from markup_pdf import SOURCE_TYPES, layer_overlay, make_marked_pdf, mask_pdf, set_visible_layers, to_rect, valid_regions
 from claude_api import PRICE_INPUT, PRICE_OUTPUT
@@ -171,7 +173,7 @@ def system_prompt(project):
     if project.get("kind") == "foundation":
         for steel, other in FOUNDATION_WORDS:
             system = system.replace(steel, other)
-    return system + (REVISED_NOTE if project.get("revised") else "")
+    return system + (REVISED_NOTE if project.get("revised") else "") + feedback.prompt_note()
 
 
 def classify_page(client, page, raw_dir):
@@ -233,7 +235,7 @@ def run_knowledge_check(context):
     write_json(raw_dir / "knowledge-prompt.json", {"system": knowledge_check.SYSTEM,
                                                    "text_blocks": [b["text"] for b in content if b["type"] == "text"]})
     schema = knowledge_check.build_schema(targets)
-    reply = call_claude(context["client"], knowledge_check.SYSTEM, content, schema, raw_dir, "knowledge")
+    reply = call_claude(context["client"], knowledge_check.SYSTEM + feedback.prompt_note(), content, schema, raw_dir, "knowledge")
     write_json(raw_dir / "knowledge-result.json", reply)
     tokens = message_cost(raw_dir / "knowledge.json")
     level = plan_for(project, classified)[1]
@@ -259,7 +261,7 @@ def run_minutes_check(context):
     write_json(raw_dir / "minutes-prompt.json", {"system": minutes_check.SYSTEM,
                                                  "text_blocks": [b["text"] for b in content if b["type"] == "text"]})
     schema = minutes_check.build_schema(list(items))
-    reply = call_claude(context["client"], minutes_check.SYSTEM, content, schema, raw_dir, "minutes")
+    reply = call_claude(context["client"], minutes_check.SYSTEM + feedback.prompt_note(), content, schema, raw_dir, "minutes")
     write_json(raw_dir / "minutes-result.json", reply)
     tokens = message_cost(raw_dir / "minutes.json")
     level = plan_for(project, classified)[1]
@@ -472,6 +474,8 @@ def to_view(item, slug, classified):
         "design_value": item.get("design_value") or item.get("decided_value") or None,
         "sources": [{"doc": e["drawing"], "page": e["page"], "where": e["where"]} for e in item.get("evidence", [])],
         "design_locations": item.get("design_locations"),
+        "red_kind": item.get("red_kind"),
+        "red_basis": item.get("red_basis"),
     }
 
 
@@ -520,6 +524,74 @@ def write_masked(folder, input_path, masks, findings, numbers, **marks):
         masked_input.unlink(missing_ok=True)
 
 
+def remap_decisions(folder, original_numbers):
+    """朱書きから外した指摘の番号を、振り直した番号にする。一度だけ行う"""
+    path = folder / "decisions.json"
+    if not path.exists():
+        return
+    data = json.loads(path.read_text())
+    if data.get("renumbered"):
+        return
+    new_of = {old: new for new, old in original_numbers.items()}
+    write_json(path, {"excluded": [new_of[number] for number in data["excluded"] if number in new_of], "renumbered": True})
+
+
+def narrow_findings(client, folder, findings, pages, checklist, project_kind):
+    """赤の絞り込み、過去の判断による除外、赤青のまとめ、番号の振り直し。画面と朱書きPDFの書き出しで同じ結果にする。
+    pages は [{number, classified}]。client が None のときは保存済みの判定だけを使う"""
+    notes = []
+    targets_cache = {}
+
+    def targets_of_page(number):
+        if number not in targets_cache:
+            title = next(((page.get("classified") or {}).get("title") for page in pages if page["number"] == number), None)
+            targets_cache[number] = red_filter.targets_for(checklist or {}, title, project_kind)
+        return targets_cache[number]
+
+    filter_usd = 0.0
+    filtered, moved_to_blue = [], 0
+    # 確定したページの指摘と番号は変えない
+    status_path = folder / "sheet_status.json"
+    locked = {int(page) for page, value in json.loads(status_path.read_text())["pages"].items() if value.get("confirmed")} if status_path.exists() else set()
+    try:
+        open_items = [item for item in findings if item["page"] not in locked]
+        kept, filtered, moved_to_blue, filter_usd = red_filter.apply(client, open_items, targets_of_page)
+        findings = sorted(kept + [item for item in findings if item["page"] in locked], key=lambda item: item["number"])
+    except Exception:
+        traceback.print_exc()
+        notes.append("赤の絞り込みが完了しなかったので、絞り込む前の指摘を出しています。")
+    # 過去に人が不要と判断した指摘と同じ種類のものを抑える
+    suppressed = []
+    try:
+        open_items = [item for item in findings if item["page"] not in locked]
+        kept, suppressed, feedback_usd = feedback.apply(client, open_items, folder / "raw")
+        findings = sorted(kept + [item for item in findings if item["page"] in locked], key=lambda item: item["number"])
+        filter_usd += feedback_usd
+    except Exception:
+        traceback.print_exc()
+    if suppressed:
+        notes.append(f"過去の判断により {len(suppressed)} 件を除外しました。")
+    if filter_usd:
+        record_cost(EXPERIMENTS / "ledger.json", f"upload-{folder.name[:8]}-red-filter", round(filter_usd, 3))
+    if filtered or moved_to_blue:
+        notes.append(f"食い違いではない表記不足の指摘を {len(filtered) + moved_to_blue} 件、赤から外しました（うち {moved_to_blue} 件はナレッジに当てはまるので青にしました）。")
+    merge_usd, merge_note = merge_same(client, findings, folder / "raw")
+    if merge_usd:
+        record_cost(EXPERIMENTS / "ledger.json", f"upload-{folder.name[:8]}-merge", round(merge_usd, 3))
+    if merge_note:
+        notes.append(merge_note)
+    # 表示の番号は絞り込んだあとで振り直す。理由と朱書きから外す印は、元の番号で引く。確定したページがあるときは振り直さない（欠番が出る）
+    original_numbers = {item["number"]: item["number"] for item in findings} if locked else {new: item["number"] for new, item in enumerate(findings, 1)}
+    new_of = {old: new for new, old in original_numbers.items()}
+    for new_number, item in zip(original_numbers, findings):
+        item["number"] = new_number
+        if item.get("merged_numbers"):
+            item["merged_numbers"] = [new_of[old] for old in item["merged_numbers"] if old in new_of]
+    remap_decisions(folder, original_numbers)
+    return {"findings": findings, "filtered": filtered, "suppressed": suppressed, "usd": filter_usd, "merge_usd": merge_usd,
+            "original_numbers": original_numbers, "notes": notes}
+
+
 def finish_job(job, folder, slug, pages, checklist, use_knowledge, client, input_path, minutes=(), masks=None, stopped=(), stopped_usd=0.0):
     """ページごとの結果から、朱書きPDFと result.json を作る。stopped は途中で止めて結果がないページ、stopped_usd はその費用"""
     numbers = [page["number"] for page in pages]
@@ -533,11 +605,10 @@ def finish_job(job, folder, slug, pages, checklist, use_knowledge, client, input
     notes = []
     if stopped:
         notes.append("途中で止めました。次のページは判定していません（指摘がないという意味ではありません）： " + "、".join(f"p.{n}" for n in stopped))
-    merge_usd, merge_note = merge_same(client, findings, folder / "raw")
-    if merge_usd:
-        record_cost(EXPERIMENTS / "ledger.json", f"upload-{folder.name[:8]}-merge", round(merge_usd, 3))
-    if merge_note:
-        notes.append(merge_note)
+    narrowed = narrow_findings(client, folder, findings, pages, checklist, load_project(slug).get("kind"))
+    findings = narrowed["findings"]
+    filtered, suppressed, filter_usd, merge_usd, original_numbers = (narrowed[key] for key in ("filtered", "suppressed", "usd", "merge_usd", "original_numbers"))
+    notes += narrowed["notes"]
     if failed:
         notes.append("次のページは判定できませんでした（指摘がないという意味ではありません）： " + "、".join(f"p.{n}" for n in failed))
     unlocated = [item["number"] for item in findings if not item["regions"]]
@@ -584,7 +655,7 @@ def finish_job(job, folder, slug, pages, checklist, use_knowledge, client, input
     if reasons_path.exists():
         reasons = json.loads(reasons_path.read_text())
         for view in views:
-            view["reason"] = view["reason"] or reasons.get(view["id"])
+            view["reason"] = view["reason"] or reasons.get(str(original_numbers.get(view["number"], view["number"])))
     # 根拠の資料（設計図の切り抜きなど）。作れなくても判定の結果は返す
     basis_usd = 0.0
     try:
@@ -596,7 +667,7 @@ def finish_job(job, folder, slug, pages, checklist, use_knowledge, client, input
     except Exception:
         traceback.print_exc()
         notes.append("根拠の資料の一部を作れませんでした。文面の根拠は表示できます。")
-    usd = round(sum(page["usd"] for page in pages) + merge_usd + stopped_usd + basis_usd, 3)
+    usd = round(sum(page["usd"] for page in pages) + merge_usd + stopped_usd + basis_usd + filter_usd, 3)
     seconds = round(time.time() - job.started, 1)
     write_json(folder / "result.json", {
         "mode": f"{'、'.join(used)}の照合（設計図書は条件D）。{len(numbers)} ページ、{len(findings)} 件。",
@@ -613,6 +684,8 @@ def finish_job(job, folder, slug, pages, checklist, use_knowledge, client, input
         "pages": [{k: page.get(k) for k in ("number", "ok", "usd", "seconds", "checks", "failed_checks", "red_pixels", "error")} |
                   {"title": (page.get("classified") or {}).get("title")} for page in pages],
         "merge_usd": round(merge_usd, 3),
+        "filtered": filtered,
+        "suppressed": suppressed,
         "usd": usd,
         "seconds": seconds,
     })

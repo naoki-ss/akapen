@@ -2,9 +2,10 @@ import { Suspense } from "react";
 import { notFound } from "next/navigation";
 import { connection } from "next/server";
 import CheckScreen from "@/components/screens/CheckScreen";
-import { getBuilding } from "@/lib/buildings";
+import { drawingResults, getBuilding } from "@/lib/buildings";
+import { isBlue } from "@/lib/findings";
 import { jobFolder, jobStale, uploadEnabled } from "@/lib/jobs";
-import { confirmedPages } from "@/lib/sheetStatus";
+import { confirmedPages, shopSheets } from "@/lib/sheetStatus";
 
 type Props = PageProps<"/projects/[slug]/check/[job]">;
 
@@ -16,6 +17,17 @@ async function Content({ params }: Props) {
   if (job === "saved" && !building.check) notFound();
   const stale = job !== "saved" && uploadEnabled() ? jobStale(slug, job) : [];
   const folder = job !== "saved" && uploadEnabled() ? jobFolder(job) : null;
+  const drawings = drawingResults(building).map((item) => {
+    const blue = item.findings.filter(isBlue).length;
+    return { title: item.title, job: item.job, red: item.findings.length - blue, blue };
+  });
+  const versions = Object.fromEntries(
+    (uploadEnabled() ? shopSheets(slug) : []).flatMap((sheet) =>
+      sheet.versions
+        .filter((version) => version.jobs.includes(job))
+        .map((version) => [sheet.title, version.version]),
+    ),
+  );
   return (
     <CheckScreen
       key={job}
@@ -23,6 +35,8 @@ async function Content({ params }: Props) {
       job={job}
       stale={stale}
       confirmed={folder ? confirmedPages(folder) : []}
+      drawings={drawings}
+      versions={versions}
     />
   );
 }

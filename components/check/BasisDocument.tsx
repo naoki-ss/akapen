@@ -100,7 +100,7 @@ export default function BasisDocument({
       )}
       {(finding.design_refs_more ?? 0) > 0 && (
         <p className={styles.docNote}>
-          ほかに {finding.design_refs_more} つの資料も根拠です。右の「根拠資料を開く」に出ています。
+          ほかに {finding.design_refs_more} つの資料も根拠です。下の「根拠資料を開く」に出ています。
         </p>
       )}
       {blocks.map((block) => (
@@ -151,7 +151,7 @@ export default function BasisDocument({
       )}
       {empty && (
         <p className={styles.docNote}>
-          この指摘に並べられる資料はありません。根拠は右の文面をご覧ください。
+          画像で並べられる資料はありません。下の文面と「根拠資料を開く」をご覧ください。
         </p>
       )}
     </aside>

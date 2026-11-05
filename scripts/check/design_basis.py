@@ -40,6 +40,7 @@ MASK_COLOR = (210, 210, 210)
 DETECT_USD_PER_PAGE = 0.03
 # 図面枠を探した費用の合計
 SPENT = [0.0]
+RENDERED = {}
 
 DETECT_SYSTEM = """図面の画像から、公開してはいけない名前や印が入る欄の位置を探します。
 
@@ -160,9 +161,10 @@ def refs_of(finding, documents):
 
 
 def page_numbers_of(label, entry):
-    # 文書名と図面の名前を除いて、ページの指定だけを読む
-    text = re.sub(r"^(差替図面|構造図)\s*\S*\s", "", label + " ") if not re.search(r"p\d", label) else label
-    return page_numbers(text.strip(), entry["numbers"])
+    # ページの指定がなければ、最後の語を見る（「構造図 29」など）
+    if re.search(r"[pP]\d|\d{2}-\d{2}", label):
+        return page_numbers(label, entry["numbers"])
+    return page_numbers(label.split()[-1], entry["numbers"])
 
 
 def display_words(page):
@@ -287,11 +289,16 @@ def title_blocks(client, path, number, page):
 
 def render_crop(path, number, crop, dpi, masks, out):
     """切り抜きの画像を書き出す。ページ全体を画像にしてから塗るので、画面に見える向きのまま塗れて、元に戻せない"""
-    page = pymupdf.open(path)[number - 1]
-    pixmap = page.get_pixmap(dpi=dpi, colorspace=pymupdf.csRGB, alpha=False)
-    for mask in masks:
-        pixmap.set_rect(pymupdf.IRect(int(mask[0] * pixmap.width), int(mask[1] * pixmap.height),
-                                      int(mask[2] * pixmap.width) + 1, int(mask[3] * pixmap.height) + 1), MASK_COLOR)
+    # 同じページを何度も描かない
+    cache_key = (str(path), number, dpi, bool(masks))
+    pixmap = RENDERED.get(cache_key)
+    if pixmap is None:
+        page = pymupdf.open(path)[number - 1]
+        pixmap = page.get_pixmap(dpi=dpi, colorspace=pymupdf.csRGB, alpha=False)
+        for mask in masks:
+            pixmap.set_rect(pymupdf.IRect(int(mask[0] * pixmap.width), int(mask[1] * pixmap.height),
+                                          int(mask[2] * pixmap.width) + 1, int(mask[3] * pixmap.height) + 1), MASK_COLOR)
+        RENDERED[cache_key] = pixmap
     area = pymupdf.IRect(int(crop[0] * pixmap.width), int(crop[1] * pixmap.height),
                          int(crop[2] * pixmap.width), int(crop[3] * pixmap.height))
     cut = pymupdf.Pixmap(pymupdf.csRGB, area)

@@ -9,7 +9,7 @@ import sys
 import tempfile
 from pathlib import Path
 
-from check_upload import load_project, merge_same
+from check_upload import load_project, narrow_findings
 from markup_pdf import make_marked_pdf, mask_pdf
 from rebuild_job import page_findings
 
@@ -44,7 +44,8 @@ def main():
     # 番号とまとめ方は画面と同じにする（finish_job と同じ順番）
     for number, item in enumerate(findings, 1):
         item["number"] = number
-    merge_same(None, findings, folder / "raw")
+    pages = [{"number": number, "classified": json.loads((folder / "raw" / f"p{number}" / "classified.json").read_text())} for number in numbers]
+    findings = narrow_findings(None, folder, findings, pages, checklist, project.get("kind"))["findings"]
     kept = [item for item in findings if item["number"] not in excluded]
 
     tables = []

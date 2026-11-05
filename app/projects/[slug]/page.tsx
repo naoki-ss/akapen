@@ -2,7 +2,7 @@ import { Suspense } from "react";
 import { notFound } from "next/navigation";
 import { connection } from "next/server";
 import ModelConsole from "@/components/screens/ModelConsole";
-import { getBuilding, listBuildings } from "@/lib/buildings";
+import { drawingResults, getBuilding, listBuildings } from "@/lib/buildings";
 import { uploadEnabled } from "@/lib/jobs";
 import { listMinutes } from "@/lib/minutes";
 import { confirmedSheets } from "@/lib/sheetStatus";
@@ -22,6 +22,7 @@ async function Content({ params }: PageProps<"/projects/[slug]">) {
         name: b.model.name,
       }))}
       canUpload={enabled}
+      drawings={drawingResults(building)}
       knowledge={enabled ? knowledgeApps() : []}
       confirmedSheets={enabled ? confirmedSheets(slug) : []}
       minutes={enabled ? listMinutes(slug) : []}

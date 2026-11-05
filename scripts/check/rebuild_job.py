@@ -105,10 +105,6 @@ def main():
     folder = Path(sys.argv[1]).resolve()
     if UPLOADS.resolve() not in folder.parents:
         sys.exit("uploads の外のフォルダは扱いません")
-    # 確定した図面は書き換えない
-    status = folder / "sheet_status.json"
-    if status.exists() and any(page.get("confirmed") for page in json.loads(status.read_text())["pages"].values()):
-        sys.exit("確定した図面を含む結果は作り直せません")
     meta = json.loads((folder / "job.json").read_text())
     slug = meta["project"]
     project = load_project(slug)

@@ -2,8 +2,16 @@
 
 import { useCallback, useEffect, useState } from "react";
 
-// 朱書きから外した指摘の番号。判定ジョブの結果はサーバーに残し、PDFにも反映する。
-// デモ用に固定した結果（jobId が null）は、この画面の間だけ持つ
+export const REMOVE_REASONS = [
+  "矛盾ではない（表記だけ）",
+  "誤検出",
+  "対応済み",
+  "その他",
+] as const;
+
+export type RemoveReason = { reason: string; note: string };
+
+// 朱書きから消した指摘の番号。判定ジョブの結果はサーバーに残し、PDFにも反映する。
 export function useDecisions(jobId: string | null) {
   const [excluded, setExcluded] = useState<ReadonlySet<number>>(new Set());
 
@@ -22,24 +30,40 @@ export function useDecisions(jobId: string | null) {
     };
   }, [jobId]);
 
-  const setKept = useCallback(
-    (number: number, kept: boolean) => {
-      setExcluded((current) => {
-        const next = new Set(current);
-        if (kept) next.delete(number);
-        else next.add(number);
-        if (jobId) {
-          void fetch(`/api/check/${jobId}/decisions`, {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ excluded: [...next] }),
-          });
-        }
-        return next;
+  const send = useCallback(
+    (next: ReadonlySet<number>, why?: RemoveReason) => {
+      if (!jobId) return;
+      void fetch(`/api/check/${jobId}/decisions`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ excluded: [...next], ...why }),
       });
     },
     [jobId],
   );
 
-  return { excluded, setKept };
+  const remove = useCallback(
+    (number: number, why: RemoveReason) => {
+      setExcluded((current) => {
+        const next = new Set(current).add(number);
+        send(next, why);
+        return next;
+      });
+    },
+    [send],
+  );
+
+  const restore = useCallback(
+    (number: number) => {
+      setExcluded((current) => {
+        const next = new Set(current);
+        next.delete(number);
+        send(next);
+        return next;
+      });
+    },
+    [send],
+  );
+
+  return { excluded, remove, restore };
 }

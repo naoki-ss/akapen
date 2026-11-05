@@ -83,7 +83,8 @@
           "masked": true
         }
       ],
-      "design_refs_more": 2
+      "design_refs_more": 2,
+      "red_basis": "差替図面p11でルーフデッキUA-R t=1.0に訂正"
     },
     {
       "id": "p2-02",
@@ -167,7 +168,8 @@
           "masked": true
         }
       ],
-      "design_refs_more": 0
+      "design_refs_more": 0,
+      "red_basis": "差替p11でCG3はH-200〜100×100×5.5×8"
     },
     {
       "id": "p2-03",
@@ -292,7 +294,8 @@
           "masked": true
         }
       ],
-      "design_refs_more": 0
+      "design_refs_more": 0,
+      "red_basis": "差替p11・p1でG1〜G5はSN400B"
     },
     {
       "id": "p2-04",
@@ -385,7 +388,8 @@
           "masked": true
         }
       ],
-      "design_refs_more": 0
+      "design_refs_more": 0,
+      "red_basis": "差替p11・p12でメッキ部材指定とF8Tボルト"
     },
     {
       "id": "p2-05",
@@ -468,7 +472,8 @@
           "masked": true
         }
       ],
-      "design_refs_more": 0
+      "design_refs_more": 0,
+      "red_basis": "差替p5の2階伏図でX1〜X2・Y3〜Y4にB24あり"
     },
     {
       "id": "p2-06",
@@ -551,7 +556,8 @@
           "masked": true
         }
       ],
-      "design_refs_more": 0
+      "design_refs_more": 0,
+      "red_basis": "差替p5・p11でP1はH-125×125×6.5×9"
     },
     {
       "id": "p2-07",
@@ -669,7 +675,8 @@
           "masked": true
         }
       ],
-      "design_refs_more": 1
+      "design_refs_more": 1,
+      "red_basis": "差替p8・p10でP3・W1が追加"
     },
     {
       "id": "p2-08",
@@ -764,7 +771,8 @@
           "masked": true
         }
       ],
-      "design_refs_more": 2
+      "design_refs_more": 2,
+      "red_basis": "差替p13でG1接合部300・2PL-9 18-M22追記"
     },
     {
       "id": "p2-09",
@@ -849,7 +857,8 @@
           "masked": true
         }
       ],
-      "design_refs_more": 0
+      "design_refs_more": 0,
+      "red_basis": "差替p5の2階伏図で同位置はCG1、B10なし"
     },
     {
       "id": "p2-10",
@@ -930,7 +939,8 @@
           "masked": true
         }
       ],
-      "design_refs_more": 0
+      "design_refs_more": 0,
+      "red_basis": "差替p15部分詳細図でデッキ受けはPL-6×50"
     },
     {
       "id": "p2-11",
@@ -992,7 +1002,8 @@
           "masked": true
         }
       ],
-      "design_refs_more": 0
+      "design_refs_more": 0,
+      "red_basis": "差替p1使用構造材料でベースプレートSN490B"
     },
     {
       "id": "p2-12",
@@ -1075,91 +1086,8 @@
           "masked": true
         }
       ],
-      "design_refs_more": 0
-    },
-    {
-      "id": "p2-13",
-      "severity": "低",
-      "category": "レベル",
-      "title": "2SLの基準（2FL−130）が図中に明記されていません",
-      "content": "施工図は「梁天(SL)=2SL±0、楕円内SL-100、四角内SL-306」としています。設計は「梁天端2FL-130、(FL-230)、(FL-436)」です。2SL=2FL-130とすれば、SL-100はFL-230に、SL-306はFL-436（差替でFL-430から訂正）に対応し、値は整合しています。2SLの定義を図中に明記するか、ご確認ください。（根拠：差替図面 p5（35-14）、構造図 p14）",
-      "drawing": {
-        "doc": "鉄骨施工図",
-        "page": 2,
-        "bbox": [
-          0.3575,
-          0.8764,
-          0.4425,
-          0.9136
-        ],
-        "sheet": "s02"
-      },
-      "members": {
-        "grids": [],
-        "marks": [
-          "B19",
-          "CG2",
-          "B19M",
-          "CG1",
-          "B10"
-        ],
-        "floor": "2F"
-      },
-      "model_refs": [],
-      "source": "ai",
-      "key_ids": [],
-      "planted": false,
-      "evidence": [
-        {
-          "doc": "鉄骨施工図",
-          "page": 2,
-          "where": "p.2 の該当箇所",
-          "text": "",
-          "bbox": [
-            0.3575,
-            0.8764,
-            0.4425,
-            0.9136
-          ],
-          "image": "findings/p2-13.png"
-        }
-      ],
-      "reason": "値は整合していますが、2SL=2FL-130という基準が図中に明記されていません。",
-      "design_refs": [
-        {
-          "doc": "差替図面",
-          "page": 5,
-          "where": "",
-          "image": "design/p2-13-1.png",
-          "width": 844,
-          "height": 637,
-          "box": [
-            0.2703,
-            0.4889,
-            0.7297,
-            0.5111
-          ],
-          "located": "text",
-          "masked": true
-        },
-        {
-          "doc": "構造図",
-          "page": 14,
-          "where": "",
-          "image": "design/p2-13-2.png",
-          "width": 844,
-          "height": 637,
-          "box": [
-            0.2707,
-            0.4889,
-            0.7293,
-            0.5111
-          ],
-          "located": "text",
-          "masked": true
-        }
-      ],
-      "design_refs_more": 0
+      "design_refs_more": 0,
+      "red_basis": "構造図p19でY2通り2FLはB29、差替p5はB39S"
     },
     {
       "id": "p3-01",
@@ -1243,7 +1171,8 @@
           "masked": true
         }
       ],
-      "design_refs_more": 0
+      "design_refs_more": 0,
+      "red_basis": "差替p11鉄骨部材リスト CG3はH-200～100×100×5.5×8切断加工"
     },
     {
       "id": "p3-02",
@@ -1333,7 +1262,8 @@
           "masked": true
         }
       ],
-      "design_refs_more": 1
+      "design_refs_more": 1,
+      "red_basis": "構造図p15 3階伏図で同位置はB19（H-198×99）"
     },
     {
       "id": "p3-03",
@@ -1423,131 +1353,8 @@
           "masked": true
         }
       ],
-      "design_refs_more": 0
-    },
-    {
-      "id": "p3-04",
-      "severity": "中",
-      "category": "レベル",
-      "title": "梁天端レベルの基準（3SL）と設計の3FL-130の関係が示されていません",
-      "content": "施工図は「特記以外 梁天(SL)=3SL±0」としていますが、図面内にSLとFLの関係が書かれていません。構造図の3階伏図では梁天端を3FL-130としています。3SL＝3FL-130の扱いで正しいかご確認ください。（根拠：構造図 3階伏図（05-15） 構造図 p15、構造図 Y1通軸組図（05-18） 構造図 p18）",
-      "drawing": {
-        "doc": "鉄骨施工図",
-        "page": 3,
-        "bbox": [
-          0.3575,
-          0.8464,
-          0.4525,
-          0.8836
-        ],
-        "sheet": "s03"
-      },
-      "members": {
-        "grids": [],
-        "marks": [
-          "G1",
-          "G2",
-          "G3",
-          "G5",
-          "B29S",
-          "B30S"
-        ],
-        "floor": "3F"
-      },
-      "model_refs": [
-        "beam|3F|Y1/X7-X8",
-        "beam|3F|Y1/X5-X6",
-        "beam|3F|Y1/X6-X7",
-        "beam|3F|Y1/X3-X4",
-        "beam|3F|Y1/X4-X5",
-        "beam|3F|Y1/X2-X3",
-        "beam|3F|Y2/X7-X8",
-        "beam|3F|Y2/X2-X3",
-        "beam|3F|Y3/X7-X8",
-        "beam|3F|Y3/X5-X6",
-        "beam|3F|Y3/X6-X7",
-        "beam|3F|Y3/X3-X4",
-        "beam|3F|Y3/X4-X5",
-        "beam|3F|Y3/X2-X3",
-        "beam|3F|Y3/X1-X2",
-        "beam|3F|Y4/X7-X8",
-        "beam|3F|Y4/X5-X6",
-        "beam|3F|Y4/X6-X7",
-        "beam|3F|Y4/X3-X4",
-        "beam|3F|Y4/X4-X5",
-        "beam|3F|Y4/X2-X3",
-        "beam|3F|Y4/X1-X2",
-        "beam|3F|X1/Y3-Y4",
-        "beam|3F|X2/Y3-Y4",
-        "beam|3F|X2/Y2-Y3",
-        "beam|3F|X2/Y1-Y2",
-        "beam|3F|X3/Y3-Y4",
-        "beam|3F|X3/Y1-Y2",
-        "beam|3F|X3/Y2-Y3",
-        "beam|3F|X5/Y3-Y4",
-        "beam|3F|X5/Y1-Y2",
-        "beam|3F|X5/Y2-Y3",
-        "beam|3F|X7/Y3-Y4",
-        "beam|3F|X7/Y1-Y2",
-        "beam|3F|X7/Y2-Y3",
-        "beam|3F|X8/Y3-Y4",
-        "beam|3F|X8/Y2-Y3",
-        "beam|3F|X8/Y1-Y2"
-      ],
-      "source": "ai",
-      "key_ids": [],
-      "planted": false,
-      "evidence": [
-        {
-          "doc": "鉄骨施工図",
-          "page": 3,
-          "where": "p.3 の該当箇所",
-          "text": "",
-          "bbox": [
-            0.3575,
-            0.8464,
-            0.4525,
-            0.8836
-          ],
-          "image": "findings/p3-04.png"
-        }
-      ],
-      "reason": "図中にSLとFLの関係がなく、設計の3FL-130との対応が示されていません。",
-      "design_refs": [
-        {
-          "doc": "構造図",
-          "page": 15,
-          "where": "",
-          "image": "design/p3-04-1.png",
-          "width": 844,
-          "height": 636,
-          "box": [
-            0.2941,
-            0.1714,
-            0.7059,
-            0.8286
-          ],
-          "located": "text",
-          "masked": true
-        },
-        {
-          "doc": "構造図",
-          "page": 18,
-          "where": "",
-          "image": "design/p3-04-2.png",
-          "width": 844,
-          "height": 637,
-          "box": [
-            0.3694,
-            0.3042,
-            0.6306,
-            0.6958
-          ],
-          "located": "text",
-          "masked": true
-        }
-      ],
-      "design_refs_more": 0
+      "design_refs_more": 0,
+      "red_basis": "構造図p15 3階伏図 X1〜X2階段部にB24配置"
     },
     {
       "id": "p3-05",
@@ -1634,7 +1441,8 @@
           "masked": true
         }
       ],
-      "design_refs_more": 0
+      "design_refs_more": 0,
+      "red_basis": "構造図p15 3階伏図にバルコニー部材の下げ特記なし"
     },
     {
       "id": "p3-06",
@@ -1702,7 +1510,8 @@
           "masked": true
         }
       ],
-      "design_refs_more": 0
+      "design_refs_more": 0,
+      "red_basis": "構造図p15 3階伏図 バルコニー外周B10のレベル"
     },
     {
       "id": "p3-07",
@@ -1800,7 +1609,8 @@
           "masked": true
         }
       ],
-      "design_refs_more": 0
+      "design_refs_more": 0,
+      "red_basis": "差替p11・p12 溶融亜鉛メッキ・F8T（メッキ）指定"
     },
     {
       "id": "p3-08",
@@ -1874,7 +1684,8 @@
           "masked": true
         }
       ],
-      "design_refs_more": 0
+      "design_refs_more": 0,
+      "red_basis": "構造図p15 3階伏図 図上約2400等間隔の配置"
     },
     {
       "id": "p3-09",
@@ -1955,7 +1766,8 @@
           "masked": true
         }
       ],
-      "design_refs_more": 0
+      "design_refs_more": 0,
+      "red_basis": "構造図p19 Y2通軸組図3FLではB29表記"
     },
     {
       "id": "p3-10",
@@ -2073,90 +1885,8 @@
           "masked": true
         }
       ],
-      "design_refs_more": 0
-    },
-    {
-      "id": "p3-11",
-      "severity": "低",
-      "category": "図面内の整合",
-      "title": "X2通りG3の六角形マークに凡例がありません",
-      "content": "X2通りY3〜Y4間のG3が六角形で囲まれていますが、図面内に六角形マークの凡例がありません。意味（レベル・仕様の違いなど）をご確認ください。（根拠：構造図 X2通軸組図（05-22） 構造図 p22）",
-      "drawing": {
-        "doc": "鉄骨施工図",
-        "page": 3,
-        "bbox": [
-          0.2375,
-          0.2164,
-          0.2625,
-          0.2736
-        ],
-        "sheet": "s03"
-      },
-      "members": {
-        "grids": [
-          "X2",
-          "Y3",
-          "Y4"
-        ],
-        "marks": [
-          "G3"
-        ],
-        "floor": "3F"
-      },
-      "model_refs": [
-        "beam|3F|Y1/X2-X3",
-        "beam|3F|Y2/X2-X3",
-        "beam|3F|Y3/X7-X8",
-        "beam|3F|Y3/X5-X6",
-        "beam|3F|Y3/X6-X7",
-        "beam|3F|Y3/X3-X4",
-        "beam|3F|Y3/X4-X5",
-        "beam|3F|Y3/X2-X3",
-        "beam|3F|Y4/X7-X8",
-        "beam|3F|Y4/X5-X6",
-        "beam|3F|Y4/X6-X7",
-        "beam|3F|Y4/X3-X4",
-        "beam|3F|Y4/X4-X5",
-        "beam|3F|Y4/X2-X3",
-        "beam|3F|X2/Y3-Y4",
-        "beam|3F|X2/Y2-Y3",
-        "beam|3F|X2/Y1-Y2",
-        "beam|3F|X8/Y3-Y4",
-        "beam|3F|X8/Y2-Y3"
-      ],
-      "source": "ai",
-      "key_ids": [],
-      "planted": false,
-      "evidence": [
-        {
-          "doc": "鉄骨施工図",
-          "page": 3,
-          "where": "p.3 の該当箇所",
-          "text": "",
-          "bbox": [
-            0.2375,
-            0.2164,
-            0.2625,
-            0.2736
-          ],
-          "image": "findings/p3-11.png"
-        }
-      ],
-      "reason": "G3を囲む六角形マークの凡例が図面内になく、意味がわかりません。",
-      "design_refs": [
-        {
-          "doc": "構造図",
-          "page": 22,
-          "where": "",
-          "image": "design/p3-11-1.png",
-          "width": 1820,
-          "height": 1287,
-          "box": null,
-          "located": "page",
-          "masked": true
-        }
-      ],
-      "design_refs_more": 0
+      "design_refs_more": 0,
+      "red_basis": "差替p12ピン接合リスト G3 1×5-M20 Aタイプ追加"
     },
     {
       "id": "p3-12",
@@ -2290,7 +2020,8 @@
           "masked": true
         }
       ],
-      "design_refs_more": 0
+      "design_refs_more": 0,
+      "red_basis": "構造図p15・p22 Y4通り柱面基準 寄り80"
     },
     {
       "id": "p3-13",
@@ -2369,7 +2100,8 @@
           "masked": true
         }
       ],
-      "design_refs_more": 0
+      "design_refs_more": 0,
+      "red_basis": "構造図p15 3階伏図 バルコニー各区画にB7配置"
     },
     {
       "id": "p6-01",
@@ -2454,7 +2186,8 @@
           "masked": true
         }
       ],
-      "design_refs_more": 0
+      "design_refs_more": 0,
+      "red_basis": "差替p11鉄骨部材リスト CG3はH-200～100×100×5.5×8"
     },
     {
       "id": "p6-02",
@@ -2586,7 +2319,8 @@
           "masked": true
         }
       ],
-      "design_refs_more": 2
+      "design_refs_more": 2,
+      "red_basis": "差替p6 R階伏図 梁天端RFL-130、CG3は130下がり"
     },
     {
       "id": "p6-03",
@@ -2700,7 +2434,8 @@
           "masked": true
         }
       ],
-      "design_refs_more": 1
+      "design_refs_more": 1,
+      "red_basis": "差替p11 鉄骨部材リスト G4はH-400×200×8×13のみ"
     },
     {
       "id": "p6-04",
@@ -2789,7 +2524,8 @@
           "masked": true
         }
       ],
-      "design_refs_more": 0
+      "design_refs_more": 0,
+      "red_basis": "差替p11 リストに該当断面のPなし、構造図p28でCG3連続"
     },
     {
       "id": "p6-05",
@@ -2879,7 +2615,8 @@
           "masked": true
         }
       ],
-      "design_refs_more": 0
+      "design_refs_more": 0,
+      "red_basis": "差替p6 R階伏図 X1～X2・Y3～Y4に階段とB24あり"
     },
     {
       "id": "p6-06",
@@ -2992,7 +2729,8 @@
           "masked": true
         }
       ],
-      "design_refs_more": 0
+      "design_refs_more": 0,
+      "red_basis": "差替p10 Y4通軸組図等 G4・G5上に間柱P2あり"
     },
     {
       "id": "p6-07",
@@ -3093,7 +2831,8 @@
           "masked": true
         }
       ],
-      "design_refs_more": 0
+      "design_refs_more": 0,
+      "red_basis": "差替p11・p12 該当部材は溶融亜鉛メッキ、ボルトF8T"
     },
     {
       "id": "p6-08",
@@ -3172,7 +2911,8 @@
           "masked": true
         }
       ],
-      "design_refs_more": 0
+      "design_refs_more": 0,
+      "red_basis": "構造図p29 継手リストにCG3用継手なし、p28片持梁"
     },
     {
       "id": "p6-09",
@@ -3238,7 +2978,8 @@
           "masked": true
         }
       ],
-      "design_refs_more": 0
+      "design_refs_more": 0,
+      "red_basis": "差替p6 R階伏図 X3寄りに開口アキと機械基礎あり"
     },
     {
       "id": "p6-10",
@@ -3316,7 +3057,8 @@
           "masked": true
         }
       ],
-      "design_refs_more": 0
+      "design_refs_more": 0,
+      "red_basis": "差替p6 R階伏図 Y4通は柱面80の指定"
     },
     {
       "id": "p6-11",
@@ -3389,7 +3131,8 @@
           "masked": true
         }
       ],
-      "design_refs_more": 0
+      "design_refs_more": 0,
+      "red_basis": "差替p6 R階伏図に対し表題が3SL階で不一致"
     }
   ],
   "changes": []

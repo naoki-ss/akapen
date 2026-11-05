@@ -108,6 +108,11 @@ def import_markdown(slug, path):
     source = Path(path)
     text = strip_notice(source.read_text())
     items = parse_items(text)
+    # 表の行は、列の名前を添えた文にする
+    from design_basis import readable_lines
+
+    named = {row["id"]: row["text"] for row in readable_lines(text) if row["id"]}
+    items = {key: named.get(key, value) for key, value in items.items()}
     date = re.search(r"\d{4}-\d{2}-\d{2}", source.stem)
     title = next((line[1:].strip() for line in text.splitlines() if line.startswith("# ")), source.stem)
     identifier = uuid.uuid4().hex

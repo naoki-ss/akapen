@@ -143,9 +143,26 @@ export function readDecisions(folder: string): number[] {
   return existsSync(file) ? JSON.parse(readFileSync(file, "utf8")).excluded : [];
 }
 
-// 朱書きから外した指摘の番号を残す
-export function saveDecisions(folder: string, excluded: number[]) {
-  writeFileSync(path.join(folder, "decisions.json"), JSON.stringify({ excluded }));
+// 消した指摘の理由
+export type RemovedReason = { reason: string; note: string; at: string };
+
+export function readDecisionReasons(folder: string): Record<string, RemovedReason> {
+  const file = path.join(folder, "decisions.json");
+  return existsSync(file)
+    ? (JSON.parse(readFileSync(file, "utf8")).reasons ?? {})
+    : {};
+}
+
+// 朱書きから消した指摘の番号と理由を残す
+export function saveDecisions(
+  folder: string,
+  excluded: number[],
+  reasons: Record<string, RemovedReason>,
+) {
+  writeFileSync(
+    path.join(folder, "decisions.json"),
+    JSON.stringify({ excluded, reasons, renumbered: true }),
+  );
 }
 
 // 朱書きPDFのパス。外した指摘があれば、その分を除いて作り直す（AIは呼ばない）
