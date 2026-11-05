@@ -1,5 +1,6 @@
 "use client";
 
+import { Plus } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
@@ -22,13 +23,14 @@ export default function MinutesTab({
   const [creating, setCreating] = useState(false);
   return (
     <div className={screens.page}>
-      {canCreate && !creating && (
-        <div className={screens.pageHead}>
+      <div className={screens.pageHead}>
+        <h1>議事録</h1>
+        {canCreate && !creating && (
           <button className={screens.action} onClick={() => setCreating(true)}>
-            ＋ 議事録を作る
+            <Plus size={15} /> 議事録を作る
           </button>
-        </div>
-      )}
+        )}
+      </div>
       {creating && (
         <MinutesRecorder
           slug={slug}

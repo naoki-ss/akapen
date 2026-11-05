@@ -1,5 +1,6 @@
 "use client";
 
+import { X, Plus } from "lucide-react";
 import { useState } from "react";
 import type { Decision, Minutes, Todo } from "@/lib/minutes";
 import styles from "./Minutes.module.css";
@@ -49,7 +50,7 @@ function DecisionRow({
         aria-label="この決定事項を消す"
         onClick={onRemove}
       >
-        ×
+        <X size={14} />
       </button>
     </li>
   );
@@ -125,7 +126,7 @@ export default function MinutesEditor({
           setNextKey(nextKey + 1);
         }}
       >
-        ＋ 決定事項を足す
+        <Plus size={14} /> 決定事項を足す
       </button>
       <h3>宿題</h3>
       <ul className={styles.list}>
@@ -144,7 +145,7 @@ export default function MinutesEditor({
                 update({ todos: draft.todos.filter((_, i) => i !== index) })
               }
             >
-              ×
+              <X size={14} />
             </button>
           </li>
         ))}
@@ -154,7 +155,7 @@ export default function MinutesEditor({
         className={styles.secondary}
         onClick={() => update({ todos: [...draft.todos, { id: "", text: "" }] })}
       >
-        ＋ 宿題を足す
+        <Plus size={14} /> 宿題を足す
       </button>
       {error && <p className={styles.error}>{error}</p>}
       <div className={styles.actions}>

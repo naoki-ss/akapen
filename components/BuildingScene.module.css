@@ -50,7 +50,7 @@
   max-width: 260px;
   padding: 5px 10px;
   border: 1.5px solid var(--callout);
-  border-radius: 6px;
+  border-radius: var(--radius);
   background: var(--panel);
   color: var(--ink);
   font-size: 12px;
@@ -60,7 +60,7 @@
 .bubble b {
   margin-right: 6px;
   padding: 0 5px;
-  border-radius: 3px;
+  border-radius: var(--radius);
   background: var(--callout);
   color: #fff;
 }

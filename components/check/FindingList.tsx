@@ -1,5 +1,6 @@
 "use client";
 
+import CountUp from "../CountUp";
 import Link from "next/link";
 import { useCallback } from "react";
 import type { CheckResult, Finding } from "@/lib/check";
@@ -126,7 +127,7 @@ export default function FindingList({
               >
                 <b>{group.title}</b>
                 <span className="mono">
-                  <i data-color="red">赤{group.red}</i>・<i data-color="blue">青{group.blue}</i>
+                  <i data-color="red">赤<CountUp value={group.red} /></i>・<i data-color="blue">青<CountUp value={group.blue} /></i>
                 </span>
               </summary>
               <Items
@@ -150,7 +151,7 @@ export default function FindingList({
             <Link key={group.key} href={group.href ?? "#"} className={styles.drawingLink}>
               <b>{group.title}</b>
               <span className="mono">
-                <i data-color="red">赤{group.red}</i>・<i data-color="blue">青{group.blue}</i>
+                <i data-color="red">赤<CountUp value={group.red} /></i>・<i data-color="blue">青<CountUp value={group.blue} /></i>
               </span>
             </Link>
           ),

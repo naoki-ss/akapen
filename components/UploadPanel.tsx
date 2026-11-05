@@ -2,12 +2,52 @@
 
 import Image from "next/image";
 import { useRef, useState } from "react";
-import type { Draft, useUploadJob } from "@/lib/useUploadJob";
+import { Check } from "lucide-react";
+import type { Draft, JobStatus, useUploadJob } from "@/lib/useUploadJob";
+import CountUp from "./CountUp";
 import styles from "./App.module.css";
 
-// 3ページずつ並行して判定する。実績は1ページ 約3〜4分、約2ドル
+// 3ページずつ並行して判定する。実績は1ページ 約1分半、約2ドル
 const estimate = (pages: number) =>
-  `目安 約${Math.round(Math.ceil(pages / 3) * 3.5)}分・約${pages * 2}ドル`;
+  `目安 約${Math.ceil(pages / 3) * 1.5}分・約${pages * 2}ドル`;
+
+// 確認の観点。判定の順ではなく、終わった数だけ順に点灯する
+const FOCUS_LABELS = ["部材リスト", "差替の赤枠", "共通事項", "符号の有無", "配置", "詳細図"];
+
+// チェック中の図面。朱色の線が上から下へ走り、観点が順に点灯し、終わった図面から結果が出る
+function ScanBoard({ jobId, status }: { jobId: string; status: JobStatus }) {
+  const pages = Object.entries(status.pages_detail ?? {});
+  return (
+    <ul className={styles.scanBoard}>
+      {pages.map(([number, page]) => (
+        <li key={number} data-state={page.state}>
+          <div className={styles.scanSheet}>
+            {/* eslint-disable-next-line @next/next/no-img-element -- 小さな画像をそのまま見せる */}
+            <img src={`/api/check/${jobId}/files/thumbs/p${number}.png`} alt="" />
+            {page.state === "running" && <i className={styles.scanLine} />}
+          </div>
+          <div className={styles.scanBody}>
+            <b>{page.title ?? `${number} ページ目`}</b>
+            <ol className={styles.scanFocus}>
+              {FOCUS_LABELS.map((label, index) => (
+                <li key={label} data-on={index < page.focus.length || page.state === "done"}>
+                  {label}
+                </li>
+              ))}
+            </ol>
+            {page.state === "done" && (
+              <span className={`${styles.scanResult} mono`}>
+                <Check size={14} />
+                <i data-color="red">赤<CountUp value={page.red ?? 0} /></i>
+                <i data-color="blue">青<CountUp value={page.blue ?? 0} /></i>
+              </span>
+            )}
+          </div>
+        </li>
+      ))}
+    </ul>
+  );
+}
 
 const elapsed = (seconds: number) =>
   seconds < 60
@@ -87,7 +127,7 @@ export default function UploadPanel({
 }: {
   job: ReturnType<typeof useUploadJob>;
 }) {
-  const { status, error, running, draft, sending } = job;
+  const { status, error, running, draft, sending, jobId } = job;
   const input = useRef<HTMLInputElement>(null);
   const [over, setOver] = useState(false);
   const [notPdf, setNotPdf] = useState(false);
@@ -133,12 +173,13 @@ export default function UploadPanel({
             }}
           />
           {running ? (
-            <div className={styles.progress} role="status">
+            <div className={styles.progress} data-wide={Boolean(status?.pages_detail)} role="status">
               <b>{status?.message ?? "図面を送っています"}</b>
               <div className={styles.bar}>
                 <div style={{ width: `${percent}%` }} />
               </div>
-              {status && <small>経過 {elapsed(status.seconds)}</small>}
+              {status && <small className="mono">経過 {elapsed(status.seconds)}</small>}
+              {status?.pages_detail && jobId && <ScanBoard jobId={jobId} status={status} />}
               <button
                 className={styles.secondary}
                 disabled={job.stopping}

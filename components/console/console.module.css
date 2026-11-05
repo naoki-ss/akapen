@@ -3,7 +3,7 @@
   width: 100%;
   padding: 7px 8px;
   border: 1px solid var(--line-strong);
-  border-radius: 6px;
+  border-radius: var(--radius);
   background: var(--panel);
   color: var(--ink);
   font: inherit;
@@ -36,7 +36,7 @@
   min-width: 0;
   padding: 5px 6px;
   border: 1px solid var(--line-strong);
-  border-radius: 6px;
+  border-radius: var(--radius);
   background: var(--panel);
   color: var(--ink);
   font: inherit;
@@ -65,7 +65,7 @@
   gap: 8px;
   padding: 6px;
   border: 1px solid transparent;
-  border-radius: 6px;
+  border-radius: var(--radius);
   background: none;
   color: var(--ink);
   font-size: 13px;
@@ -152,7 +152,7 @@
   flex: 1;
   padding: 4px 6px;
   border: 1px solid var(--line-strong);
-  border-radius: 5px;
+  border-radius: var(--radius);
   background: var(--panel);
   color: var(--ink);
   font: inherit;
@@ -169,7 +169,7 @@
   flex: none;
   padding: 5px 8px;
   border: 1px solid var(--line-strong);
-  border-radius: 6px;
+  border-radius: var(--radius);
   background: var(--panel);
   color: var(--ink);
   font-size: 12px;
@@ -227,7 +227,7 @@
 .choice button {
   padding: 4px 2px;
   border: 1px solid var(--line-strong);
-  border-radius: 5px;
+  border-radius: var(--radius);
   background: var(--panel);
   color: var(--ink);
   font-size: 12px;
@@ -317,7 +317,7 @@
   align-items: flex-start;
   gap: 8px;
   padding: 6px;
-  border-radius: 6px;
+  border-radius: var(--radius);
   color: var(--ink);
   font-size: 13px;
   line-height: 1.4;
@@ -359,7 +359,7 @@ button.findingLink {
 
 .summaryLine a.meetingLink {
   padding: 4px 10px;
-  border-radius: 6px;
+  border-radius: var(--radius);
   background: var(--ink);
   color: #fff;
   font-size: 12px;

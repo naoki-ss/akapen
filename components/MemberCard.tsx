@@ -1,5 +1,6 @@
 "use client";
 
+import { X } from "lucide-react";
 import {
   memberKey,
   TYPE_LABELS,
@@ -90,7 +91,7 @@ export default function MemberCard({
         aria-label="部材の情報を閉じる"
         onClick={onClose}
       >
-        ×
+        <X size={14} />
       </button>
       <span className={`${styles.mark} mono`}>{member.mark}</span>
       <span className={styles.type}>{TYPE_LABELS[member.type]}</span>

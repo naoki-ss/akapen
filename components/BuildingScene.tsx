@@ -17,6 +17,8 @@ import {
 } from "react";
 import {
   ACESFilmicToneMapping,
+  Color,
+  type MeshStandardMaterial,
   type BufferGeometry,
   CanvasTexture,
   CylinderGeometry,
@@ -164,6 +166,34 @@ function memberGeometry(shape: Shape): BufferGeometry {
   return meterBox(shape.size);
 }
 
+const FLY_MS = 1000;
+const GLOW_MS = 500;
+const GLOW_START = new Color("#8d949c");
+
+const reducedMotion = () =>
+  window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+
+// 指摘の部材の赤を、ふわっと点灯させる
+function GlowMaterial({ color, intensity }: { color: string; intensity: number }) {
+  const material = useRef<MeshStandardMaterial>(null);
+  const started = useRef<number | null>(null);
+  const goal = useMemo(() => new Color(color), [color]);
+  useFrame(() => {
+    if (!material.current) return;
+    const now = performance.now();
+    started.current ??= now;
+    const t = reducedMotion() ? 1 : Math.min(1, (now - started.current) / GLOW_MS);
+    if (material.current.userData.done) return;
+    const eased = 1 - (1 - t) ** 2;
+    material.current.color.lerpColors(GLOW_START, goal, eased);
+    material.current.emissive.copy(goal);
+    material.current.emissiveIntensity = intensity * eased;
+    if (t >= 1) material.current.userData.done = true;
+    invalidate();
+  });
+  return <meshStandardMaterial ref={material} color={GLOW_START} emissive={color} emissiveIntensity={0} />;
+}
+
 function MemberMesh({
   member,
   materialKey,
@@ -202,14 +232,7 @@ function MemberMesh({
       castShadow={!ghost}
       receiveShadow={!ghost}
     >
-      {accent && (
-        <meshStandardMaterial
-          key={accent}
-          color={accent}
-          emissive={accent}
-          emissiveIntensity={selected ? 0.2 : 0.75}
-        />
-      )}
+      {accent && <GlowMaterial key={accent} color={accent} intensity={selected ? 0.2 : 0.75} />}
     </mesh>
   );
 }
@@ -414,7 +437,11 @@ function CameraRig({
   const controls = useThree(
     (state) => state.controls,
   ) as unknown as OrbitControlsImpl | null;
-  const goal = useRef<{ position: Vector3; target: Vector3 } | null>(null);
+  const goal = useRef<{
+    position: Vector3;
+    target: Vector3;
+    from?: { position: Vector3; target: Vector3; at: number };
+  } | null>(null);
   // 開いた直後は動かさず、最初から収まった視点で見せる
   const opening = useRef(true);
   const visibleAspect =
@@ -474,7 +501,7 @@ function CameraRig({
     return () => controls.removeEventListener("start", stop);
   }, [controls]);
 
-  useFrame((state, delta) => {
+  useFrame((state) => {
     const orbit = state.controls as unknown as OrbitControlsImpl | null;
     if (!orbit) return;
     // 見上げられるようにしつつ、カメラが地面より下に行かないようにする
@@ -484,14 +511,17 @@ function CameraRig({
       ? Math.PI
       : Math.PI / 2 + Math.asin(Math.min(1, Math.max(0, above)));
     if (!goal.current) return;
-    const k = opening.current ? 1 : 1 - Math.exp(-Math.min(delta, 0.1) * 5);
+    // 始めと終わりをゆるやかにして、1秒で飛ぶ。開いた直後と、動きを減らす設定のときは飛ばない
+    const now = performance.now();
+    goal.current.from ??= { position: camera.position.clone(), target: orbit.target.clone(), at: now };
+    const { from } = goal.current;
+    const t = opening.current || reducedMotion() ? 1 : Math.min(1, (now - from.at) / FLY_MS);
     opening.current = false;
-    camera.position.lerp(goal.current.position, k);
-    orbit.target.lerp(goal.current.target, k);
+    const k = t < 0.5 ? 4 * t ** 3 : 1 - (-2 * t + 2) ** 3 / 2;
+    camera.position.lerpVectors(from.position, goal.current.position, k);
+    orbit.target.lerpVectors(from.target, goal.current.target, k);
     orbit.update();
-    if (camera.position.distanceTo(goal.current.position) < 0.02) {
-      goal.current = null;
-    }
+    if (t >= 1) goal.current = null;
     invalidate();
   });
   return null;

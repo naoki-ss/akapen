@@ -1,5 +1,7 @@
 "use client";
 
+import CountUp from "../CountUp";
+import { Plus } from "lucide-react";
 import Link from "next/link";
 import { useState } from "react";
 import type { ProjectCard } from "@/lib/buildings";
@@ -90,7 +92,7 @@ export default function ProjectList({
           )}
           {canRegister && (
             <Link className={styles.action} href="/projects/new">
-              ＋ 新しい現場をつくる
+              <Plus size={15} /> 新しい現場をつくる
             </Link>
           )}
         </div>
@@ -135,10 +137,10 @@ export default function ProjectList({
                   <div className={styles.openCounts} aria-label="未対応の指摘">
                     <small>未対応の指摘</small>
                     <i className="mono" data-color="red">
-                      赤 {project.red}
+                      赤 <CountUp value={project.red} />
                     </i>
                     <i className="mono" data-color="blue">
-                      青 {project.blue}
+                      青 <CountUp value={project.blue} />
                     </i>
                   </div>
                 </div>

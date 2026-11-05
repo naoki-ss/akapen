@@ -42,27 +42,24 @@ export function useDecisions(jobId: string | null) {
     [jobId],
   );
 
+  // 保存は state の更新の外で行う（開発時は更新の関数が2回呼ばれ、2回送ってしまう）
   const remove = useCallback(
     (number: number, why: RemoveReason) => {
-      setExcluded((current) => {
-        const next = new Set(current).add(number);
-        send(next, why);
-        return next;
-      });
+      const next = new Set(excluded).add(number);
+      setExcluded(next);
+      send(next, why);
     },
-    [send],
+    [excluded, send],
   );
 
   const restore = useCallback(
     (number: number) => {
-      setExcluded((current) => {
-        const next = new Set(current);
-        next.delete(number);
-        send(next);
-        return next;
-      });
+      const next = new Set(excluded);
+      next.delete(number);
+      setExcluded(next);
+      send(next);
     },
-    [send],
+    [excluded, send],
   );
 
   return { excluded, remove, restore };

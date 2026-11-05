@@ -406,6 +406,9 @@ export default function DesignTab({
 }) {
   return (
     <div className={screens.page}>
+      <div className={screens.pageHead}>
+        <h1>設計図書</h1>
+      </div>
       {canAdd && <AddSet slug={slug} />}
       <ModelUpdate slug={slug} initial={model} />
       <MemberChanges ledger={ledger} />

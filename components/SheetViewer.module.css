@@ -15,7 +15,7 @@
   width: min(1500px, 100%);
   height: 100%;
   background: #fff;
-  border-radius: 6px;
+  border-radius: var(--radius);
   overflow: hidden;
 }
 
@@ -92,7 +92,7 @@
   position: absolute;
   /* 朱書きの赤・青と区別できるように、確認中の範囲は深緑で囲む */
   border: 3px solid var(--accent);
-  border-radius: 3px;
+  border-radius: var(--radius);
   box-shadow: 0 0 0 2px rgb(255 255 255 / 85%);
   pointer-events: none;
 }

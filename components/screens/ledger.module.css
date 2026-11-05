@@ -11,7 +11,7 @@
   margin-bottom: 16px;
   padding: 12px;
   border: 1px solid var(--line);
-  border-radius: 8px;
+  border-radius: var(--radius);
   background: var(--panel);
 }
 
@@ -28,7 +28,7 @@
 .table select {
   padding: 5px 8px;
   border: 1px solid var(--line-strong);
-  border-radius: 6px;
+  border-radius: var(--radius);
   background: #fff;
   color: var(--ink);
   font: inherit;
@@ -40,12 +40,12 @@
   margin-bottom: 14px;
   border-collapse: collapse;
   background: var(--panel);
-  font-size: 13px;
+  font-size: 14px;
 }
 
 .table th,
 .table td {
-  padding: 7px 10px;
+  padding: 12px 14px;
   border-bottom: 1px solid var(--line);
   text-align: left;
   vertical-align: top;
@@ -112,7 +112,7 @@
 .secondary {
   padding: 4px 10px;
   border: 1px solid var(--line-strong);
-  border-radius: 6px;
+  border-radius: var(--radius);
   background: var(--panel);
   color: var(--ink);
   font: inherit;
@@ -124,7 +124,7 @@
   margin-bottom: 16px;
   padding: 10px 12px;
   border: 1px solid var(--line);
-  border-radius: 8px;
+  border-radius: var(--radius);
   background: var(--panel);
   font-size: 13px;
 }
@@ -179,11 +179,45 @@
   margin-bottom: 14px;
   padding: 10px 12px;
   border: 1px solid var(--line);
-  border-radius: 8px;
+  border-radius: var(--radius);
   background: var(--panel);
   font-size: 13px;
 }
 
 .modelUpdate details {
   flex-basis: 100%;
+}
+
+/* 図面数と赤青の合計 */
+.totals {
+  display: flex;
+  gap: 32px;
+  margin: 0 28px 0 0;
+}
+
+.totals > div {
+  display: flex;
+  flex-direction: row-reverse;
+  align-items: baseline;
+  gap: 6px;
+}
+
+.totals dd {
+  margin: 0;
+  font-size: 30px;
+  font-weight: 700;
+  line-height: 1;
+}
+
+.totals dt {
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.totals [data-color="red"] dd {
+  color: var(--red);
+}
+
+.totals [data-color="blue"] dd {
+  color: var(--blue);
 }

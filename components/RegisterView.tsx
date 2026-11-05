@@ -1,5 +1,6 @@
 "use client";
 
+import { Check, X } from "lucide-react";
 import { useEffect, useState } from "react";
 import type { ProjectSummary } from "@/lib/buildings";
 import { PREFECTURES } from "@/lib/prefectures";
@@ -439,7 +440,7 @@ export default function RegisterView({
                         setEntries(entries.filter((_, i) => i !== index))
                       }
                     >
-                      ×
+                      <X size={14} />
                     </button>
                   )}
                 </li>
@@ -528,7 +529,7 @@ export default function RegisterView({
                     : "todo"
               }
             >
-              <i className="mono">{stageIndex > index ? "✓" : index + 1}</i>
+              <i className="mono">{stageIndex > index ? <Check size={13} /> : index + 1}</i>
               <span>
                 <b>{step.title}</b>
                 <small>{step.text}</small>

@@ -8,7 +8,7 @@
 .secondary {
   padding: 7px 14px;
   border: 1px solid var(--line-strong);
-  border-radius: 6px;
+  border-radius: var(--radius);
   background: var(--panel);
   color: var(--ink);
   font: inherit;
@@ -26,7 +26,7 @@
   max-width: 720px;
   padding: 18px;
   border: 1px solid var(--line);
-  border-radius: 8px;
+  border-radius: var(--radius);
   background: var(--panel);
   font-size: 14px;
 }
@@ -59,7 +59,7 @@
 .field select {
   padding: 6px 8px;
   border: 1px solid var(--line-strong);
-  border-radius: 6px;
+  border-radius: var(--radius);
   background: #fff;
   color: var(--ink);
   font: inherit;
@@ -79,7 +79,7 @@
   gap: 8px;
   padding: 10px;
   border: 1px solid var(--line);
-  border-radius: 8px;
+  border-radius: var(--radius);
   background: var(--panel);
 }
 
@@ -110,7 +110,7 @@
 .chips button {
   padding: 2px 8px;
   border: 1px solid var(--line-strong);
-  border-radius: 12px;
+  border-radius: var(--radius);
   background: var(--tint, #eee);
   color: var(--ink);
   font: inherit;

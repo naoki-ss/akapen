@@ -1,5 +1,8 @@
 "use client";
 
+import { flushSync } from "react-dom";
+import Skeleton from "../Skeleton";
+import { MoreHorizontal } from "lucide-react";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
@@ -125,9 +128,13 @@ export default function CheckScreen({
   if (!currentSheet) {
     return (
       <AppFrame crumbs={crumbs}>
-        <p className={styles.noMasked} role="status">
-          {missing ? "このチェック結果は見つかりません。" : "読み込み中…"}
-        </p>
+        {missing ? (
+          <p className={styles.noMasked} role="status">
+            このチェック結果は見つかりません。
+          </p>
+        ) : (
+          <Skeleton />
+        )}
       </AppFrame>
     );
   }
@@ -179,7 +186,7 @@ export default function CheckScreen({
                   aria-label="メニュー"
                   onClick={() => setMenuOpen(!menuOpen)}
                 >
-                  ⋯
+                  <MoreHorizontal size={16} />
                 </button>
                 {menuOpen && (
                   <>
@@ -331,10 +338,19 @@ export default function CheckScreen({
                 publicView={uploaded ? publicView : true}
                 onRemove={(why: RemoveReason) => {
                   if (!active) return;
-                  remove(active.number, why);
-                  setJustRemoved(active.number);
-                  // 一覧の画面に戻る
-                  setActiveId(null);
+                  const number = active.number;
+                  const apply = () => {
+                    remove(number, why);
+                    setJustRemoved(number);
+                    // 一覧の画面に戻る
+                    setActiveId(null);
+                  };
+                  // 項目がすっと消える。使えないブラウザではそのまま消す
+                  if (document.startViewTransition) {
+                    document.startViewTransition(() => flushSync(apply));
+                  } else {
+                    apply();
+                  }
                 }}
               />
             </div>

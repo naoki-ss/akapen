@@ -1,3 +1,4 @@
+import Skeleton from "@/components/Skeleton";
 import { connection } from "next/server";
 import { Suspense } from "react";
 import KnowledgeScreen from "@/components/screens/KnowledgeScreen";
@@ -20,7 +21,7 @@ async function Content() {
 // ナレッジ。環境で共通で、物件の外から開く
 export default function Page() {
   return (
-    <Suspense>
+    <Suspense fallback={<Skeleton />}>
       <Content />
     </Suspense>
   );

@@ -122,6 +122,18 @@ class Job:
             self._page_message()
             self.write()
 
+    def page_detail(self, number, **values):
+        """ページごとの進み具合。画面のチェック中の表示に使う"""
+        with self.lock:
+            detail = self.status.setdefault("pages_detail", {}).setdefault(str(number), {"state": "waiting", "focus": []})
+            detail.update(values)
+            self.write()
+
+    def focus_done(self, number, key):
+        with self.lock:
+            self.status["pages_detail"][str(number)]["focus"].append(key)
+            self.write()
+
     def _page_message(self):
         pages = "、".join(str(p) for p in self.status["active_pages"])
         total = self.status["pages_total"]
@@ -217,7 +229,7 @@ def run_design_check(context):
     raw_dir = context["raw_dir"]
     client = context["client"]
     page = pymupdf.open(context["input"])[context["number"] - 1]
-    found, unreadable, usd, seconds = design_split.run_focus(client, system, project, plan, page, OUTPUT_NOTE, schema, raw_dir)
+    found, unreadable, usd, seconds = design_split.run_focus(client, system, project, plan, page, OUTPUT_NOTE, schema, raw_dir, on_focus=context["on_focus"])
     targets = knowledge_check.targets_of(context["checklist"]) if context.get("checklist") else []
     kept, dropped, verdicts, consolidate_usd = design_split.consolidate(client, found, targets, raw_dir)
     reply = {"findings": kept, "unreadable": unreadable, "dropped_items": dropped}
@@ -315,6 +327,7 @@ def check_page(job, client, project, library, minutes, input_path, number, job_i
     if stop_requested(job.folder):
         return None
     job.page_started(number)
+    job.page_detail(number, state="running")
     raw_dir = job.folder / "raw" / f"p{number}"
     raw_dir.mkdir(parents=True, exist_ok=True)
     page = pymupdf.open(input_path)[number - 1]
@@ -325,12 +338,14 @@ def check_page(job, client, project, library, minutes, input_path, number, job_i
         classified, cost = classify_page(client, page, raw_dir)
         usd += cost
         write_json(raw_dir / "classified.json", classified)
+        job.page_detail(number, title=classified.get("title"))
         # 施工図の種類からチェックリストを選ぶ。合うものがなければ青の照合はしない
         name, checklist = knowledge_check.checklist_for(library, classified.get("title"), project.get("kind"))
         if checklist:
             write_json(raw_dir / "knowledge-checklist.json", {"name": name})
         context = {"client": client, "project": project, "classified": classified, "input": str(input_path),
-                   "number": number, "raw_dir": raw_dir, "checklist": checklist, "minutes": minutes}
+                   "number": number, "raw_dir": raw_dir, "checklist": checklist, "minutes": minutes,
+                   "on_focus": lambda key: job.focus_done(number, key)}
         # 議事録に、この階に関係する項目がなければ照合しない
         page_level = plan_for(project, classified)[1]
         page_floor = project.get("floor_by_level", {}).get(page_level)
@@ -351,6 +366,8 @@ def check_page(job, client, project, library, minutes, input_path, number, job_i
                 (raw_dir / f"error-{name}.txt").write_text(traceback.format_exc())
                 failed.append(name)
                 usd += stopped_cost(raw_dir, name)
+        blue = sum(item["source_type"] == "knowledge" for item in findings)
+        job.page_detail(number, state="done", red=len(findings) - blue, blue=blue)
         return {"number": number, "ok": len(failed) < len(checkers), "failed_checks": failed, "findings": findings,
                 "classified": classified, "raw_dir": raw_dir, "usd": usd, "seconds": round(time.time() - started, 1), "red_pixels": red_pixels(page),
                 "checks": checks, "error": "一部の照合に失敗" if failed else None}
@@ -747,6 +764,8 @@ def main():
         # どの版の設計図書で照合したかを残す。新しい版が入ったときに、再チェックが必要と分かるように
         write_json(folder / "job.json", {**meta, "design_sets": drawing_ledger.current_sets(slug)})
         job.max_usd = meta.get("max_usd")
+        for number in numbers:
+            job.page_detail(number)
         job.update(pages_total=len(numbers), stage="確認中", message=f"チェックを始めます（全 {len(numbers)} ページ）")
 
         load_env()

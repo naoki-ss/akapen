@@ -1,3 +1,4 @@
+import Skeleton from "@/components/Skeleton";
 import { notFound } from "next/navigation";
 import { connection } from "next/server";
 import { Suspense } from "react";
@@ -23,7 +24,7 @@ async function Content({ params }: PageProps<"/projects/[slug]/minutes">) {
 // 現場トップ：議事録のタブ
 export default function Page(props: PageProps<"/projects/[slug]/minutes">) {
   return (
-    <Suspense>
+    <Suspense fallback={<Skeleton />}>
       <Content {...props} />
     </Suspense>
   );

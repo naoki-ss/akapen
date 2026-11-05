@@ -124,7 +124,7 @@ export default function ComparePane({
           {sourceLabel(finding)}
         </span>
       </header>
-      <div className={styles.compareColumns}>
+      <div key={finding.id} className={styles.compareColumns}>
         <div className={styles.compareCard} data-side="sheet">
           <h3>施工図（いまの状態）</h3>
           {finding.sheet_value && (

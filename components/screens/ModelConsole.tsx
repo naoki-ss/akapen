@@ -1,5 +1,7 @@
 "use client";
 
+import CountUp from "../CountUp";
+import { ArrowRight } from "lucide-react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useCallback, useEffect, useMemo, useState } from "react";
@@ -65,7 +67,7 @@ function FindingItems({
   return (
     <>
       <h4 className={panel.colorHead} data-color={color}>
-        {color === "red" ? "赤" : "青"} {findings.length}
+        {color === "red" ? "赤" : "青"} <CountUp value={findings.length} />
       </h4>
       <ul>
         {findings.map((finding) => {
@@ -91,7 +93,7 @@ function FindingItems({
               {isActive && (
                 <div className={panel.findingOpen}>
                   <Link href={`/projects/${slug}/check/${drawing.job}?finding=${finding.id}`}>
-                    なぜ問題かを見る →
+                    なぜ問題かを見る <ArrowRight size={14} />
                   </Link>
                 </div>
               )}
@@ -123,8 +125,8 @@ function DrawingGroup({
       <summary>
         <b>{drawing.title}</b>
         <span className="mono">
-          <em data-color="red">赤{drawing.findings.length - blue.length}</em>・
-          <em data-color="blue">青{blue.length}</em>
+          <em data-color="red">赤<CountUp value={drawing.findings.length - blue.length} /></em>・
+          <em data-color="blue">青<CountUp value={blue.length} /></em>
         </span>
       </summary>
       <FindingItems

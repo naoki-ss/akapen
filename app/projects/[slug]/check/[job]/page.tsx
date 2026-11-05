@@ -1,3 +1,4 @@
+import Skeleton from "@/components/Skeleton";
 import { Suspense } from "react";
 import { notFound } from "next/navigation";
 import { connection } from "next/server";
@@ -44,7 +45,7 @@ async function Content({ params }: Props) {
 // ④ 施工図の朱書きと根拠。job は判定ジョブのID、saved はデモ用に固定した結果
 export default function Page(props: Props) {
   return (
-    <Suspense>
+    <Suspense fallback={<Skeleton />}>
       <Content {...props} />
     </Suspense>
   );

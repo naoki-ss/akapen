@@ -104,7 +104,7 @@ class FirstWriter:
 SHARED_CACHE = FirstWriter()
 
 
-def run_focus(client, system, config, plan, page, output_note, schema, raw_dir, effort="low"):
+def run_focus(client, system, config, plan, page, output_note, schema, raw_dir, effort="low", on_focus=None):
     """観点ごとに並行で判定する。1つ目の応答が始まってから残りを始めると、施工図の画像のキャッシュが効く。
     (指摘, 読めなかった内容, 費用, 秒)"""
     started = time.time()
@@ -134,7 +134,10 @@ def run_focus(client, system, config, plan, page, output_note, schema, raw_dir, 
                     SHARED_CACHE.ready.set()
         content = [*base, {"type": "text", "text": f"この施工図のページを設計図と照らし合わせます。今回の確認の観点だけを見てください。\n\n観点：{text}{output_note}"}]
         try:
-            return call(client, system + RED_RULE, content, schema, raw_dir, f"focus-{key}", effort, on_start)
+            result = call(client, system + RED_RULE, content, schema, raw_dir, f"focus-{key}", effort, on_start)
+            if on_focus:
+                on_focus(key)
+            return result
         finally:
             # 失敗したときも、待っている呼び出しを止めたままにしない
             if on_start:

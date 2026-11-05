@@ -5,18 +5,22 @@
  */
 :root {
   --bg: #f6f4ee;
-  --ink: #1b2430;
-  --muted: #5b6470;
-  --line: #dad6cc;
+  --ink: #141b24;
+  --muted: #4c5460;
+  --line: #dfdbd1;
   --line-strong: #b9b5aa;
   --panel: #fdfcf9;
   --panel-3d: rgb(236 234 228 / 86%);
   --tint: #eceae4;
   --tint-strong: #dad6cc;
-  --accent: #1b2430;
-  --accent-dark: #0e141c;
+  --accent: #141b24;
+  --accent-dark: #2c3644;
   --red: #c62d23;
   --blue: #1d5bb8;
+  --radius: 4px;
+  /* 動きの決まり。速く入ってすっと止まる */
+  --ease: cubic-bezier(0.2, 0.7, 0.2, 1);
+  --quick: 0.16s;
 }
 
 * {
@@ -30,6 +34,43 @@ body {
   line-height: 1.55;
   background: var(--bg);
   color: var(--ink);
+  -webkit-font-smoothing: antialiased;
+}
+
+h1,
+h2,
+h3 {
+  letter-spacing: 0.01em;
+}
+
+a,
+button,
+input,
+select,
+textarea,
+summary {
+  transition:
+    background-color var(--quick) ease,
+    border-color var(--quick) ease,
+    color var(--quick) ease,
+    opacity var(--quick) ease;
+}
+
+/* 青は朱書きの意味を持つので、リンクには使わない */
+a {
+  color: var(--ink);
+  text-decoration-thickness: 1px;
+  text-underline-offset: 3px;
+}
+
+a:hover {
+  color: var(--accent-dark);
+}
+
+/* 図標は文字と同じ高さにそろえる */
+svg.lucide {
+  flex: none;
+  vertical-align: -0.15em;
 }
 
 button {
@@ -39,9 +80,59 @@ button {
 /* 通り芯・符号・数値 */
 .mono {
   font-family: var(--font-mono), monospace;
+  font-variant-numeric: tabular-nums;
 }
 
 /* 朱書きの手書き注記だけに使う */
 .hand {
   font-family: var(--font-hand), cursive;
+}
+
+/* 読み込み中の灰色の棒 */
+@keyframes skeletonPulse {
+  50% {
+    opacity: 0.45;
+  }
+}
+
+.skeleton {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  padding: 40px 56px;
+  width: 100%;
+}
+
+.skeleton i {
+  display: block;
+  height: 12px;
+  border-radius: var(--radius);
+  background: var(--tint-strong);
+  animation: skeletonPulse 1.2s ease-in-out infinite;
+}
+
+.skeleton i:nth-child(1) {
+  width: 28%;
+  height: 24px;
+  margin-bottom: 10px;
+}
+
+.skeleton i:nth-child(2n) {
+  width: 72%;
+}
+
+.skeleton i:nth-child(3n) {
+  width: 54%;
+}
+
+/* 動きを減らす設定のときは止める */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.001ms !important;
+    animation-delay: 0s !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.001ms !important;
+  }
 }

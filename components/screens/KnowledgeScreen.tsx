@@ -1,5 +1,6 @@
 "use client";
 
+import { X, Plus } from "lucide-react";
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import type { ImportEstimate, KnowledgeItem, KnowledgeRow } from "@/lib/knowledge";
@@ -99,7 +100,7 @@ function KindPicker({
             aria-label={`${name} を外す`}
             onClick={() => onChange(value.filter((item) => item !== name))}
           >
-            {name} ×
+            {name} <X size={12} />
           </button>
         ))}
       </div>
@@ -202,7 +203,7 @@ function RowFields({
           aria-label="この項目を消す"
           onClick={onRemove}
         >
-          ×
+          <X size={14} />
         </button>
       )}
     </div>
@@ -369,7 +370,7 @@ function FileFlow({ kinds, onAdded }: { kinds: string[]; onAdded: () => void }) 
       {error && <p className={styles.error}>{error}</p>}
       <div className={styles.actions}>
         <button className={styles.secondary} onClick={() => setRows([...rows, emptyRow()])}>
-          ＋ 項目を足す
+          <Plus size={14} /> 項目を足す
         </button>
         <button
           className={screens.action}

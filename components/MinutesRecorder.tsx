@@ -1,5 +1,6 @@
 "use client";
 
+import { Mic, Square, X } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import type { Minutes, MinutesMethod } from "@/lib/minutes";
 import MinutesEditor from "./MinutesEditor";
@@ -166,7 +167,7 @@ export default function MinutesRecorder({
       <header>
         <b>議事録を作る</b>
         <button type="button" className={styles.remove} aria-label="閉じる" onClick={onClose}>
-          ×
+          <X size={14} />
         </button>
       </header>
       {stage === "input" && (
@@ -210,12 +211,17 @@ export default function MinutesRecorder({
               </div>
               <div className={styles.actions}>
                 {recording ? (
-                  <button type="button" className={styles.stop} onClick={stopRecording}>
-                    ■ 録音を止める
-                  </button>
+                  <>
+                    <button type="button" className={styles.stop} onClick={stopRecording}>
+                      <Square size={12} fill="currentColor" /> 録音を止める
+                    </button>
+                    <span className={styles.wave} aria-hidden>
+                      <i /><i /><i /><i /><i /><i /><i />
+                    </span>
+                  </>
                 ) : (
                   <button type="button" className={styles.secondary} onClick={startRecording}>
-                    ● 録音を始める
+                    <Mic size={14} /> 録音を始める
                   </button>
                 )}
                 <button

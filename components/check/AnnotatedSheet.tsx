@@ -1,5 +1,6 @@
 "use client";
 
+import { Minus, Plus } from "lucide-react";
 import Image from "next/image";
 import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties } from "react";
 import type { Finding } from "@/lib/check";
@@ -70,6 +71,8 @@ const boxStyle = ([x0, y0, x1, y1]: Box) => ({
   height: `${(y1 - y0) * 100}%`,
 });
 
+// 枠を順に描く数の上限。多くても1秒で描き終わるようにする
+const MAX_ORDER = 10;
 const MIN_SCALE = 1;
 const MAX_SCALE = 8;
 const DRAG_THRESHOLD = 4;
@@ -116,6 +119,8 @@ export default function AnnotatedSheet({
   const frameRef = useRef<HTMLDivElement>(null);
   const [frame, setFrame] = useState({ width: 0, height: 0 });
   const [view, setView] = useState<View>({ scale: 1, x: 0, y: 0 });
+  const sheetImage = `${base}/${sheet.base_image ?? sheet.image}`;
+  const [loadedImage, setLoadedImage] = useState<string | null>(null);
   const drag = useRef<{ x: number; y: number; startX: number; startY: number; moved: boolean } | null>(null);
   const page = {
     width: Math.min(frame.width, frame.height * ratio),
@@ -240,6 +245,7 @@ export default function AnnotatedSheet({
       <div
         className={styles.sheetPage}
         data-focus={Boolean(active)}
+        data-ready={loadedImage === sheetImage}
         style={
           {
             width: page.width,
@@ -251,21 +257,22 @@ export default function AnnotatedSheet({
         onClick={onClear}
       >
         <Image
-          src={`${base}/${sheet.base_image ?? sheet.image}`}
+          src={sheetImage}
+          onLoad={() => setLoadedImage(sheetImage)}
           alt={sheet.title}
           width={sheet.width}
           height={sheet.height}
           loading="eager"
           unoptimized
         />
-        {findings.map((finding) => {
+        {findings.map((finding, order) => {
           const active = finding.id === activeId;
           const color = colorName(finding);
           return regionsOf(finding).map((region, index) => (
             <button
               key={`${finding.id}-${index}`}
               className={styles.frame}
-              style={boxStyle(region)}
+              style={{ ...boxStyle(region), "--order": Math.min(order, MAX_ORDER) } as CSSProperties}
               data-color={color}
               data-active={active}
               aria-label={`指摘 ${finding.number}：${finding.title}`}
@@ -274,6 +281,10 @@ export default function AnnotatedSheet({
                 onSelect(finding);
               }}
             >
+              {/* 枠はペンで描くように現れる。番号札は描き終わりに出る */}
+              <svg className={styles.frameLine} aria-hidden>
+                <rect x="0" y="0" width="100%" height="100%" pathLength={1} />
+              </svg>
               {index === 0 && (
                 <i className={`${styles.frameNumber} mono`}>{finding.number}</i>
               )}
@@ -305,8 +316,8 @@ export default function AnnotatedSheet({
         })}
       </div>
       <div className={styles.zoomButtons} onPointerDown={(event) => event.stopPropagation()}>
-        <button aria-label="拡大" onClick={() => zoomAt(1.4, frame.width / 2, frame.height / 2)}>＋</button>
-        <button aria-label="縮小" onClick={() => zoomAt(1 / 1.4, frame.width / 2, frame.height / 2)}>－</button>
+        <button aria-label="拡大" onClick={() => zoomAt(1.4, frame.width / 2, frame.height / 2)}><Plus size={15} /></button>
+        <button aria-label="縮小" onClick={() => zoomAt(1 / 1.4, frame.width / 2, frame.height / 2)}><Minus size={15} /></button>
         <button onClick={() => setView(clamp({ scale: 1, x: 0, y: 0 }))}>全体</button>
       </div>
     </div>

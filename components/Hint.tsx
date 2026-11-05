@@ -1,5 +1,6 @@
 "use client";
 
+import { X } from "lucide-react";
 import { useEffect, useState } from "react";
 import styles from "./screens/screens.module.css";
 
@@ -19,7 +20,7 @@ export default function Hint({ id, text }: { id: string; text: string }) {
     <p className={styles.hint} role="note">
       {text}
       <button aria-label="案内を閉じる" onClick={() => setShown(false)}>
-        ×
+        <X size={14} />
       </button>
     </p>
   );

@@ -4,7 +4,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import type { CheckResult } from "./check";
 import type { Sheet } from "./sheets";
 
-const POLL_MS = 3000;
+const POLL_MS = 1000;
 
 export type JobStatus = {
   state: "running" | "done" | "error" | "stopped";
@@ -12,6 +12,11 @@ export type JobStatus = {
   pages_total: number;
   pages_done: number;
   seconds: number;
+  // ページごとの進み具合。focus は終わった確認の観点
+  pages_detail?: Record<
+    string,
+    { state: "waiting" | "running" | "done"; focus: string[]; title?: string | null; red?: number; blue?: number }
+  >;
 };
 
 // 判定するページを選んでいるPDF
@@ -194,6 +199,7 @@ export function useUploadJob(
   const cancelDraft = useCallback(() => setDraft(null), []);
 
   return {
+    jobId,
     status,
     error,
     history,

@@ -1,5 +1,7 @@
 "use client";
 
+import CountUp from "../CountUp";
+import { Plus } from "lucide-react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useCallback, useState } from "react";
@@ -116,8 +118,8 @@ function ShopTable({ slug, shop }: { slug: string; shop: ShopSheet[] }) {
               <td className="mono">
                 {version.page !== null && (
                   <>
-                    <span className={styles.red}>赤{version.red}</span>・
-                    <span className={styles.blue}>青{version.blue}</span>
+                    <span className={styles.red}>赤<CountUp value={version.red} /></span>・
+                    <span className={styles.blue}>青<CountUp value={version.blue} /></span>
                   </>
                 )}
               </td>
@@ -189,8 +191,8 @@ function SavedTable({ slug, rows }: { slug: string; rows: SavedRow[] }) {
               <b>{row.title}</b>
             </td>
             <td className="mono">
-              <span className={styles.red}>赤{row.red}</span>・
-              <span className={styles.blue}>青{row.blue}</span>
+              <span className={styles.red}>赤<CountUp value={row.red} /></span>・
+              <span className={styles.blue}>青<CountUp value={row.blue} /></span>
             </td>
             <td>
               <Link className={styles.resultLink} href={`/projects/${slug}/check/${row.job}`}>
@@ -223,18 +225,33 @@ export default function SheetsTab({
     [router, slug],
   );
   const job = useUploadJob(slug, showResult);
+  const latest = canUpload ? shop.map((sheet) => sheet.versions[sheet.versions.length - 1]) : saved;
+  const total = (color: "red" | "blue") => latest.reduce((sum, row) => sum + row[color], 0);
   return (
     <div className={screens.page}>
-      {canUpload && (
-        <>
-          <div className={screens.pageHead}>
-            <button className={screens.action} onClick={() => setAdding(!adding)}>
-              ＋ 施工図を入れる
-            </button>
+      <div className={screens.pageHead}>
+        <h1>施工図</h1>
+        <dl className={styles.totals}>
+          <div>
+            <dd className="mono">{latest.length}</dd>
+            <dt>図面</dt>
           </div>
-          {adding && <UploadPanel job={job} />}
-        </>
-      )}
+          <div data-color="red">
+            <dd className="mono"><CountUp value={total("red")} /></dd>
+            <dt>赤</dt>
+          </div>
+          <div data-color="blue">
+            <dd className="mono"><CountUp value={total("blue")} /></dd>
+            <dt>青</dt>
+          </div>
+        </dl>
+        {canUpload && (
+          <button className={screens.action} onClick={() => setAdding(!adding)}>
+            <Plus size={15} /> 施工図を入れる
+          </button>
+        )}
+      </div>
+      {canUpload && adding && <UploadPanel job={job} />}
       {canUpload ? (
         <>
           <ShopTable slug={slug} shop={shop} />
