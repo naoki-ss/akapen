@@ -156,9 +156,9 @@ def check_file(name, data, label=""):
 
 for name in filter(None, files):
     path = REPO / name
-    # 公開するのは本社屋だけ。別の物件の置き場が戻ってこないようにする
-    if "sample-x" in name or "sample_x" in name:
-        problems.append(f"{name}: 別の物件のファイルです")
+    # 公開するのは本社屋だけ。ほかの物件の置き場を作らない
+    if name.startswith(("demo-data/", "validation/")) and name.count("/") >= 2 and name.split("/")[1] != "sample-b":
+        problems.append(f"{name}: 本社屋以外のファイルです")
     if path.is_file():
         check_file(name, path.read_bytes())
 
