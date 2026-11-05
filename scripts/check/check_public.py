@@ -15,7 +15,11 @@ import sys
 from common import PRIVATE, REPO
 
 config = json.loads((PRIVATE / "dummy_map.json").read_text())
-names = config["forbidden_words"]
+# 確定した担当者の名前も禁止語にする。画面にもコードにも出さない。記録はリポジトリの外にだけある
+confirmers = sorted({entry["confirmed"]["by"]
+                     for path in (PRIVATE / "uploads").glob("*/sheet_status.json")
+                     for entry in json.loads(path.read_text())["pages"].values() if entry.get("confirmed")})
+names = [*config["forbidden_words"], *confirmers]
 numbers = config["forbidden_numbers"]
 # 公開してよい物件名。単独の社名は非公開の物件の手がかりになるので禁止語のまま残す
 phrases = config.get("allowed_phrases", [])
@@ -63,6 +67,7 @@ print(f"アップロードと登録のファイル {len(upload_hashes)} 種類�
 # 社内のチェックリストは公開してよいか決まるまで入れない。本体と同じファイル、項目の文章の転記を止める。
 # 短い文（「設計図通りか」など）は一般的な言い回しと区別できないので調べない
 SPACES = re.compile(r"\s+")
+CONFIRMER_FIELD = re.compile(r"(confirmed\??\.|item\.|\bfinal\??\.)by\b")
 CHECKLIST_MIN_CHARS = 8
 checklist_phrases = {}
 checklist_hashes = set()
@@ -121,6 +126,9 @@ def check_file(name, data, label=""):
         text = data.decode()
     except UnicodeDecodeError:
         return
+    # 画面のコードが確定者の名前を受け取っていないか
+    if path.suffix == ".tsx" and CONFIRMER_FIELD.search(text):
+        problems.append(f"{label}{name}: 確定者の名前を画面に渡しています")
     compact = SPACES.sub("", text)
     for phrase, where in checklist_phrases.items():
         if phrase in compact:

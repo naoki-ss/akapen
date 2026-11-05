@@ -318,6 +318,28 @@ def stopped_cost(raw_dir, name):
     return message_cost(path)[2] if path.exists() else 0.0
 
 
+def input_counts(checklist, minutes):
+    """照合に使う資料の数。{議事録の項目, ナレッジの項目}"""
+    return {"minutes": sum(len(document["items"]) for document in minutes),
+            "knowledge": sum(len(items) for items in checklist.values())}
+
+
+INPUT_NAMES = {"minutes": "議事録", "knowledge": "ナレッジ"}
+
+
+def preflight(meta, checklist, minutes):
+    """AIを呼ぶ前に、照合に使う資料が入っているかを確かめる。入っていなければ費用を掛けずに止める。
+    allow_missing は、ないと承知で始めるもの。expect_minutes は、議事録に入っているはずの語"""
+    allowed = meta.get("allow_missing") or []
+    missing = [INPUT_NAMES[name] for name, count in input_counts(checklist, minutes).items() if not count and name not in allowed]
+    if missing:
+        raise ValueError(f"{'と'.join(missing)}が入っていないので、チェックを始めませんでした。費用は掛かっていません")
+    text = "\n".join(document["text"] for document in minutes)
+    absent = [word for word in meta.get("expect_minutes") or [] if word not in text]
+    if absent:
+        raise ValueError(f"議事録に入っているはずの「{'、'.join(absent)}」がないので、チェックを始めませんでした。費用は掛かっていません")
+
+
 def stop_requested(folder):
     return (folder / "stop.flag").exists()
 
@@ -744,6 +766,10 @@ def finish_job(job, folder, slug, pages, checklist, use_knowledge, client, input
 
 
 def main():
+    # 始める前の画面に出す、照合に使う資料の数。AIは呼ばない
+    if sys.argv[1] == "--inputs":
+        print(json.dumps(input_counts(knowledge_check.load_library(), minutes_check.load_minutes(load_project(sys.argv[2]), sys.argv[2]))))
+        return
     folder = Path(sys.argv[1]).resolve()
     if UPLOADS.resolve() not in folder.parents:
         sys.exit("uploads の外のフォルダは扱いません")
@@ -774,6 +800,7 @@ def main():
         client = anthropic.Anthropic()
         checklist = knowledge_check.load_library()
         minutes = minutes_check.load_minutes(project, slug)
+        preflight(meta, checklist, minutes)
         use_knowledge = "knowledge" in checkers_for(project, checklist, minutes)
         pages, stopped = run_pages(job, numbers, lambda n: check_page(job, client, project, checklist, minutes, input_path, n, folder.name))
         masks = project.get("masks")

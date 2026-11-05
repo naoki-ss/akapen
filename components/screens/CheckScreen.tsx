@@ -34,7 +34,7 @@ export default function CheckScreen({
 }: Building & {
   job: string;
   stale: string[];
-  confirmed: { page: number; by: string; at: string }[];
+  confirmed: { page: number; at: string }[];
   // ほかの図面の件数（図面ごとの最新の結果）
   drawings: { title: string; job: string; red: number; blue: number }[];
   // この結果の図面の版（図名 → 第何版）

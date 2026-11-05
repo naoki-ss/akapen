@@ -74,6 +74,10 @@ function PagePicker({
     setChosen(next);
   };
   const pages = [...chosen].sort((a, b) => a - b);
+  const missing = [
+    ...(draft.inputs?.minutes === 0 ? ["議事録"] : []),
+    ...(draft.inputs?.knowledge === 0 ? ["ナレッジ"] : []),
+  ];
   return (
     <div className={styles.pagePicker}>
       <div className={styles.pickerHead}>
@@ -102,12 +106,20 @@ function PagePicker({
           </li>
         ))}
       </ul>
+      {draft.inputs && (
+        <p className={styles.inputs} data-missing={missing.length > 0}>
+          照合に使う資料：議事録 <b className="mono">{draft.inputs.minutes}</b> 項目・ナレッジ{" "}
+          <b className="mono">{draft.inputs.knowledge}</b> 項目
+          {missing.length > 0 && `。${missing.join("と")}が入っていないので、その照合はしません`}
+        </p>
+      )}
       <div className={styles.dropActions}>
         <button
           className={styles.primary}
           disabled={pages.length === 0 || sending}
           onClick={() => onStart(pages)}
         >
+          {missing.length > 0 && `${missing.join("と")}なしで `}
           {pages.length} ページのチェックを始める
         </button>
         <button className={styles.secondary} onClick={onOther}>

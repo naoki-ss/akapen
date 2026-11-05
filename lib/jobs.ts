@@ -218,7 +218,7 @@ export async function prepareJob(
       [fromRoot("scripts", "check", "prepare_job.py"), folder],
       { cwd: fromRoot("scripts", "check") },
     );
-    return { id, pages: JSON.parse(stdout).pages as PageThumb[] };
+    return { id, pages: JSON.parse(stdout).pages as PageThumb[], inputs: await inputCounts(project) };
   } catch (error) {
     // sys.exit の文だけを画面に出す。それ以外は図面の場所などが混ざるので出さない
     const stderr = String((error as { stderr?: string }).stderr ?? "").trim();
@@ -227,8 +227,22 @@ export async function prepareJob(
   }
 }
 
-// 選んだページの判定を始める。AIの費用が掛かるのはここから
-export function startJob(folder: string, pages: number[]) {
+// 照合に使う資料の数。読めなければ null（判定の側でもう一度確かめる）
+async function inputCounts(project: string) {
+  try {
+    const { stdout } = await runFile(
+      PYTHON(),
+      [fromRoot("scripts", "check", "check_upload.py"), "--inputs", project],
+      { cwd: fromRoot("scripts", "check") },
+    );
+    return JSON.parse(stdout.trim().split("\n").at(-1) ?? "") as { minutes: number; knowledge: number };
+  } catch {
+    return null;
+  }
+}
+
+// 選んだページの判定を始める。AIの費用が掛かるのはここから。allowMissing は、ないと承知で始める資料
+export function startJob(folder: string, pages: number[], allowMissing: string[] = []) {
   const status = JSON.parse(
     readFileSync(path.join(folder, "status.json"), "utf8"),
   );
@@ -237,7 +251,7 @@ export function startJob(folder: string, pages: number[]) {
   const meta = JSON.parse(readFileSync(path.join(folder, "job.json"), "utf8"));
   writeFileSync(
     path.join(folder, "job.json"),
-    JSON.stringify({ ...meta, pages }),
+    JSON.stringify({ ...meta, pages, allow_missing: allowMissing }),
   );
   writeFileSync(
     path.join(folder, "status.json"),

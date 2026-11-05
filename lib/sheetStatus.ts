@@ -19,7 +19,9 @@ const fromRoot = (...parts: string[]) =>
 const UPLOADS = path.join(homedir(), "sekozu-data", "uploads");
 
 export type SheetState = "提出" | "チェック中" | "チェックバック済み" | "確定";
+// 記録には担当者の名前も残す。画面には出さないので、ここから先へは日時だけを渡す
 export type Confirmation = { by: string; at: string };
+export type ConfirmedAt = { at: string };
 
 type StatusFile = {
   pages: Record<string, { checked_back_at?: string; confirmed?: Confirmation }>;
@@ -33,7 +35,7 @@ export type ShopVersion = {
   page: number | null;
   uploaded_at: string;
   state: SheetState;
-  confirmed?: Confirmation;
+  confirmed?: ConfirmedAt;
   // 同じ内容を判定し直した回数
   rejudged: number;
   stale: string[];
@@ -48,7 +50,6 @@ export type ConfirmedSheet = {
   title: string;
   job: string;
   page: number;
-  by: string;
   at: string;
   base: string;
   sheet: Sheet;
@@ -70,7 +71,7 @@ export function confirmedPages(folder: string) {
     .filter(([, value]) => value.confirmed)
     .map(([page, value]) => ({
       page: Number(page),
-      ...(value.confirmed as Confirmation),
+      at: (value.confirmed as Confirmation).at,
     }));
 }
 
@@ -146,7 +147,7 @@ type Row = {
   hash: string;
   uploaded_at: string;
   state: SheetState;
-  confirmed?: Confirmation;
+  confirmed?: ConfirmedAt;
   stale: string[];
   red: number;
   blue: number;
@@ -207,7 +208,7 @@ function jobRows(project: string): Row[] {
           : status.checked_back_at
             ? "チェックバック済み"
             : "チェック中",
-        confirmed: status.confirmed,
+        confirmed: status.confirmed ? { at: status.confirmed.at } : undefined,
         stale: staleSheets(ledger, meta.design_sets),
       });
     }
@@ -267,7 +268,6 @@ export function confirmedSheets(project: string): ConfirmedSheet[] {
       title: sheet.title,
       job: version.job,
       page: version.page,
-      by: version.confirmed.by,
       at: version.confirmed.at,
       base: `/api/check/${version.job}/files${result.masked ? "/masked" : ""}`,
       sheet: { ...found, title: sheet.title },

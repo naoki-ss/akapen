@@ -11,6 +11,15 @@ import UploadPanel from "../UploadPanel";
 import styles from "./ledger.module.css";
 import screens from "./screens.module.css";
 
+// 確定は日付だけを出す。担当者の名前は画面に出さない
+const dayText = (iso: string) =>
+  new Intl.DateTimeFormat("ja-JP", {
+    year: "numeric",
+    month: "numeric",
+    day: "numeric",
+    timeZone: "Asia/Tokyo",
+  }).format(new Date(iso));
+
 const dateText = (iso: string) =>
   new Intl.DateTimeFormat("ja-JP", {
     year: "numeric",
@@ -105,7 +114,7 @@ function ShopTable({ slug, shop }: { slug: string; shop: ShopSheet[] }) {
                 {version.confirmed && (
                   <small className={styles.note}>
                     {" "}
-                    {version.confirmed.by}・{dateText(version.confirmed.at)}
+                    {dayText(version.confirmed.at)}
                   </small>
                 )}
                 {version.stale.length > 0 && index === 0 && (
@@ -162,8 +171,7 @@ function ConfirmedList({ slug, shop }: { slug: string; shop: ShopSheet[] }) {
           <Link href={`/projects/${slug}/check/${version.job}`}>{sheet.title}</Link>
           <small className={styles.note}>
             {" "}
-            第{version.version}版・{version.confirmed?.by}・
-            {version.confirmed && dateText(version.confirmed.at)}
+            第{version.version}版・確定 {version.confirmed && dayText(version.confirmed.at)}
           </small>
         </li>
       ))}

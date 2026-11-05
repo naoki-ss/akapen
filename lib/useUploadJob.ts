@@ -21,7 +21,13 @@ export type JobStatus = {
 
 // 判定するページを選んでいるPDF
 export type PageThumb = { number: number; width: number; height: number };
-export type Draft = { id: string; name: string; pages: PageThumb[] };
+export type Draft = {
+  id: string;
+  name: string;
+  pages: PageThumb[];
+  // 照合に使う資料の数
+  inputs: { minutes: number; knowledge: number } | null;
+};
 
 export type ResultRow = {
   id: string;
@@ -156,7 +162,7 @@ export function useUploadJob(
         setError(body.error);
         return;
       }
-      setDraft({ id: body.id, name: file.name, pages: body.pages });
+      setDraft({ id: body.id, name: file.name, pages: body.pages, inputs: body.inputs });
     },
     [slug],
   );
@@ -170,7 +176,13 @@ export function useUploadJob(
       const response = await fetch(`/api/check/${draft.id}/start`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ pages }),
+        // 画面で「なし」と見せて押されたものだけ、ないと承知で始める
+        body: JSON.stringify({
+          pages,
+          allow_missing: Object.entries(draft.inputs ?? {})
+            .filter(([, count]) => count === 0)
+            .map(([name]) => name),
+        }),
       });
       const body = await response.json();
       setSending(false);
