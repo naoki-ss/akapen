@@ -16,6 +16,8 @@ import { homedir } from "node:os";
 import path from "node:path";
 import { promisify } from "node:util";
 
+import { readLedger, staleSheets } from "./ledger";
+
 const UPLOADS = path.join(homedir(), "sekozu-data", "uploads");
 const PROJECTS = path.join(homedir(), "sekozu-data", "projects.json");
 // ビルドツールにパスを追跡させない（.venv のシンボリックリンクで止まるため、実行時に組み立てる）
@@ -59,12 +61,15 @@ export type JobSummary = {
   open: { title: string; red: number; blue: number }[];
   masked: boolean;
   stopped: boolean;
+  // 照合したあとに新しくなった設計図書のページの図名
+  stale: string[];
 };
 
 // 物件の過去の結果。元のファイル名は社名が入ることがあるので返さない
 export function listJobs(project: string): JobSummary[] {
   if (!existsSync(UPLOADS)) return [];
   const jobs: JobSummary[] = [];
+  const ledger = readLedger(project);
   for (const id of readdirSync(UPLOADS)) {
     const folder = jobFolder(id);
     if (!folder || !existsSync(path.join(folder, "result.json"))) continue;
@@ -116,12 +121,21 @@ export function listJobs(project: string): JobSummary[] {
       open,
       masked: Boolean(result.masked),
       stopped: Boolean(result.stopped_pages?.length),
+      stale: staleSheets(ledger, meta.design_sets),
     });
   }
   const rank = (job: JobSummary) => job.pin ?? Number.MAX_SAFE_INTEGER;
   return jobs.sort(
     (a, b) => rank(a) - rank(b) || b.uploaded_at.localeCompare(a.uploaded_at),
   );
+}
+
+// 判定の結果の、再チェックが必要な設計図書のページ
+export function jobStale(project: string, id: string) {
+  const folder = jobFolder(id);
+  if (!folder) return [];
+  const meta = JSON.parse(readFileSync(path.join(folder, "job.json"), "utf8"));
+  return staleSheets(readLedger(project), meta.design_sets);
 }
 
 export function readDecisions(folder: string): number[] {

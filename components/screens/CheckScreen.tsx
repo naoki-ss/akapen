@@ -28,7 +28,8 @@ export default function CheckScreen({
   check,
   sheets,
   job,
-}: Building & { job: string }) {
+  stale,
+}: Building & { job: string; stale: string[] }) {
   const isSaved = job === "saved";
   const jobId = isSaved ? null : job;
   const { result: uploaded, missing } = useJobResult(jobId);
@@ -227,6 +228,12 @@ export default function CheckScreen({
             </div>
           </div>
         </div>
+
+        {stale.length > 0 && (
+          <p className={styles.internalBanner} role="status">
+            設計図書が更新されました。再チェックが必要です（{stale.join("、")}）。
+          </p>
+        )}
 
         {!publicView && (
           <p className={styles.internalBanner}>

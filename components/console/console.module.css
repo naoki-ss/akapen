@@ -247,3 +247,11 @@
   font-size: 12px;
   font-weight: 700;
 }
+
+.stale {
+  margin: 6px 0;
+  padding: 6px 8px;
+  border-left: 3px solid var(--red);
+  background: #c62d2314;
+  font-size: 12px;
+}

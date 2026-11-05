@@ -210,6 +210,11 @@ export default function ModelConsole({
           )}
         </div>
         {canUpload && adding && <UploadPanel job={job} />}
+        {(job.history.find((item) => item.id === jobId)?.stale.length ?? 0) > 0 && (
+          <p className={panel.stale} role="status">
+            設計図書が更新されました。再チェックが必要です。
+          </p>
+        )}
 
         <div className={panel.findings}>
           {loading && <p className={panel.empty}>読み込み中…</p>}

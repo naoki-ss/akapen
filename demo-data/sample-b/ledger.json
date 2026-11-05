@@ -1,0 +1,1414 @@
+{
+  "sets": [
+    {
+      "id": "s1",
+      "label": "構造図 0730版",
+      "date": "2020-07-30",
+      "pages": 33,
+      "full": true,
+      "added_at": "2026-11-05T09:09:20+09:00"
+    },
+    {
+      "id": "s2",
+      "label": "構造図 0812版",
+      "date": "2020-08-12",
+      "pages": 33,
+      "full": true,
+      "added_at": "2026-11-05T09:09:27+09:00"
+    },
+    {
+      "id": "s3",
+      "label": "差替図面",
+      "date": "2020-09-23",
+      "pages": 15,
+      "full": false,
+      "added_at": "2026-11-05T09:09:33+09:00"
+    }
+  ],
+  "sheets": [
+    {
+      "id": "d1",
+      "title": "構造設計特記仕様書",
+      "versions": [
+        {
+          "set": "s1",
+          "page": 1,
+          "number": "33-01",
+          "title": "構造設計特記仕様書",
+          "version": 1
+        },
+        {
+          "set": "s2",
+          "page": 1,
+          "number": "05-01",
+          "title": "構造設計特記仕様書",
+          "version": 2,
+          "changes": null
+        },
+        {
+          "set": "s3",
+          "page": 1,
+          "number": "35-01",
+          "title": "構造設計特記仕様書",
+          "version": 3,
+          "changes": null
+        }
+      ]
+    },
+    {
+      "id": "d2",
+      "title": "鉄筋コンクリート構造配筋標準図(1)",
+      "versions": [
+        {
+          "set": "s1",
+          "page": 2,
+          "number": "33-02",
+          "title": "鉄筋コンクリート構造配筋標準図(1)",
+          "version": 1
+        },
+        {
+          "set": "s2",
+          "page": 2,
+          "number": "05-02",
+          "title": "鉄筋コンクリート構造配筋標準図(1)",
+          "version": 2,
+          "changes": null
+        }
+      ]
+    },
+    {
+      "id": "d3",
+      "title": "鉄筋コンクリート構造配筋標準図(2)",
+      "versions": [
+        {
+          "set": "s1",
+          "page": 3,
+          "number": "33-03",
+          "title": "鉄筋コンクリート構造配筋標準図(2)",
+          "version": 1
+        },
+        {
+          "set": "s2",
+          "page": 3,
+          "number": "05-03",
+          "title": "鉄筋コンクリート構造配筋標準図(2)",
+          "version": 2,
+          "changes": null
+        }
+      ]
+    },
+    {
+      "id": "d4",
+      "title": "鉄骨構造標準図",
+      "versions": [
+        {
+          "set": "s1",
+          "page": 4,
+          "number": "33-04",
+          "title": "鉄骨構造標準図",
+          "version": 1
+        },
+        {
+          "set": "s2",
+          "page": 4,
+          "number": "05-04",
+          "title": "鉄骨構造標準図",
+          "version": 2,
+          "changes": null
+        }
+      ]
+    },
+    {
+      "id": "d5",
+      "title": "ベースパック柱脚工法標準図(1)",
+      "versions": [
+        {
+          "set": "s1",
+          "page": 5,
+          "number": "33-05",
+          "title": "ベースパック柱脚工法標準図(1)",
+          "version": 1
+        },
+        {
+          "set": "s2",
+          "page": 5,
+          "number": "05-05",
+          "title": "ベースパック柱脚工法標準図(1)",
+          "version": 2,
+          "changes": null
+        }
+      ]
+    },
+    {
+      "id": "d6",
+      "title": "ベースパック柱脚工法標準図(2)",
+      "versions": [
+        {
+          "set": "s1",
+          "page": 6,
+          "number": "33-06",
+          "title": "ベースパック柱脚工法標準図(2)",
+          "version": 1
+        },
+        {
+          "set": "s2",
+          "page": 6,
+          "number": "05-06",
+          "title": "ベースパック柱脚工法標準図(2)",
+          "version": 2,
+          "changes": null
+        }
+      ]
+    },
+    {
+      "id": "d7",
+      "title": "デッキ合成スラブ標準仕様書",
+      "versions": [
+        {
+          "set": "s1",
+          "page": 7,
+          "number": "33-07",
+          "title": "デッキ合成スラブ標準仕様書",
+          "version": 1
+        },
+        {
+          "set": "s2",
+          "page": 7,
+          "number": "05-07",
+          "title": "デッキ合成スラブ標準仕様書",
+          "version": 2,
+          "changes": null
+        },
+        {
+          "set": "s3",
+          "page": 2,
+          "number": "35-07",
+          "title": "デッキ合成スラブ標準仕様書",
+          "version": 3,
+          "changes": null
+        }
+      ]
+    },
+    {
+      "id": "d8",
+      "title": "屋根30分耐火構造設計・施工標準仕様書",
+      "versions": [
+        {
+          "set": "s1",
+          "page": 8,
+          "number": "33-08",
+          "title": "屋根30分耐火構造設計・施工標準仕様書",
+          "version": 1
+        },
+        {
+          "set": "s2",
+          "page": 8,
+          "number": "05-08",
+          "title": "屋根30分耐火構造設計・施工標準仕様書",
+          "version": 2,
+          "changes": null
+        },
+        {
+          "set": "s3",
+          "page": 3,
+          "number": "35-08",
+          "title": "屋根30分耐火構造設計・施工標準仕様書",
+          "version": 3,
+          "changes": null
+        }
+      ]
+    },
+    {
+      "id": "d9",
+      "title": "MAGNUM工法(標準型)特記仕様書",
+      "versions": [
+        {
+          "set": "s1",
+          "page": 9,
+          "number": "33-09",
+          "title": "杭仕様書",
+          "version": 1
+        },
+        {
+          "set": "s2",
+          "page": 9,
+          "number": "05-09",
+          "title": "MAGNUM工法(標準型)特記仕様書",
+          "version": 2,
+          "changes": null
+        }
+      ]
+    },
+    {
+      "id": "d10",
+      "title": "F.T.Pile構法特記仕様書",
+      "versions": [
+        {
+          "set": "s1",
+          "page": 10,
+          "number": "33-10",
+          "title": "杭頭接合標準図",
+          "version": 1
+        },
+        {
+          "set": "s2",
+          "page": 10,
+          "number": "05-10",
+          "title": "F.T.Pile構法特記仕様書",
+          "version": 2,
+          "changes": null
+        }
+      ]
+    },
+    {
+      "id": "d11",
+      "title": "地盤調査図",
+      "versions": [
+        {
+          "set": "s1",
+          "page": 11,
+          "number": "33-11",
+          "title": "地盤調査図",
+          "version": 1
+        },
+        {
+          "set": "s2",
+          "page": 11,
+          "number": "05-11",
+          "title": "地盤調査図",
+          "version": 2,
+          "changes": null
+        }
+      ]
+    },
+    {
+      "id": "d12",
+      "title": "杭伏図",
+      "versions": [
+        {
+          "set": "s1",
+          "page": 12,
+          "number": "33-12",
+          "title": "杭伏図",
+          "version": 1
+        },
+        {
+          "set": "s2",
+          "page": 12,
+          "number": "05-12",
+          "title": "杭伏図",
+          "version": 2,
+          "changes": {
+            "rows": [],
+            "marks": [
+              {
+                "mark": "P1",
+                "before": 0,
+                "after": 4
+              },
+              {
+                "mark": "P2",
+                "before": 0,
+                "after": 18
+              }
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "id": "d13",
+      "title": "基礎伏図",
+      "versions": [
+        {
+          "set": "s1",
+          "page": 13,
+          "number": "33-13",
+          "title": "基礎伏図",
+          "version": 1
+        },
+        {
+          "set": "s2",
+          "page": 13,
+          "number": "05-13",
+          "title": "基礎伏図",
+          "version": 2,
+          "changes": {
+            "rows": [],
+            "marks": [
+              {
+                "mark": "FG1",
+                "before": 6,
+                "after": 2
+              },
+              {
+                "mark": "FG2",
+                "before": 25,
+                "after": 5
+              },
+              {
+                "mark": "FG3",
+                "before": 3,
+                "after": 16
+              },
+              {
+                "mark": "FG4",
+                "before": 0,
+                "after": 8
+              },
+              {
+                "mark": "FG5",
+                "before": 0,
+                "after": 3
+              }
+            ]
+          }
+        },
+        {
+          "set": "s3",
+          "page": 4,
+          "number": "35-13",
+          "title": "基礎伏図",
+          "version": 3,
+          "changes": {
+            "rows": [],
+            "marks": [
+              {
+                "mark": "FG2",
+                "before": 5,
+                "after": 3
+              },
+              {
+                "mark": "FG3",
+                "before": 16,
+                "after": 18
+              }
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "id": "d14",
+      "title": "2階伏図",
+      "versions": [
+        {
+          "set": "s1",
+          "page": 14,
+          "number": "33-14",
+          "title": "2階伏図",
+          "version": 1
+        },
+        {
+          "set": "s2",
+          "page": 14,
+          "number": "05-14",
+          "title": "2階伏図",
+          "version": 2,
+          "changes": {
+            "rows": [],
+            "marks": [
+              {
+                "mark": "B10",
+                "before": 26,
+                "after": 6
+              },
+              {
+                "mark": "B7",
+                "before": 0,
+                "after": 20
+              }
+            ]
+          }
+        },
+        {
+          "set": "s3",
+          "page": 5,
+          "number": "35-14",
+          "title": "2階伏図",
+          "version": 3,
+          "changes": {
+            "rows": [],
+            "marks": [
+              {
+                "mark": "B10",
+                "before": 6,
+                "after": 8
+              },
+              {
+                "mark": "B19",
+                "before": 31,
+                "after": 21
+              },
+              {
+                "mark": "B19M",
+                "before": 0,
+                "after": 1
+              },
+              {
+                "mark": "B20",
+                "before": 0,
+                "after": 14
+              },
+              {
+                "mark": "B7",
+                "before": 20,
+                "after": 8
+              },
+              {
+                "mark": "G2",
+                "before": 6,
+                "after": 3
+              }
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "id": "d15",
+      "title": "3階伏図",
+      "versions": [
+        {
+          "set": "s1",
+          "page": 15,
+          "number": "33-15",
+          "title": "3階伏図",
+          "version": 1
+        },
+        {
+          "set": "s2",
+          "page": 15,
+          "number": "05-15",
+          "title": "3階伏図",
+          "version": 2,
+          "changes": {
+            "rows": [],
+            "marks": [
+              {
+                "mark": "B10",
+                "before": 25,
+                "after": 3
+              },
+              {
+                "mark": "B7",
+                "before": 0,
+                "after": 22
+              }
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "id": "d16",
+      "title": "R階伏図",
+      "versions": [
+        {
+          "set": "s1",
+          "page": 16,
+          "number": "33-16",
+          "title": "R階伏図",
+          "version": 1
+        },
+        {
+          "set": "s2",
+          "page": 16,
+          "number": "05-16",
+          "title": "R階伏図",
+          "version": 2,
+          "changes": {
+            "rows": [],
+            "marks": [
+              {
+                "mark": "B10",
+                "before": 25,
+                "after": 3
+              },
+              {
+                "mark": "B7",
+                "before": 0,
+                "after": 22
+              }
+            ]
+          }
+        },
+        {
+          "set": "s3",
+          "page": 6,
+          "number": "35-16",
+          "title": "R階伏図",
+          "version": 3,
+          "changes": {
+            "rows": [],
+            "marks": [
+              {
+                "mark": "B10",
+                "before": 3,
+                "after": 7
+              },
+              {
+                "mark": "B19",
+                "before": 24,
+                "after": 8
+              },
+              {
+                "mark": "B20",
+                "before": 0,
+                "after": 16
+              },
+              {
+                "mark": "B34S",
+                "before": 24,
+                "after": 26
+              },
+              {
+                "mark": "B39S",
+                "before": 2,
+                "after": 0
+              },
+              {
+                "mark": "B7",
+                "before": 22,
+                "after": 6
+              },
+              {
+                "mark": "G2",
+                "before": 5,
+                "after": 3
+              },
+              {
+                "mark": "G3",
+                "before": 3,
+                "after": 0
+              },
+              {
+                "mark": "G4",
+                "before": 17,
+                "after": 20
+              }
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "id": "d17",
+      "title": "PHR階伏図",
+      "versions": [
+        {
+          "set": "s1",
+          "page": 17,
+          "number": "33-17",
+          "title": "PHR階伏図",
+          "version": 1
+        },
+        {
+          "set": "s2",
+          "page": 17,
+          "number": "05-17",
+          "title": "PHR階伏図",
+          "version": 2,
+          "changes": {
+            "rows": [],
+            "marks": []
+          }
+        },
+        {
+          "set": "s3",
+          "page": 7,
+          "number": "35-17",
+          "title": "PHR階伏図",
+          "version": 3,
+          "changes": {
+            "rows": [],
+            "marks": []
+          }
+        }
+      ]
+    },
+    {
+      "id": "d18",
+      "title": "軸組図(1)",
+      "versions": [
+        {
+          "set": "s1",
+          "page": 18,
+          "number": "33-18",
+          "title": "軸組図(1)",
+          "version": 1
+        },
+        {
+          "set": "s2",
+          "page": 18,
+          "number": "05-18",
+          "title": "軸組図(1)",
+          "version": 2,
+          "changes": {
+            "rows": [],
+            "marks": [
+              {
+                "mark": "FG1",
+                "before": 3,
+                "after": 0
+              },
+              {
+                "mark": "FG2",
+                "before": 2,
+                "after": 3
+              },
+              {
+                "mark": "FG3",
+                "before": 0,
+                "after": 2
+              }
+            ]
+          }
+        },
+        {
+          "set": "s3",
+          "page": 8,
+          "number": "35-18",
+          "title": "軸組図(1)",
+          "version": 3,
+          "changes": {
+            "rows": [],
+            "marks": [
+              {
+                "mark": "CG3",
+                "before": 0,
+                "after": 6
+              },
+              {
+                "mark": "FG2",
+                "before": 3,
+                "after": 1
+              },
+              {
+                "mark": "FG4",
+                "before": 0,
+                "after": 2
+              },
+              {
+                "mark": "P3",
+                "before": 0,
+                "after": 4
+              }
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "id": "d19",
+      "title": "軸組図(2)",
+      "versions": [
+        {
+          "set": "s1",
+          "page": 19,
+          "number": "33-19",
+          "title": "軸組図(2)",
+          "version": 1
+        },
+        {
+          "set": "s2",
+          "page": 19,
+          "number": "05-19",
+          "title": "軸組図(2)",
+          "version": 2,
+          "changes": {
+            "rows": [],
+            "marks": [
+              {
+                "mark": "FG2",
+                "before": 4,
+                "after": 0
+              },
+              {
+                "mark": "FG3",
+                "before": 0,
+                "after": 2
+              },
+              {
+                "mark": "FG4",
+                "before": 0,
+                "after": 2
+              }
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "id": "d20",
+      "title": "軸組図(3)",
+      "versions": [
+        {
+          "set": "s1",
+          "page": 20,
+          "number": "33-20",
+          "title": "軸組図(3)",
+          "version": 1
+        },
+        {
+          "set": "s2",
+          "page": 20,
+          "number": "05-20",
+          "title": "軸組図(3)",
+          "version": 2,
+          "changes": {
+            "rows": [],
+            "marks": [
+              {
+                "mark": "FG2",
+                "before": 4,
+                "after": 0
+              },
+              {
+                "mark": "FG3",
+                "before": 1,
+                "after": 2
+              },
+              {
+                "mark": "FG4",
+                "before": 0,
+                "after": 2
+              },
+              {
+                "mark": "FG5",
+                "before": 0,
+                "after": 1
+              }
+            ]
+          }
+        },
+        {
+          "set": "s3",
+          "page": 9,
+          "number": "35-20",
+          "title": "軸組図(3)",
+          "version": 3,
+          "changes": {
+            "rows": [],
+            "marks": [
+              {
+                "mark": "CG3",
+                "before": 0,
+                "after": 3
+              },
+              {
+                "mark": "FG3",
+                "before": 2,
+                "after": 3
+              },
+              {
+                "mark": "FG4",
+                "before": 2,
+                "after": 1
+              }
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "id": "d21",
+      "title": "軸組図(4)",
+      "versions": [
+        {
+          "set": "s1",
+          "page": 21,
+          "number": "33-21",
+          "title": "軸組図(4)",
+          "version": 1
+        },
+        {
+          "set": "s2",
+          "page": 21,
+          "number": "05-21",
+          "title": "軸組図(4)",
+          "version": 2,
+          "changes": {
+            "rows": [],
+            "marks": [
+              {
+                "mark": "FG2",
+                "before": 4,
+                "after": 0
+              },
+              {
+                "mark": "FG3",
+                "before": 1,
+                "after": 2
+              },
+              {
+                "mark": "FG4",
+                "before": 0,
+                "after": 2
+              },
+              {
+                "mark": "FG5",
+                "before": 0,
+                "after": 1
+              }
+            ]
+          }
+        },
+        {
+          "set": "s3",
+          "page": 10,
+          "number": "35-21",
+          "title": "軸組図(4)",
+          "version": 3,
+          "changes": {
+            "rows": [],
+            "marks": [
+              {
+                "mark": "FG3",
+                "before": 2,
+                "after": 3
+              },
+              {
+                "mark": "FG4",
+                "before": 2,
+                "after": 1
+              },
+              {
+                "mark": "P3",
+                "before": 0,
+                "after": 3
+              },
+              {
+                "mark": "W1",
+                "before": 0,
+                "after": 2
+              }
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "id": "d22",
+      "title": "軸組図(5)",
+      "versions": [
+        {
+          "set": "s1",
+          "page": 22,
+          "number": "33-22",
+          "title": "軸組図(5)",
+          "version": 1
+        },
+        {
+          "set": "s2",
+          "page": 22,
+          "number": "05-22",
+          "title": "軸組図(5)",
+          "version": 2,
+          "changes": {
+            "rows": [],
+            "marks": [
+              {
+                "mark": "FG2",
+                "before": 3,
+                "after": 0
+              },
+              {
+                "mark": "FG3",
+                "before": 1,
+                "after": 2
+              },
+              {
+                "mark": "FG4",
+                "before": 0,
+                "after": 1
+              },
+              {
+                "mark": "FG5",
+                "before": 0,
+                "after": 1
+              }
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "id": "d23",
+      "title": "軸組図(6)",
+      "versions": [
+        {
+          "set": "s1",
+          "page": 23,
+          "number": "33-23",
+          "title": "軸組図(6)",
+          "version": 1
+        },
+        {
+          "set": "s2",
+          "page": 23,
+          "number": "05-23",
+          "title": "軸組図(6)",
+          "version": 2,
+          "changes": {
+            "rows": [],
+            "marks": [
+              {
+                "mark": "FG1",
+                "before": 1,
+                "after": 0
+              },
+              {
+                "mark": "FG2",
+                "before": 2,
+                "after": 1
+              },
+              {
+                "mark": "FG3",
+                "before": 0,
+                "after": 2
+              }
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "id": "d24",
+      "title": "軸組図(7)",
+      "versions": [
+        {
+          "set": "s1",
+          "page": 24,
+          "number": "33-24",
+          "title": "軸組図(7)",
+          "version": 1
+        },
+        {
+          "set": "s2",
+          "page": 24,
+          "number": "05-24",
+          "title": "軸組図(7)",
+          "version": 2,
+          "changes": {
+            "rows": [],
+            "marks": [
+              {
+                "mark": "FG1",
+                "before": 1,
+                "after": 2
+              },
+              {
+                "mark": "FG2",
+                "before": 2,
+                "after": 0
+              },
+              {
+                "mark": "FG3",
+                "before": 0,
+                "after": 1
+              }
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "id": "d25",
+      "title": "軸組図(8)",
+      "versions": [
+        {
+          "set": "s1",
+          "page": 25,
+          "number": "33-25",
+          "title": "軸組図(8)",
+          "version": 1
+        },
+        {
+          "set": "s2",
+          "page": 25,
+          "number": "05-25",
+          "title": "軸組図(8)",
+          "version": 2,
+          "changes": {
+            "rows": [],
+            "marks": [
+              {
+                "mark": "FG1",
+                "before": 1,
+                "after": 0
+              },
+              {
+                "mark": "FG2",
+                "before": 4,
+                "after": 1
+              },
+              {
+                "mark": "FG3",
+                "before": 0,
+                "after": 3
+              },
+              {
+                "mark": "FG4",
+                "before": 0,
+                "after": 1
+              }
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "id": "d26",
+      "title": "基礎詳細図",
+      "versions": [
+        {
+          "set": "s1",
+          "page": 26,
+          "number": "33-26",
+          "title": "基礎詳細図",
+          "version": 1
+        },
+        {
+          "set": "s2",
+          "page": 26,
+          "number": "05-26",
+          "title": "基礎詳細図",
+          "version": 2,
+          "changes": null
+        }
+      ]
+    },
+    {
+      "id": "d27",
+      "title": "基礎梁リスト",
+      "versions": [
+        {
+          "set": "s1",
+          "page": 27,
+          "number": "33-27",
+          "title": "基礎梁リスト",
+          "version": 1
+        },
+        {
+          "set": "s2",
+          "page": 27,
+          "number": "05-27",
+          "title": "基礎梁リスト",
+          "version": 2,
+          "changes": {
+            "rows": [
+              {
+                "mark": "DS1",
+                "before": "外部土間コンクリート部分詳細図 1/30 階段ササラ受部分詳細図 1/30",
+                "after": "80 - D10@200シングル D10@200シングル 1,250"
+              },
+              {
+                "mark": "FB2",
+                "before": "150",
+                "after": "かぶり厚の施工要領図"
+              },
+              {
+                "mark": "FG4",
+                "before": "",
+                "after": ""
+              },
+              {
+                "mark": "FG5",
+                "before": "",
+                "after": ""
+              }
+            ],
+            "marks": []
+          }
+        }
+      ]
+    },
+    {
+      "id": "d28",
+      "title": "鉄骨部材リスト",
+      "versions": [
+        {
+          "set": "s1",
+          "page": 28,
+          "number": "33-28",
+          "title": "鉄骨部材リスト",
+          "version": 1
+        },
+        {
+          "set": "s2",
+          "page": 28,
+          "number": "05-28",
+          "title": "鉄骨部材リスト",
+          "version": 2,
+          "changes": {
+            "rows": [
+              {
+                "mark": "B7",
+                "before": "",
+                "after": "L - 75× 75× 12(溶融亜鉛メッキ処理)"
+              }
+            ],
+            "marks": []
+          }
+        },
+        {
+          "set": "s3",
+          "page": 11,
+          "number": "35-28",
+          "title": "鉄骨部材リスト",
+          "version": 3,
+          "changes": {
+            "rows": [
+              {
+                "mark": "B10",
+                "before": "H - 100× 100× 6× 8(溶融亜鉛メッキ処理)",
+                "after": "H - 100× 100× 6× 8"
+              },
+              {
+                "mark": "B19",
+                "before": "H - 198× 99× 4.5× 7(外部階段:溶融亜鉛メッキ処理)",
+                "after": "H - 198× 99× 4.5× 7"
+              },
+              {
+                "mark": "B24",
+                "before": "H - 248× 124× 5× 8(外部階段:溶融亜鉛メッキ処理)",
+                "after": "H - 248× 124× 5× 8"
+              },
+              {
+                "mark": "B7",
+                "before": "L - 75× 75× 12(溶融亜鉛メッキ処理)",
+                "after": "L - 75× 75× 9"
+              },
+              {
+                "mark": "C3",
+                "before": "□ - 250× 250× 9(溶融亜鉛メッキ処理)",
+                "after": "□ - 250× 250× 9"
+              },
+              {
+                "mark": "CG3",
+                "before": "H - 200~100× 100× 5.5× 8(溶融亜鉛メッキ処理)",
+                "after": "H - 200~100× 100× 5.5× 8"
+              },
+              {
+                "mark": "G5",
+                "before": "H - 350× 175× 7× 11(溶融亜鉛メッキ処理)",
+                "after": "H - 350× 175× 7× 11"
+              },
+              {
+                "mark": "B19M",
+                "before": "",
+                "after": "H - 194× 150× 6× 9"
+              },
+              {
+                "mark": "B20",
+                "before": "",
+                "after": "H - 200× 100× 5.5× 8"
+              }
+            ],
+            "marks": []
+          }
+        }
+      ]
+    },
+    {
+      "id": "d29",
+      "title": "柱脚・継手リスト",
+      "versions": [
+        {
+          "set": "s1",
+          "page": 29,
+          "number": "33-29",
+          "title": "柱脚・継手リスト",
+          "version": 1
+        },
+        {
+          "set": "s2",
+          "page": 29,
+          "number": "05-29",
+          "title": "柱脚・継手リスト",
+          "version": 2,
+          "changes": {
+            "rows": [],
+            "marks": []
+          }
+        }
+      ]
+    },
+    {
+      "id": "d30",
+      "title": "鉄骨詳細図(1)",
+      "versions": [
+        {
+          "set": "s1",
+          "page": 30,
+          "number": "33-30",
+          "title": "鉄骨詳細図(1)",
+          "version": 1
+        },
+        {
+          "set": "s2",
+          "page": 30,
+          "number": "05-30",
+          "title": "鉄骨詳細図(1)",
+          "version": 2,
+          "changes": {
+            "rows": [],
+            "marks": []
+          }
+        },
+        {
+          "set": "s3",
+          "page": 13,
+          "number": "35-31",
+          "title": "鉄骨詳細図(1)",
+          "version": 3,
+          "changes": {
+            "rows": [],
+            "marks": [
+              {
+                "mark": "C1",
+                "before": 6,
+                "after": 7
+              },
+              {
+                "mark": "G1",
+                "before": 3,
+                "after": 6
+              }
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "id": "d31",
+      "title": "鉄骨詳細図(2)",
+      "versions": [
+        {
+          "set": "s1",
+          "page": 31,
+          "number": "33-31",
+          "title": "鉄骨詳細図(2)",
+          "version": 1
+        },
+        {
+          "set": "s2",
+          "page": 31,
+          "number": "05-31",
+          "title": "鉄骨詳細図(2)",
+          "version": 2,
+          "changes": {
+            "rows": [],
+            "marks": []
+          }
+        }
+      ]
+    },
+    {
+      "id": "d32",
+      "title": "鉄骨詳細図(3)",
+      "versions": [
+        {
+          "set": "s1",
+          "page": 32,
+          "number": "33-32",
+          "title": "鉄骨詳細図(3)",
+          "version": 1
+        },
+        {
+          "set": "s2",
+          "page": 32,
+          "number": "05-32",
+          "title": "鉄骨詳細図(3)",
+          "version": 2,
+          "changes": {
+            "rows": [],
+            "marks": []
+          }
+        },
+        {
+          "set": "s3",
+          "page": 14,
+          "number": "35-33",
+          "title": "鉄骨詳細図(3)",
+          "version": 3,
+          "changes": {
+            "rows": [],
+            "marks": []
+          }
+        }
+      ]
+    },
+    {
+      "id": "d33",
+      "title": "部分詳細図",
+      "versions": [
+        {
+          "set": "s1",
+          "page": 33,
+          "number": "33-33",
+          "title": "部分詳細図",
+          "version": 1
+        },
+        {
+          "set": "s2",
+          "page": 33,
+          "number": "05-33",
+          "title": "部分詳細図",
+          "version": 2,
+          "changes": {
+            "rows": [],
+            "marks": []
+          }
+        }
+      ]
+    },
+    {
+      "id": "d34",
+      "title": "ピン接合リスト・片持梁詳細図",
+      "versions": [
+        {
+          "set": "s3",
+          "page": 12,
+          "number": "35-29",
+          "title": "ピン接合リスト・片持梁詳細図",
+          "version": 1
+        }
+      ]
+    },
+    {
+      "id": "d35",
+      "title": "部分詳細図(2)",
+      "versions": [
+        {
+          "set": "s3",
+          "page": 15,
+          "number": "35-35",
+          "title": "部分詳細図(2)",
+          "version": 1
+        }
+      ]
+    }
+  ],
+  "baseline": [
+    "s2",
+    "s3"
+  ],
+  "checked": [
+    "d14",
+    "d15",
+    "d16",
+    "d17",
+    "d18",
+    "d19",
+    "d20",
+    "d21",
+    "d22",
+    "d23",
+    "d24",
+    "d25",
+    "d28",
+    "d29"
+  ]
+}

@@ -3,6 +3,8 @@
   python drawing_ledger.py propose <物件> <取り込みID>     図番・図名を読み、束ねる先の案を返す（AIを呼ばない）
   python drawing_ledger.py read-titles <物件> <取り込みID>  文字で読めないページの図名をAIで読む
   python drawing_ledger.py commit <物件> <取り込みID>      標準入力の内容で台帳に入れる
+  python drawing_ledger.py baseline <物件> <版,版>         今の設定の設計図書が台帳のどの版かを記録する
+  python drawing_ledger.py export <物件> -                 公開してよい物件の台帳を demo-data に書き出す
 
 束ねる先は図名を優先する。同じ図番でも中身が違うことがあるので、図番だけでは束ねない。合わないページは入れるときに選ばせる。
 台帳と入れたPDFはリポジトリの外（~/sekozu-data/ledger/）に置く。
@@ -17,10 +19,11 @@ from datetime import datetime
 import pymupdf
 
 from building_pages import display_words, title_of
-from common import PRIVATE, write_json
+from common import PRIVATE, REPO, write_json
 from repeat_runs import PRICE_INPUT, PRICE_OUTPUT
 
 ROOT = PRIVATE / "ledger"
+PROJECTS = PRIVATE / "projects.json"
 # 全ページの版とみなす、既にあるページ数に対する割合
 FULL_SET_RATIO = 0.8
 PAGE_LONG_EDGE = 1568
@@ -109,6 +112,189 @@ def propose(slug, incoming):
             "sheets": [{"id": s["id"], "title": s["title"], "versions": len(s["versions"])} for s in ledger["sheets"]]}
 
 
+MARK = re.compile(r"^[A-Z]{1,4}\d{1,3}[A-Z]?$")
+GRID = re.compile(r"^[XY]\d+$")
+# 比べるのに足りる文字数。文字のないページは比べない
+MIN_WORDS = 50
+ROW_TOLERANCE = 0.004
+CELL_GAP = 0.02
+
+
+def plain(word):
+    return unicodedata.normalize("NFKC", word).replace(" ", "").upper()
+
+
+def table_rows(page, words):
+    """{符号: 行の文字}。部材リストのように、行の先頭に符号がある表を読む"""
+    width, height = page.rect.width, page.rect.height
+    limit = height * 0.86
+    rows = {}
+    for word in words:
+        if word[1] < limit:
+            rows.setdefault(round(word[1] / height / ROW_TOLERANCE), []).append(word)
+    found = {}
+    for row in rows.values():
+        row.sort(key=lambda w: w[0])
+        cells, current, last = [], [], None
+        for word in row:
+            if last is not None and (word[0] - last) / width > CELL_GAP:
+                cells.append(current)
+                current = []
+            current.append(word[4])
+            last = word[2]
+        cells.append(current)
+        texts = [plain("".join(cell)) for cell in cells]
+        keys = [index for index, text in enumerate(texts) if MARK.match(text) and not GRID.match(text)]
+        for position, index in enumerate(keys):
+            end = keys[position + 1] if position + 1 < len(keys) else len(texts)
+            found.setdefault(texts[index], " ".join(" ".join(cell) for cell in cells[index + 1:end]))
+    return found
+
+
+def mark_counts(words):
+    counts = {}
+    for word in words:
+        text = plain(word[4])
+        if MARK.match(text) and not GRID.match(text):
+            counts[text] = counts.get(text, 0) + 1
+    return counts
+
+
+# 材料の記号など、部材の符号ではないもの
+NOT_MEMBER = re.compile(r"^(SN|SNR|SS|SSC|SM|BCR|BCP|STK|STKR|SD|SDP|SUS|EZ|QL|UA|K|F|D)\d")
+# 仕様書や標準図は、符号の増減を見ても部材の変化ではない
+NOT_MEMBER_PAGE = re.compile(r"仕様|標準")
+
+
+def compare_pages(before, after, title=""):
+    """2つの版のページの文字を比べる。リストは行の違い、図は符号の数の違いを返す。読み取りではないので、位置までは分からない"""
+    if NOT_MEMBER_PAGE.search(title):
+        return None
+    words_a, words_b = display_words(before), display_words(after)
+    if len(words_a) < MIN_WORDS or len(words_b) < MIN_WORDS:
+        return None
+    if "リスト" in title:
+        rows_a, rows_b = table_rows(before, words_a), table_rows(after, words_b)
+        changed = [{"mark": mark, "before": rows_a[mark], "after": rows_b[mark]}
+                   for mark in sorted(set(rows_a) & set(rows_b))
+                   if not NOT_MEMBER.match(mark) and rows_a[mark] and rows_b[mark]
+                   and rows_a[mark].replace(" ", "") != rows_b[mark].replace(" ", "")]
+        added = [{"mark": mark, "before": "", "after": rows_b[mark]} for mark in sorted(set(rows_b) - set(rows_a)) if not NOT_MEMBER.match(mark)]
+        removed = [{"mark": mark, "before": rows_a[mark], "after": ""} for mark in sorted(set(rows_a) - set(rows_b)) if not NOT_MEMBER.match(mark)]
+        return {"rows": changed + added + removed, "marks": []}
+    counts_a, counts_b = mark_counts(words_a), mark_counts(words_b)
+    marks = [{"mark": mark, "before": counts_a.get(mark, 0), "after": counts_b.get(mark, 0)}
+             for mark in sorted(set(counts_a) | set(counts_b))
+             if counts_a.get(mark, 0) != counts_b.get(mark, 0) and not NOT_MEMBER.match(mark)]
+    return {"rows": [], "marks": marks}
+
+
+def add_changes(slug, ledger):
+    """版ごとに、1つ前の版からの変化を入れる"""
+    documents = {}
+
+    def open_set(set_id):
+        return documents.setdefault(set_id, pymupdf.open(ROOT / slug / "sets" / f"{set_id}.pdf"))
+
+    for sheet in ledger["sheets"]:
+        for older, newer in zip(sheet["versions"], sheet["versions"][1:]):
+            newer["changes"] = compare_pages(open_set(older["set"])[older["page"] - 1], open_set(newer["set"])[newer["page"] - 1], newer["title"] or sheet["title"])
+
+
+def latest_config(slug, ledger, project):
+    """台帳の最新の版から、照合に使う設計図書の設定を作る。全ページの版を構造図に、そのあとの部分的な版を差替図面にする"""
+    sets = ledger["sets"]
+    full_index = max((i for i, item in enumerate(sets) if item["full"]), default=None)
+    if full_index is None:
+        return None
+    base = sets[full_index]["id"]
+    partial = [item["id"] for item in sets[full_index + 1:]]
+    folder = ROOT / slug / "sets"
+    # 部分的な版が1つならそのまま使う。2つ以上なら、ページごとに最新の版を1つのPDFにまとめる
+    revised_pages, order = {}, []
+    for sheet in ledger["sheets"]:
+        latest = sheet["versions"][-1]
+        if latest["set"] in partial:
+            order.append((partial.index(latest["set"]), latest["page"], sheet["id"], latest["set"]))
+    order.sort()
+    if len(partial) == 1:
+        revised = str(folder / f"{partial[0]}.pdf")
+        revised_pages = {item[2]: item[1] for item in order}
+    elif partial:
+        revised = folder / f"merged-{'-'.join(partial)}.pdf"
+        merged = pymupdf.open()
+        for index, (_, page, sheet_id, set_id) in enumerate(order, 1):
+            merged.insert_pdf(pymupdf.open(folder / f"{set_id}.pdf"), from_page=page - 1, to_page=page - 1)
+            revised_pages[sheet_id] = index
+        merged.save(revised)
+        revised = str(revised)
+    else:
+        revised = None
+    page_in = lambda sheet, set_id: next((v["page"] for v in sheet["versions"] if v["set"] == set_id), None)
+    # 今の設定のページを、台帳のページに直す。今の構造図がどの版かは baseline で分かる
+    old_base = next(item["id"] for item in sets if item["id"] in ledger["baseline"] and item["full"])
+    sheet_at = {page_in(sheet, old_base): sheet for sheet in ledger["sheets"] if page_in(sheet, old_base)}
+    new_page = lambda page: page_in(sheet_at[page], base) if page in sheet_at else None
+    plans = {}
+    for level, plan in project.get("plan_by_level", {}).items():
+        sheet = sheet_at.get(plan.get("design"))
+        plans[level] = {"design": new_page(plan.get("design")), "revised": revised_pages.get(sheet["id"]) if sheet else None}
+    config = {"design": str(folder / f"{base}.pdf"), "revised": revised,
+              "common_pages": [p for p in map(new_page, project.get("common_pages", [])) if p], "plan_by_level": plans}
+    if project.get("default_plan"):
+        config["default_plan"] = {"design": new_page(project["default_plan"].get("design"))}
+    return config
+
+
+def checked_sheets(ledger, project):
+    """照合で使うページのID。この中のページが新しくなると、再チェックが必要になる"""
+    old_base = next((item["id"] for item in ledger["sets"] if item["id"] in ledger.get("baseline", []) and item["full"]), None)
+    if not old_base:
+        return []
+    pages = set(project.get("common_pages", []))
+    pages |= {plan.get("design") for plan in project.get("plan_by_level", {}).values()}
+    pages.add((project.get("default_plan") or {}).get("design"))
+    return [sheet["id"] for sheet in ledger["sheets"] if any(v["set"] == old_base and v["page"] in pages for v in sheet["versions"])]
+
+
+def set_baseline(slug, ids):
+    """今の設定の設計図書が台帳のどの版かを記録する。これより前の判定は、この版で照合したものとして扱う"""
+    ledger = load_ledger(slug)
+    ledger["baseline"] = ids
+    project = json.loads(PROJECTS.read_text())[slug]
+    ledger["checked"] = checked_sheets(ledger, project)
+    add_changes(slug, ledger)
+    write_json(ledger_path(slug), ledger)
+    print(json.dumps({"checked": len(ledger["checked"])}))
+
+
+def repoint_project(slug, ledger):
+    """新しい版を入れたら、これからの判定はその版で照合する"""
+    if not ledger.get("baseline"):
+        return
+    projects = json.loads(PROJECTS.read_text())
+    config = latest_config(slug, ledger, projects[slug])
+    if config:
+        projects[slug].update(config)
+        write_json(PROJECTS, projects)
+    # 設定のページ番号が新しくなったので、基準の版も今の版にそろえる
+    full = [item["id"] for item in ledger["sets"] if item["full"]][-1]
+    later = [item["id"] for item in ledger["sets"] if ledger["sets"].index(item) > [s["id"] for s in ledger["sets"]].index(full)]
+    ledger["config_sets"] = [full, *later]
+
+
+def export_public(slug):
+    """公開してよい物件の台帳を demo-data に書き出す。公開用の表示で一覧を見られるようにする"""
+    ledger = load_ledger(slug)
+    write_json(REPO / "demo-data" / slug / "ledger.json", ledger)
+
+
+def current_sets(slug):
+    """今の判定で照合に使う版"""
+    ledger = load_ledger(slug)
+    return ledger.get("config_sets") or ledger.get("baseline") or []
+
+
 def read_titles(slug, incoming):
     """文字で読めないページの図名をAIで読む"""
     import anthropic
@@ -174,13 +360,19 @@ def commit(slug, incoming, payload):
             sheet["title"] = new_title
         sheet["versions"].append({"set": set_id, "page": item["page"], "number": row["number"], "title": item.get("title") or row["title"],
                                   "version": len(sheet["versions"]) + 1})
+    add_changes(slug, ledger)
+    repoint_project(slug, ledger)
     write_json(ledger_path(slug), ledger)
     print(json.dumps({"set": set_id, "sheets": len(ledger["sheets"])}))
 
 
 def main():
     command, slug, incoming = sys.argv[1:4]
-    if command == "propose":
+    if command == "baseline":
+        set_baseline(slug, incoming.split(","))
+    elif command == "export":
+        export_public(slug)
+    elif command == "propose":
         print(json.dumps(propose(slug, incoming), ensure_ascii=False))
     elif command == "read-titles":
         read_titles(slug, incoming)

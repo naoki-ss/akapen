@@ -13,12 +13,19 @@ const script = () => path.join(process.cwd(), "scripts", "check", "drawing_ledge
 const python = () => path.join(process.cwd(), ".venv", "bin", "python");
 const cwd = () => path.join(process.cwd(), "scripts", "check");
 
+export type VersionChanges = {
+  rows: { mark: string; before: string; after: string }[];
+  marks: { mark: string; before: number; after: number }[];
+};
+
 export type LedgerVersion = {
   set: string;
   page: number;
   number: string;
   title: string;
   version: number;
+  // 1つ前の版からの変化。図面の文字を比べた結果
+  changes?: VersionChanges | null;
 };
 
 export type LedgerSheet = { id: string; title: string; versions: LedgerVersion[] };
@@ -32,7 +39,14 @@ export type LedgerSet = {
   added_at: string;
 };
 
-export type Ledger = { sets: LedgerSet[]; sheets: LedgerSheet[] };
+export type Ledger = {
+  sets: LedgerSet[];
+  sheets: LedgerSheet[];
+  // 台帳を作ったときの設定の設計図書の版。記録のない判定はこの版で照合したものとして扱う
+  baseline?: string[];
+  // 照合で使うページ
+  checked?: string[];
+};
 
 export type ProposedPage = {
   page: number;
@@ -103,3 +117,17 @@ export const readTitles = (slug: string, id: string) =>
 
 export const commitSet = (slug: string, id: string, payload: unknown) =>
   run(["commit", slug, id], JSON.stringify(payload));
+
+// 照合したあとに新しくなった設計図書のページの図名。空なら再チェックは要らない
+export function staleSheets(ledger: Ledger, jobSets?: string[]) {
+  const used = jobSets?.length ? jobSets : ledger.baseline;
+  if (!used?.length) return [];
+  const known = new Set(ledger.checked ?? []);
+  return ledger.sheets
+    .filter(
+      (sheet) =>
+        known.has(sheet.id) &&
+        !used.includes(sheet.versions[sheet.versions.length - 1].set),
+    )
+    .map((sheet) => sheet.title);
+}

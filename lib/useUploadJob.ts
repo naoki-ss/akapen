@@ -48,6 +48,7 @@ export type JobSummary = {
   open: { title: string; red: number; blue: number }[];
   masked: boolean;
   stopped: boolean;
+  stale: string[];
 };
 
 // 物件を切り替えて戻っても、走っているチェックを見失わないようにする

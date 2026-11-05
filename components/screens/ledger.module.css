@@ -119,3 +119,22 @@
   font-size: 12px;
   cursor: pointer;
 }
+
+.changes {
+  margin-bottom: 16px;
+  padding: 10px 12px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--panel);
+  font-size: 13px;
+}
+
+.changes summary {
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.changes h3 {
+  margin: 10px 0 4px;
+  font-size: 13px;
+}

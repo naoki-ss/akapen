@@ -276,6 +276,56 @@ function DesignTable({ ledger }: { ledger: Ledger }) {
   );
 }
 
+// 前の版から変わった部材。図面の文字を比べた結果を出す
+function MemberChanges({ ledger }: { ledger: Ledger }) {
+  const latestSet = ledger.sets[ledger.sets.length - 1];
+  const previous = ledger.sets[ledger.sets.length - 2];
+  if (!latestSet || !previous) return null;
+  const changed = ledger.sheets.flatMap((sheet) => {
+    const version = sheet.versions.find((item) => item.set === latestSet.id);
+    const changes = version?.changes;
+    return changes && (changes.rows.length || changes.marks.length)
+      ? [{ sheet, changes }]
+      : [];
+  });
+  if (changed.length === 0) return null;
+  return (
+    <details className={styles.changes}>
+      <summary>
+        {latestSet.label}で変わった部材（{changed.length} ページ）
+      </summary>
+      <p className={styles.note}>
+        前の版と図面の文字を比べた結果です。符号の数と部材リストの行の違いを出しています。場所までは分かりません。3Dの作り直しは、確認してから行います。
+      </p>
+      {changed.map(({ sheet, changes }) => (
+        <section key={sheet.id}>
+          <h3>{sheet.title}</h3>
+          {changes.rows.length > 0 && (
+            <table className={styles.table}>
+              <tbody>
+                {changes.rows.map((row) => (
+                  <tr key={row.mark}>
+                    <td className="mono">{row.mark}</td>
+                    <td>{row.before || "（なし）"}</td>
+                    <td>→ {row.after || "（なし）"}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          )}
+          {changes.marks.length > 0 && (
+            <p className="mono">
+              {changes.marks
+                .map((mark) => `${mark.mark} ${mark.before}→${mark.after}か所`)
+                .join("、")}
+            </p>
+          )}
+        </section>
+      ))}
+    </details>
+  );
+}
+
 // 図面台帳
 export default function LedgerScreen({
   slug,
@@ -302,6 +352,7 @@ export default function LedgerScreen({
         </div>
         <h2 className={styles.heading}>設計図書</h2>
         {canAdd && <AddSet slug={slug} />}
+        <MemberChanges ledger={ledger} />
         <DesignTable ledger={ledger} />
       </div>
     </AppFrame>

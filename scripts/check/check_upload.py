@@ -32,6 +32,7 @@ from ai_review import call_claude, load_env
 from common import PRIVATE, REPO, write_json
 from index_steel_sheets import SCHEMA as INDEX_SCHEMA, SYSTEM as INDEX_SYSTEM
 import design_basis
+import drawing_ledger
 import knowledge_check
 import merge_findings
 import minutes_check
@@ -637,6 +638,8 @@ def main():
         numbers = meta.get("pages") or [1]
         if not all(1 <= number <= page_count for number in numbers):
             raise ValueError("選んだページがPDFにありません")
+        # どの版の設計図書で照合したかを残す。新しい版が入ったときに、再チェックが必要と分かるように
+        write_json(folder / "job.json", {**meta, "design_sets": drawing_ledger.current_sets(slug)})
         job.update(pages_total=len(numbers), stage="確認中", message=f"チェックを始めます（全 {len(numbers)} ページ）")
 
         load_env()
