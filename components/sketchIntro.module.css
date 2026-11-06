@@ -1,0 +1,79 @@
+/* トップの表示の動き。朱の補助線と骨組みを描いてから、本物の画面に入れ替える */
+.overlay {
+  position: fixed;
+  z-index: 50;
+  inset: 0;
+  pointer-events: none;
+}
+
+.overlay path {
+  fill: none;
+  stroke: #c62d23;
+  stroke-dasharray: 1;
+  stroke-dashoffset: 1;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  animation-name: sketchDraw;
+  animation-timing-function: cubic-bezier(0.4, 0, 0.2, 1);
+  animation-fill-mode: forwards;
+}
+
+/* 補助線：細く薄く。1.35秒から消える */
+.guides {
+  animation: sketchFade 0.4s ease-out 1.35s forwards;
+}
+
+.guides path {
+  stroke-width: 1px;
+  stroke-opacity: 0.45;
+  animation-duration: 0.35s;
+}
+
+/* 骨組み：1.55秒から消える */
+.sketch {
+  animation: sketchFade 0.5s ease-out 1.55s forwards;
+}
+
+.sketch path {
+  stroke-width: 1.5px;
+  animation-duration: 0.45s;
+}
+
+@keyframes sketchDraw {
+  to {
+    stroke-dashoffset: 0;
+  }
+}
+
+@keyframes sketchFade {
+  to {
+    opacity: 0;
+  }
+}
+
+/* 本物の画面：下から 6px 持ち上がって現れる */
+.reveal.reveal {
+  animation: sketchReveal 0.55s cubic-bezier(0.2, 0.8, 0.2, 1) both;
+}
+
+@keyframes sketchReveal {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+}
+
+.replay {
+  position: fixed;
+  z-index: 60;
+  right: 16px;
+  bottom: 16px;
+  padding: 6px 14px;
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius);
+  background: var(--panel);
+  color: var(--ink);
+  font: inherit;
+  font-size: 13px;
+  cursor: pointer;
+}

@@ -8,7 +8,7 @@
     "start": "next start",
     "lint": "eslint",
     "check:markup": "node scripts/e2e/markup.mjs",
-    "check:logo": "node scripts/e2e/logo.mjs"
+    "check:intro": "node scripts/e2e/intro.mjs"
   },
   "dependencies": {
     "@react-three/drei": "^10.7.9",

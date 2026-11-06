@@ -151,3 +151,8 @@ button {
     transition-duration: 0.001ms !important;
   }
 }
+
+/* トップの表示の動きの前は、本物の画面を隠しておく（components/SketchIntro.tsx） */
+html[data-intro="pending"] [data-sketch-reveal] {
+  opacity: 0;
+}

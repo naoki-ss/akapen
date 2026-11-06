@@ -4,7 +4,7 @@ import styles from "./screens/screens.module.css";
 
 export function Logo() {
   return (
-    <Link href="/" className={styles.logo}>
+    <Link href="/" className={styles.logo} data-sketch="logo">
       <svg viewBox="0 0 32 32" width="24" height="24" aria-hidden>
         <path
           d="M6 26 L9 18 L22 5 a2.8 2.8 0 0 1 4 0 l1 1 a2.8 2.8 0 0 1 0 4 L14 23 Z"
@@ -33,7 +33,7 @@ export default function AppFrame({
 }) {
   return (
     <div className={styles.frame}>
-      <header className={styles.frameHead}>
+      <header className={styles.frameHead} data-sketch="header" data-sketch-reveal="0">
         <Logo />
         <nav aria-label="現在の場所" className={styles.crumbs}>
           {crumbs.map((crumb) =>

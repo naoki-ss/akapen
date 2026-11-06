@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
+import { afterIntro } from "@/lib/intro";
 import { floorsOf, type BuildingModel } from "@/lib/model";
 import BuildingScene from "./BuildingSceneLazy";
 import styles from "./screens/screens.module.css";
@@ -29,7 +30,8 @@ export default function SceneThumb({ slug }: { slug: string }) {
   useEffect(() => {
     if (images.has(slug) || !canDraw()) return;
     let stopped = false;
-    queue = queue.then(
+    // トップの表示の動きが終わってから描く（動きを止めない）
+    queue = queue.then(afterIntro).then(
       () =>
         new Promise<void>((resolve) => {
           finish.current = resolve;
