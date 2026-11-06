@@ -430,8 +430,12 @@ def build(pdf, folder, model_path, out):
     first_floor = next((value for name, value in rows.items() if re.fullmatch(r"(1F|1FL|1階床)", unicodedata.normalize("NFKC", name))), 0)
     top_name = next((name for name in names if name.startswith("R")), names[-1])
     # 主屋根の高さ：建物データの屋根の階。パラペットは屋根からの立上りだけを使う（基準の違いを持ち込まない）
-    roof_gl = max(roof_levels) if roof_levels else levels[top_name] + first_floor
-    parapet_rise = max(0, min(max(parapets) - roof_gl, 2000)) if parapets else 0
+    # 塔屋の屋根や笠木を主屋根と読み違えた値は除く（建物データの屋根の階から 1.5m 以上離れた屋根、塔屋の笠木と同じ高さのパラペット）
+    structural_roof = levels[top_name] + first_floor
+    roof_levels = [value for value in roof_levels if abs(value - structural_roof) <= 1500]
+    roof_gl = max(roof_levels) if roof_levels else structural_roof
+    main_parapets = sorted(value for value in parapets if not any(abs(value - top) <= 100 for top in ph_tops)) or sorted(parapets)
+    parapet_rise = max(0, min(main_parapets[len(main_parapets) // 2] - roof_gl, 2000)) if parapets else 0
     if not parapets:
         need("立面", "パラペットの高さを読めませんでした。屋根の高さで止めています")
     ph_rise = 0

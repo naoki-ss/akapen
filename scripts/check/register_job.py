@@ -66,7 +66,7 @@ class Status:
 
 
 # 外観の読み取りの費用の上限（ドル）
-EXTERIOR_MAX_USD = 2.0
+EXTERIOR_MAX_USD = 3.0
 
 
 def register_for(folder):
