@@ -17,7 +17,15 @@ const REVEAL_START = 1.2;
 const REVEAL_STEP = 0.05;
 const TOTAL = 2.3;
 
-type Line = { key: string; d: string; delay: number; ref?: string };
+// delay：描き始め、fade：消え始め（秒）
+type Line = { key: string; d: string; delay: number; fade: number; ref?: string };
+
+// その要素の本物が現れ始める時刻。現れる動きの遅れ（animation-delay）から読む
+function revealAt(element: Element | null) {
+  const target = element?.closest<HTMLElement>("[data-sketch-reveal]");
+  const delay = parseFloat(target?.style.animationDelay ?? "");
+  return Number.isFinite(delay) ? delay : REVEAL_START;
+}
 
 // 要素の位置。現れる前の「下から 6px」の分を引いて、最後の位置で測る
 function rectOf(element: Element) {
@@ -60,7 +68,7 @@ function measure() {
   const title = one("title");
   const button = one("button");
   const guides: Line[] = [];
-  const addGuide = (d: string) => guides.push({ key: `g${guides.length}`, d, delay: guides.length * GUIDE_STEP });
+  const addGuide = (d: string) => guides.push({ key: `g${guides.length}`, d, delay: guides.length * GUIDE_STEP, fade: 0 });
   if (header) addGuide(hLine(header.bottom, 0, width));
   const left = cards[0]?.left ?? (title ? rectOf(title).left : undefined);
   const right = Math.max(...cards.map((c) => c.right), button ? rectOf(button).right : 0);
@@ -78,29 +86,31 @@ function measure() {
   const groups: string[][] = [];
   // 線ごとの対象（自動の点検で、要素の位置と比べるため）
   const refs: string[][] = [];
-  const push = (paths: string[], ref: string[]) => {
+  const fades: number[] = [];
+  const push = (paths: string[], ref: string[], element: Element | null) => {
     groups.push(paths);
     refs.push(ref);
+    fades.push(revealAt(element));
   };
-  if (header) push([hLine(header.bottom, 0, width)], ["header-bottom"]);
+  if (header) push([hLine(header.bottom, 0, width)], ["header-bottom"], headerElement);
   const logo = one("logo");
   if (logo) {
     const r = rectOf(logo);
-    push([hLine(r.bottom + 3, r.left, r.right)], ["logo"]);
+    push([hLine(r.bottom + 3, r.left, r.right)], ["logo"], logo);
   }
   if (title) {
     const r = textRect(title);
-    push([hLine(r.bottom + 4, r.left, r.right)], ["title"]);
+    push([hLine(r.bottom + 4, r.left, r.right)], ["title"], title);
   }
-  if (button) push([rectPath(rectOf(button), 0.5)], ["button"]);
+  if (button) push([rectPath(rectOf(button), 0.5)], ["button"], button);
   for (const [index, card] of all("card").entries()) {
     const outer = rectOf(card);
-    push([rectPath(outer, 0.5)], [`card-${index}`]);
+    push([rectPath(outer, 0.5)], [`card-${index}`], card);
     const thumb = card.querySelector('[data-sketch="thumb"]');
     const body = card.querySelector('[data-sketch="body"]');
     if (thumb) {
       const t = rectOf(thumb);
-      push([hLine(t.bottom, t.left, t.right)], [`thumb-${index}`]);
+      push([hLine(t.bottom, t.left, t.right)], [`thumb-${index}`], card);
       // 3D のサムネイルの建物のおおまかな形（塔屋と本体の2つの箱と地面）
       if (thumb.getAttribute("data-building") === "true") {
         const x = (f: number) => t.left + t.width * f;
@@ -109,7 +119,7 @@ function measure() {
           `M ${x(0.19)} ${y(0.86)} V ${y(0.33)} H ${x(0.28)} V ${y(0.88)}`,
           `M ${x(0.28)} ${y(0.88)} V ${y(0.42)} H ${x(0.8)} V ${y(0.82)} L ${x(0.28)} ${y(0.88)}`,
           hLine(y(0.9), x(0.1), x(0.9)),
-        ], []);
+        ], [], card);
       }
     }
     if (body) {
@@ -117,15 +127,18 @@ function measure() {
         const r = textRect(row);
         return hLine(r.bottom - 2, r.left, r.right);
       });
-      if (rows.length) push(rows, []);
+      if (rows.length) push(rows, [], card);
       const badges = [...body.querySelectorAll('[data-sketch="badge"]')].map((badge) => rectPath(rectOf(badge), 0.5));
-      if (badges.length) push(badges, badges.map((_, b) => `badge-${index}-${b}`));
+      if (badges.length) push(badges, badges.map((_, b) => `badge-${index}-${b}`), card);
     }
   }
   const step = Math.min(0.08, Math.max(0.02, (SKETCH_END - SKETCH_DRAW - SKETCH_START) / Math.max(1, groups.length - 1)));
   const sketch: Line[] = groups.flatMap((paths, g) =>
-    paths.map((d, i) => ({ key: `s${g}-${i}`, d, delay: SKETCH_START + g * step + i * 0.02, ref: refs[g][i] })),
+    paths.map((d, i) => ({ key: `s${g}-${i}`, d, delay: SKETCH_START + g * step + i * 0.02, ref: refs[g][i], fade: fades[g] })),
   );
+  // 補助線は、骨組みを描き終えた直後から消す
+  const drawn = Math.max(0, ...sketch.map((line) => line.delay + SKETCH_DRAW));
+  for (const guide of guides) guide.fade = drawn;
   return { width, height, guides, sketch };
 }
 
@@ -221,12 +234,12 @@ export default function SketchIntro({ replay = false }: { replay?: boolean }) {
         >
           <g className={styles.guides}>
             {drawing.guides.map((line) => (
-              <path key={line.key} d={line.d} pathLength={1} style={{ animationDelay: `${line.delay}s` }} />
+              <path key={line.key} d={line.d} pathLength={1} style={{ animationDelay: `${line.delay}s, ${line.fade}s` }} />
             ))}
           </g>
           <g className={styles.sketch}>
             {drawing.sketch.map((line) => (
-              <path key={line.key} d={line.d} pathLength={1} data-ref={line.ref} style={{ animationDelay: `${line.delay}s` }} />
+              <path key={line.key} d={line.d} pathLength={1} data-ref={line.ref} style={{ animationDelay: `${line.delay}s, ${line.fade}s` }} />
             ))}
           </g>
         </svg>

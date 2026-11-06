@@ -13,30 +13,25 @@
   stroke-dashoffset: 1;
   stroke-linecap: round;
   stroke-linejoin: round;
-  animation-name: sketchDraw;
-  animation-timing-function: cubic-bezier(0.4, 0, 0.2, 1);
+  animation-timing-function: cubic-bezier(0.4, 0, 0.2, 1), linear;
   animation-fill-mode: forwards;
 }
 
-/* 補助線：細く薄く。1.35秒から消える */
-.guides {
-  animation: sketchFade 0.4s ease-out 1.35s forwards;
-}
-
+/* 補助線：細く薄く。骨組みを描き終えた直後から 0.3秒で消える */
 .guides path {
   stroke-width: 1px;
   stroke-opacity: 0.45;
-  animation-duration: 0.35s;
+  animation-name: sketchDraw, sketchFade;
+  animation-duration: 0.35s, 0.3s;
+  animation-timing-function: cubic-bezier(0.4, 0, 0.2, 1), ease-out;
 }
 
-/* 骨組み：1.55秒から消える */
-.sketch {
-  animation: sketchFade 0.5s ease-out 1.55s forwards;
-}
-
+/* 骨組み：描いた順に1本ずつ、その要素の本物が現れ始めるのと同時に消える
+   0.15秒で本来の枠線の色に寄せてから、0.3秒で透明にする */
 .sketch path {
   stroke-width: 1.5px;
-  animation-duration: 0.45s;
+  animation-name: sketchDraw, sketchSettle;
+  animation-duration: 0.45s, 0.45s;
 }
 
 @keyframes sketchDraw {
@@ -47,6 +42,23 @@
 
 @keyframes sketchFade {
   to {
+    opacity: 0;
+  }
+}
+
+@keyframes sketchSettle {
+  0% {
+    stroke: #c62d23;
+    opacity: 1;
+    animation-timing-function: linear;
+  }
+  33.33% {
+    stroke: #dad6cc;
+    opacity: 1;
+    animation-timing-function: ease-out;
+  }
+  100% {
+    stroke: #dad6cc;
     opacity: 0;
   }
 }
