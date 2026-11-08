@@ -61,3 +61,4 @@
 - 日本語で応答する
 - 機能を1つ作るたびに、実際に動かして確認してからコミットする
 - 大きく方針を変える前に相談する
+- 公開前の点検はスキル `public-check`、施工図チェックの検証はスキル `finding-check` の手順で行う。点検と採点はサブエージェント `public-checker`・`finding-reviewer` に任せる。git commit / push の前の公開チェックと、秘密のファイルの読み取りの禁止は、フック（`.claude/settings.json`）が受け持つ。説明は README の「Claude の活用」
