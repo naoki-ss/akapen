@@ -20,6 +20,8 @@ confirmers = sorted({entry["confirmed"]["by"]
                      for path in (PRIVATE / "uploads").glob("*/sheet_status.json")
                      for entry in json.loads(path.read_text())["pages"].values() if entry.get("confirmed")})
 names = [*config["forbidden_words"], *confirmers]
+# 点検語：社内ツール名、他社のサービス名、非公開の物件の手がかり、社内システムのドメイン（一覧はリポジトリの外にだけ置く）
+audit_words = [word for word in config.get("audit_words", []) if word]
 numbers = config["forbidden_numbers"]
 # 公開してよい物件名。単独の社名は非公開の物件の手がかりになるので禁止語のまま残す
 phrases = config.get("allowed_phrases", [])
@@ -152,6 +154,9 @@ def check_file(name, data, label=""):
         if word not in allowed.get(name, []) and re.search(pattern, text):
             # 実名を画面に出さないよう、位置だけを表示する
             problems.append(f"{label}{name}: 禁止語の {(names + numbers).index(word) + 1} 番目に一致")
+    for index, word in enumerate(audit_words, 1):
+        if word not in allowed.get(name, []) and word in text:
+            problems.append(f"{label}{name}: 点検語の {index} 番目に一致")
 
 
 for name in filter(None, files):
